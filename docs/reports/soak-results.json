@@ -1,0 +1,12 @@
+{
+  "timestampUtc": "2026-11-17T20:08:42.1536753+00:00",
+  "simulated": true,
+  "results": [
+    {
+      "name": "soak.concurrent-audio-worker",
+      "passed": true,
+      "milliseconds": 120482
+    }
+  ],
+  "failed": 0
+}

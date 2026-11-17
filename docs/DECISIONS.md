@@ -1,0 +1,17 @@
+# Decisions
+
+1. **.NET 8 and native UIKit/C** follow the requested platform split. Windows SDK contract target is 19041 with a minimum platform version of 17763. Actual development tests ran on Windows 10 build 19045.
+2. **Independent usbmux plist client** avoids shipping platform DLL bundles and their license/deployment complexity. It uses Apple's existing localhost service and documented open-source protocol behavior; mature OpenSSH remains external.
+3. **48 kHz stereo PCM16 first** gives deterministic framing, 192,000 bytes/s, a common Core Audio format and no codec dependencies. Windows handles format conversion. Compression needs measured justification.
+4. **Bounded old-sample eviction** prioritizes current audio over stale sound after a stall. No claimed virtual sound card, endpoint replacement, speaker auto-mute or kernel driver.
+5. **One UIKit/agent process initially** gives supported background audio and avoids unverified launchd audio-session ownership. Jobs cannot be promised to survive app termination. A dedicated worker daemon requires a verified toolchain/device lifecycle first.
+6. **Serial workers and chunked storage** fit the A8/1 GiB target. Progress is not persisted on every update; only state changes reach the journal, reducing flash and disk writes.
+7. **Resume rather than transparent job replay** preserves user intent after reconnect. Persisted active jobs are marked interrupted after process restart; a retry receives a new job ID.
+8. **No archive extraction or arbitrary shell** keeps transferred data separate from execution. Launch actions require a local allowlist. SSH uses strict identity/known-host settings.
+9. **Generic GSMTC rather than service-specific scrapers** supports participating Windows apps, with capabilities checked before commands. The wrapper project was studied but not adopted.
+10. **Opt-in local events API first** is usable without scraping notifications or manipulating another application's database. Official notification listener support remains permission/package dependent.
+11. **Mode C remains explicit and limited**: no automatic YouTube extraction, no DRM workaround, and no assumption that USB supplies internet. Direct-URL receipt does not prove successful AVPlayer playback or reduced host CPU.
+12. **Simulator playback follows elapsed sample time**, not timer callback count. An initial soak exposed Windows timer coalescing; the corrected simulator catches up elapsed blocks and bounds exceptional scheduler stalls.
+13. **A streaming-only multimedia timer request** is justified by measured underruns with default Windows pacing. It is always released on stream exit. On Windows 10 2004+ it is process scoped; earlier supported Windows versions can temporarily affect global timer resolution. Increased timer resolution can increase power use, so it is not enabled during idle operation.
+14. **Dedicated pacing and first-packet priming** separate audio deadlines from worker thread-pool scheduling and handshake/startup delay. Initial silence before PCM is primed is not an underrun; missing samples after playback starts remain counted and fail the strict soak gate.
+15. **A conservative 2 GiB storage quota** counts complete data and reserved partial uploads. It prevents sixteen large transfers from filling the phone by design. Replacement uploads temporarily count both versions; retention and quota configuration can be added after real-device validation.

@@ -1,0 +1,13 @@
+{
+ "keyFile": "config/session.key",
+ "transport": "usb",
+ "devicePort": 23451,
+ "deviceSerial": null,
+ "apiPort": 23452,
+ "streamAudio": true,
+ "fixtureAudio": false,
+ "deviceHasInternet": false,
+ "hideSensitive": true,
+ "blockedSources": [],
+ "actions": [{"id":"media.toggle","title":"Play / Pause","kind":"media.toggle"}]
+}

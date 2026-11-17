@@ -1,0 +1,15 @@
+{
+  "realWindowsCapture": true,
+  "simulatedReceiver": true,
+  "physicalIPhoneTest": false,
+  "receiver": {
+    "packets": 189,
+    "bytes": 362880,
+    "gaps": 0,
+    "bufferedBytes": 0,
+    "droppedBytes": 0,
+    "silenceBytes": 1920,
+    "playbackTicks": 190,
+    "sha256": "cdb646c267adfb450fd4c3aa62148d6620c2cfb5b0258138ee5fe05600b38c8d"
+  }
+}

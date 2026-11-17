@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+.vs/
+.theos/
+packages/
+artifacts/
+*.user
+*.secret
+*.key
+state/
+config/local.json

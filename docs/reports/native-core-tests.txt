@@ -1,0 +1,3 @@
+Command: gcc -std=c11 -Wall -Wextra -Werror tests/native/core_test.c src/Shared/Protocol/bt_wire.c src/iOS/AudioReceiver/BTPcmRing.c -o artifacts/native-core-tests.exe
+Observed result: PASS native protocol and PCM ring
+Platform: Windows x64, not iOS.

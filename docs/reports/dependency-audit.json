@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "parameters": "--vulnerable --include-transitive",
+  "sources": [
+    "https://api.nuget.org/v3/index.json"
+  ],
+  "projects": [
+    {
+      "path": "src/Simulator/BackThread.Simulator.csproj"
+    },
+    {
+      "path": "src/Windows/Audio/BackThread.Audio.csproj"
+    },
+    {
+      "path": "src/Windows/Events/BackThread.Events.csproj"
+    },
+    {
+      "path": "src/Windows/Host/BackThread.Host.csproj"
+    },
+    {
+      "path": "src/Windows/Media/BackThread.Media.csproj"
+    },
+    {
+      "path": "src/Windows/Transport/BackThread.Transport.csproj"
+    },
+    {
+      "path": "src/Windows/Tray/BackThread.Tray.csproj"
+    },
+    {
+      "path": "src/Windows/Worker/BackThread.Worker.csproj"
+    },
+    {
+      "path": "tests/BackThread.Tests/BackThread.Tests.csproj"
+    }
+  ]
+}
