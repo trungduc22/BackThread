@@ -551,6 +551,22 @@ internal static class HybridMediaTests
                 await Check.Eventually(() => Task.FromResult(host.Router.CurrentState.Owner == PlaybackOwner.iPhoneOwned));
                 await host.ReturnToWindowsAsync(false, ct);
                 Check.Equal(PlaybackOwner.WindowsOwned, host.Router.CurrentState.Owner);
+
+                string? probeDir = AppContext.BaseDirectory;
+                string? exampleConfig = null;
+                while (probeDir != null)
+                {
+                    string candidate = Path.Combine(probeDir, "config", "example.json");
+                    if (File.Exists(candidate)) { exampleConfig = candidate; break; }
+                    probeDir = Path.GetDirectoryName(probeDir);
+                }
+                if (exampleConfig != null)
+                {
+                    var loadedExample = HostConfig.Load(exampleConfig);
+                    Check.True(loadedExample.KeepScreenAwakeDuringVideo);
+                    Check.True(loadedExample.PauseWindowsOnConfirmedHandoff);
+                    Check.True(!loadedExample.AllowExperimentalYouTubeEmbed);
+                }
             }
             finally
             {

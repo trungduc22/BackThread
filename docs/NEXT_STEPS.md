@@ -1,40 +1,27 @@
-# Next steps — 0.1.2
+# Next Steps — Physical Windows 10 & iPhone 6 Acceptance Checklist
 
-## Latest verified hardware checkpoint — 2026-11-18
+All software engineering milestones, unit/integration suites (`36/36`), simulator zero-loss soak (`30.15s`), C11 tests, static analysis (`22/22`), ARM64 cross-builds (`BackThread.ipa`), self-contained `win-x64` release bundle, and documentation are complete in the repository. The remaining steps require physical Windows 10 desktop hardware and a Lightning-connected iPhone 6 (iOS 12.5.8).
 
-**First audible Windows PCM through the iPhone speaker is now verified.** After the normal own-app Upgrade and foreground reopen, the user saw “Connected by USB”. The new three-second PCM fixture passed 27 physical protocol/audio/worker checks and the user answered “Có nghe tiếng”. Current fixture stats show Speaker, 48 kHz, gain 0.25, system volume 1, both peaks 4096, noErr, successful getters, and zero sampled gaps/overflow/underrun. This does not establish a single root cause for earlier silent attempts: app build, launch state and user-controlled system volume differed.
+1. **Verify Device Readiness & Upgrade Only BackThread App**:
+   - Connect iPhone 6 over Lightning USB and confirm Apple Mobile Device Service sees the paired UDID (`python scripts/diagnose-hardware.py`).
+   - Install/upgrade `artifacts/ios-build/BackThread.ipa` via `python scripts/install-ios.py --component ui --install` without modifying jailbreak, AMFI, or system components.
+   - Verify `library/BackThread/session.key` persistence or provision the host key via **Setup -> Pair** inside the app.
 
-Normal WASAPI media was then heard through the iPhone, with the user reporting “Có nhưng bị ngắt/giật” after normal Host app gain was restored to 1. **Continuous audio quality is not accepted yet.** The separate 90-second diagnostic run at app gain 0.25/system volume about 0.105 received/rendered nonzero PCM but had 472 sender drops, 132 gap events, 1,416,960 overflow bytes and 2,423,040 active-window silence bytes. Fifteen native RSS samples were 11,337,728–11,395,072 bytes. It passed its functional gates, not a zero-loss/acoustic quality gate.
+2. **Re-Test Phase 9 Live PCM Audio Through Physical Speaker**:
+   - Run `BackThread.DeviceTests.exe --key-file config/session.key --fixture --seconds 3` and verify clean audibility.
+   - Play ordinary Windows WASAPI media via `BackThread.Tray.exe` and verify whether Phase 9 (`AgentServer` / `Connection` / `LoopbackBridge` / `BTAudioReceiver` re-priming) eliminates physical stutter (`repairs-physical-wasapi90.json` comparison) under normal CPU load.
+   - Test route switches (Speaker <-> Headphones), screen off/lock, and incoming phone interruptions (`BTAudioSessionCoordinator`).
 
-A normal-Host sample measured 0.046875 CPU seconds over 3.04 wall seconds and 84,193,280 bytes RSS; total Windows CPU was reported 100%, with 3,585 MiB available and no paging in that snapshot. This is evidence of load, not proof of one cause for stutter. Its last observed sender-drop counter was zero; that does not prove native receiver/capture quality.
+3. **Physical External PiP Acceptance (Mode A, Mode B & Ambient)**:
+   - Submit an HTTPS `.mp4`/`.m3u8` URL via Tray *Send Media to iPhone* (or Chromium extension): confirm `AVPlayer` enters fullscreen PiP (`BTVideoSurfaceView`), Windows GSMTC pauses **only after** `confirmed`, and video fills edge-to-edge smoothly on A8.
+   - Test **Ambient Mode**, **720p / 480p caps**, **Keep Awake**, and **Audio Focus** (`DuckVideo`, `KeepVideoMuteAudio`, `LivePcmOnly`).
+   - Physically unplug the Lightning cable mid-playback during Mode A: confirm Wi-Fi video continues unbroken (`Wi-Fi Independent · USB Away`); replug USB and verify `media.sync` restores host sync cleanly.
+   - Send a local Windows `.mp4` file via Mode B buffered USB and verify chunked playback & memory stability.
 
-The user subsequently confirmed physically unplugging the cable. USB disappearance is therefore an observed user disconnect, not an unexplained discovery failure. Hardware work is now waiting for reconnection. Latest Windows changes batch each frame into one pooled socket write and add write-wait telemetry; **their physical effect on stutter has not been tested**. No system/framework/service/jailbreak repair was performed.
+4. **Windows Integrations, Spotify & Notifications Verification**:
+   - Configure `spotifyClientId` in `config/local.json`, complete browser PKCE sign-in via Tray, and verify Connect transport + DPAPI token survival across Host restart.
+   - Test Chromium MV3 unpacked extension + `install-native-host.ps1` Native Messaging flow.
+   - Test Priority 1–3 notifications over playing PiP video (`BTNotificationOverlayView`) to confirm fullscreen red alerts dismiss cleanly back to playing video without tearing down `AVPlayer`, and optionally sign/register `packaging/msix/Package.appxmanifest` on Windows 10 for native `UserNotificationListener` consent.
 
-Evidence: [human confirmations](reports/repairs-human-listening.json), [physical fixture](reports/repairs-physical-fixture.json), [90-second native profile](reports/repairs-physical-wasapi90.json), [normal Host load](reports/repairs-host-load.json). Earlier failed listening reports remain historical evidence.
-
-**Priority: stable ordinary Windows audio through the speaker.** First audible fixture and normal WASAPI media are confirmed, but media stutters. The user unplugged the cable; wait for reconnection before physical retesting. Preserve the normal gain fix and measure loss/write waits before selecting further scheduling/buffer changes.
-
-## Immediate remaining issue
-
-The final corrected 120-second simulator soak still fails its unchanged zero-loss gate (118 sender drops, 20 gap events, 5,760 overflow and 243,840 silence bytes). Do not rerun the same test repeatedly or declare batching a cure. Next investigation should correlate capture-ring counters, writer queue residence/wall waits and receiver arrival/buffer occupancy under a controlled host load, then compare the baseline and repaired build with the same workload. Preserve fail reports and thresholds. Confirm the latest patch on the reconnected phone before selecting further pacing or buffer changes.
-
-## Offline repair checkpoint
-
-The reviewed defects are repaired in source: common PCM measurement deadline with shutdown-tail exclusion; native audio failure isolated from USB control; explicit volume/getter diagnostics; reset intent checked under the lifecycle lock. The Host records unsolicited audio.error without dropping the session. Analyzer reports are invalidated before each run and cannot reuse old clean results after an incomplete invocation. See current repairs reports for actual build/test counts; these are not physical acceptance.
-
-## Next physical regression when reconnected
-
-1. Read-only re-enumerate the one intended device and revalidate existing paired certificate, version and services. Inspect only the BackThread app's metadata. If pairing or required services are missing, report that blocker; do not re-pair automatically or install/repair system components.
-2. Through the already prepared normal installer, upgrade only BackThread-owned artifacts; preserve app data/key. Do not copy old container UUID paths blindly. Never install a release key, password or pairing record. Keep only one Agent listener on loopback 23451.
-3. Verify the latest native image actually executes and serves the key-authenticated protocol. A PID, installation completion or uiopen exit status is insufficient. Do not modify standalone execution policy to work around its historical denial; the embedded app is the proven route.
-4. Check audio session/category/mode, queue presence and getter/error statuses. Use at most a short controlled fixture with ordinary system volume. Compare app-local and USB input only if this will resolve a specific uncertainty. Do not repeat tones or raise volume without new evidence. Speaker playback passes only with listening confirmation.
-5. Run the corrected measurement window and --require-nonzero with an intentional brief Windows signal. Keep active-stream loss distinct from shutdown tail. Profile pacing/occupancy before tuning ring size or scheduling. The passing simulator soak is not proof of sound.
-6. Trigger normal app stop/start and supported audio interruptions/routes, then verify reset cannot revive stopped playback and an audio-only failure leaves ping/jobs operational. No system service restart or policy changes.
-7. Validate actual UIKit media/artwork/touch, Windows command results, banners/history/privacy and allowlisted Quick Actions. Keep Windows media state authoritative.
-8. Run native worker cancel/resume/quota/restart alongside audio, then at least 30 minutes mixed workload, screen-off, physical cable reconnect, RSS/CPU and own crash evidence. Do not alter Jetsam or unrelated logs/data.
-
-## Scope to preserve
-
-Windows Host, transport and simulator remain the foundation. Defer unrelated providers, YouTube extraction, daemon architecture and heavy dependencies. Independent unfinished features include notification permission packaging, backup retention/snapshot and AVPlayer result coordination. Report unavailable system functionality rather than repairing the user's bypass-prepared system. No firmware/activation/jailbreak operations or remote push.
-
-Reports and local commits are the resumption point; no work continues after the execution environment ends.
+5. **30-Minute Mixed Endurance Soak**:
+   - Run simultaneous External PiP/Live PCM, file transfers/worker hashes, and periodic notifications on physical iPhone 6 to collect extended RSS, thermal, and battery headroom baselines.

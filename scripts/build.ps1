@@ -18,6 +18,16 @@ try {
   Copy-Item -LiteralPath LICENSE,THIRD_PARTY_NOTICES.md -Destination $publishPath -Force
   Copy-Item -LiteralPath scripts/Setup-Portable.ps1 -Destination $publishPath -Force
   Copy-Item -LiteralPath docs/PORTABLE_README.txt -Destination (Join-Path $publishPath 'READ-ME-FIRST.txt') -Force
+  New-Item -ItemType Directory -Force (Join-Path $publishPath 'extensions/chromium') | Out-Null
+  Copy-Item -Path 'extensions/chromium/*' -Destination (Join-Path $publishPath 'extensions/chromium') -Recurse -Force
+  New-Item -ItemType Directory -Force (Join-Path $publishPath 'packaging/msix') | Out-Null
+  Copy-Item -Path 'packaging/msix/*' -Destination (Join-Path $publishPath 'packaging/msix') -Recurse -Force
   & ./scripts/collect-licenses.ps1 -Destination (Join-Path $publishPath 'licenses')
+  $checksums = Get-ChildItem -LiteralPath $publishPath -Recurse -File | Where-Object { $_.Name -ne 'checksums.sha256' } | Sort-Object FullName | ForEach-Object {
+   $rel = [IO.Path]::GetRelativePath($publishPath, $_.FullName).Replace('\','/')
+   $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+   "$hash  $rel"
+  }
+  $checksums | Set-Content -LiteralPath (Join-Path $publishPath 'checksums.sha256') -Encoding utf8
  }
 } finally { Pop-Location }

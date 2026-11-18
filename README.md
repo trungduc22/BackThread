@@ -1,57 +1,55 @@
 # BackThread
 
-BackThread connects a Windows 10 computer to an iPhone over Lightning USB for PCM audio, media controls, notifications, and independent file jobs.
+BackThread transforms a docked iPhone (tested target: **iPhone 6, ARM64, iOS 12.5.8**) over a single Lightning USB cable into an external Windows 10 companion surface featuring:
 
-**Current state (0.1.2 engineering checkpoint):** Windows Host and simulator pass their recorded tests. The full UIKit app and embedded Agent genuinely executed on the iPhone 6 / iOS 12.5.8: authenticated USB, basic worker/files and nonzero PCM buffers were verified. **A new short fixture and ordinary Windows audio have now been heard through the iPhone speaker, but normal media stutters; continuous quality has not passed.** The native repair app was upgraded and executed; the newest Windows transport batching change remains physically untested after the user unplugged USB. Device work is waiting for reconnection; only BackThread-owned files may be changed, and no missing system/jailbreak component is repaired. Read [feature status](docs/FEATURE_STATUS.md), [hardware evidence](docs/HARDWARE_TEST_RESULTS.md) and [next steps](docs/NEXT_STEPS.md).
+- **External Picture-in-Picture (PiP)**: Hardware `AVPlayer` independent playback via iPhone Wi-Fi (`Mode A · DirectInternet`) or chunked USB streaming (`Mode B · BufferedUsb`) with a persistent single `AVPlayerLayer` across preview, fullscreen focus, and dark Ambient modes.
+- **Hybrid Media Router & Official Integrations**: Monotonic generation fencing, `CONFIRMED`-only Windows auto-pause, `AudioFocusPolicy` arbitration, USB disconnect survival (`media.sync` reconnect reconciliation), official **Spotify Web API OAuth PKCE** (`DPAPI` local tokens, Mode D remote control), and compliant **YouTube oEmbed** metadata / optional isolated `youtube-nocookie` embed fallback.
+- **Low-Jitter USB PCM Audio**: Real-time 48 kHz stereo PCM16 streaming (`LoopbackBridge` WASAPI capture -> bounded `BTH1` channel 2 -> 19,200-byte native C ring -> `AudioQueue` with post-underrun re-priming).
+- **Non-Destructive Windows Notifications & Controls**: Priority 0–3 filtering, privacy masking, swipeable banners, and fullscreen critical alerts layered above running External PiP video without interrupting `AVPlayer`, plus allowlisted Windows Quick Actions, Chromium MV3 Native Messaging extension, and bounded A8 file/SHA-256/text/metadata jobs.
 
-Implemented Windows components include authenticated usbmux and localhost transport, WASAPI loopback, GSMTC media controls, bounded event routing, resumable binary transfers, SHA-256 verification, text and metadata jobs, an authenticated local integration API, and a WinForms tray. The simulator executes actual jobs and receives actual PCM frames; it does not play through an iPhone speaker.
+> **Current Verification Status (Continuing from `0.1.2` `307e167`):**
+> All Windows host libraries, Tray UI, Simulator, Chromium extension, MSIX manifest, `36/36` automated `.NET` socket/hybrid-media/soak tests (`30.15s` concurrent 98-job zero-loss simulator soak), `C11` shared wire/ring tests (`zig cc` & `gcc`), `22/22` Python packaging/analyzer tests, `22/22` Clang static-analyzer units, and `19`-unit ARM64 iOS 12 cross-builds + `BackThread.ipa` pass in the offline Linux engineering environment.
+> Historically on physical iPhone 6 hardware (`0.1.2` checkpoint), authenticated USB, embedded Agent execution, file jobs, first audible speaker fixture, and stuttered normal WASAPI playback were verified before cable unplug. **Newest `0.2.0` Hybrid Media Engine, landscape UIKit views, Phase 9 stutter fixes, and physical Windows 10 GUI/MSIX/Spotify flows remain pending physical iPhone 6 and Windows 10 reconnection acceptance.** Read [feature status](docs/FEATURE_STATUS.md), [hardware evidence](docs/HARDWARE_TEST_RESULTS.md), [media handoff tests](docs/MEDIA_HANDOFF_TESTS.md), and [next steps](docs/NEXT_STEPS.md).
 
-## Build and test
+## Build and verify
 
-Use a .NET 8 SDK on Windows 10 1809 or later; builds use Windows SDK contracts 19041. GCC is optional for the shared C tests.
+Use .NET 8 SDK (`8.0.428`+), with `-p:EnableWindowsTargeting=true` when cross-building from Linux, plus Zig `0.13.0` / LLD `23.1.x` / iPhoneOS 12.4 SDK / `rcodesign` for iOS ARM64 binaries:
 
 ```powershell
 dotnet build BackThread.sln -c Release
 ./scripts/test.ps1
-./scripts/test.ps1 -SoakSeconds 120
-python ./scripts/diagnose-hardware.py --output artifacts/hardware-audit.json
-python ./scripts/inspect-ios-device.py --output artifacts/ios-device-audit.json
-dotnet run --project src/Windows/Host -- --diagnose
-# Default physical USB acceptance gate; does not send audio unless explicitly requested:
-dotnet run --project tests/BackThread.DeviceTests -- --key-file config/session.key
+./scripts/test.ps1 -SoakSeconds 30
+python scripts/publish-windows-release.py   # or ./scripts/build.ps1 -Publish on Windows
+python scripts/build-ios.py --linker <lld> --zig <zig> --sdk <iPhoneOS12.4.sdk> --codesign <rcodesign>
+python scripts/analyze-ios.py --zig <zig> --sdk <iPhoneOS12.4.sdk>
+python scripts/install-ios.py --component ui
 ```
 
-The test runner is an executable with a nonzero failure exit code; use the script or `dotnet run --project tests/BackThread.Tests -c Release`, not `dotnet test`.
+The `.NET` test runner is an executable with nonzero exit on failure (`dotnet run --project tests/BackThread.Tests -c Release`, not `dotnet test`).
 
-## Run with the simulator
-
-From the repository root:
+## Quick Start (Windows + iPhone or Simulator)
 
 ```powershell
+# 1. Provision session key & default configuration (keep config/session.key private)
 dotnet run --project src/Windows/Host -- --init-key config/session.key
 Copy-Item config/example.json config/local.json
-# Edit config/local.json: set transport to "localhost".
-# Set fixtureAudio to true for generated audio, or leave false for actual WASAPI capture.
+
+# 2a. Simulator workflow (set transport="localhost" in config/local.json)
 dotnet run --project src/Simulator -- --key-file config/session.key
-# In a second terminal:
 dotnet run --project src/Windows/Host -- --config config/local.json
+
+# 2b. Physical USB workflow (transport="usb", deviceHasInternet=true; Apple Mobile Device Service running)
+# Provision config/session.key inside BackThread iOS Setup -> Pair, then run:
+dotnet run --project src/Windows/Tray -- (Resolve-Path config/local.json)
 ```
 
-Both listeners bind only to loopback. Keep the generated session key private. The local API is at `http://127.0.0.1:23452/v1`; it requires `Authorization: Bearer <the lowercase hex session key>` and rejects browser Origin requests. See [API examples](docs/LOCAL_API.md).
+Loopback HTTP API listens strictly at `http://127.0.0.1:23452/v1`, requires `Authorization: Bearer <64-hex key>`, and rejects browser `Origin` requests. See [LOCAL_API.md](docs/LOCAL_API.md).
 
-## Run with the iPhone
+## Documentation Index
 
-An iOS build toolchain and authorized installation method are required. Build instructions are in [BUILD_IOS.md](docs/BUILD_IOS.md). After installation, launch BackThread, tap Pair, provision the host's key, and reopen the app. Select `transport: "usb"` in the host configuration. No Wi-Fi, cloud service, or internet on the iPhone is needed for USB audio and file jobs.
+- **Architecture & Media Engine**: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [HYBRID_MEDIA_ARCHITECTURE.md](docs/HYBRID_MEDIA_ARCHITECTURE.md), [EXTERNAL_PIP.md](docs/EXTERNAL_PIP.md), [MEDIA_PROVIDER_COMPATIBILITY.md](docs/MEDIA_PROVIDER_COMPATIBILITY.md)
+- **Integrations, Notifications & UI**: [SPOTIFY_INTEGRATION.md](docs/SPOTIFY_INTEGRATION.md), [YOUTUBE_INTEGRATION.md](docs/YOUTUBE_INTEGRATION.md), [NOTIFICATION_ACCEPTANCE.md](docs/NOTIFICATION_ACCEPTANCE.md), [UI_DESIGN.md](docs/UI_DESIGN.md)
+- **Protocol, API & Security**: [PROTOCOL.md](docs/PROTOCOL.md), [LOCAL_API.md](docs/LOCAL_API.md), [SECURITY.md](docs/SECURITY.md), [DEPENDENCIES.md](docs/DEPENDENCIES.md)
+- **Builds, Tests & Status**: [BUILD_WINDOWS.md](docs/BUILD_WINDOWS.md), [BUILD_IOS.md](docs/BUILD_IOS.md), [FEATURE_STATUS.md](docs/FEATURE_STATUS.md), [MEDIA_HANDOFF_TESTS.md](docs/MEDIA_HANDOFF_TESTS.md), [PERFORMANCE.md](docs/PERFORMANCE.md), [PROGRESS.md](docs/PROGRESS.md), [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md), [NEXT_STEPS.md](docs/NEXT_STEPS.md)
 
-The agent listens on iPhone loopback port 23451. Windows reaches it through Apple Mobile Device Service on localhost port 27015. No extra port forward is required for BackThread. OpenSSH diagnostics use a separately configured loopback forward and strict host-key verification.
-
-The UI package embeds the Agent. A separate manual Agent package is also built; run only one listener on port 23451. Neither package installs a launchd service or session key. The installer preserves app data through Upgrade; a device test verified sentinel preservation despite container-path rotation. [Device acceptance instructions](docs/DEVICE_ACCEPTANCE.md) distinguish USB from explicit simulation, quiet PCM, actual callbacks/routes and pending human listening. Device preparation, jailbreak, firmware changes and Activation Lock remain outside this project.
-
-## Guides
-
-- [Architecture](docs/ARCHITECTURE.md), [wire protocol](docs/PROTOCOL.md), [security](docs/SECURITY.md)
-- [Windows build and use](docs/BUILD_WINDOWS.md), [iOS build and install](docs/BUILD_IOS.md)
-- [Dependencies and research](docs/DEPENDENCIES.md), [performance evidence](docs/PERFORMANCE.md)
-- [Progress](docs/PROGRESS.md), [known issues](docs/KNOWN_ISSUES.md), [next steps](docs/NEXT_STEPS.md), [decisions](docs/DECISIONS.md)
-
-Original code is MIT licensed. Third-party notices and platform SDK conditions remain separate. No TetherSender source was copied.
+Original source is MIT licensed ([LICENSE](LICENSE)); third-party notices remain separate ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). No GPL `youTFast`, stream extractors, DRM bypasses, or `TetherSender` source are included.

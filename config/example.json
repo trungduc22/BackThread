@@ -1,14 +1,36 @@
 {
- "keyFile": "config/session.key",
- "transport": "usb",
- "devicePort": 23451,
- "deviceSerial": null,
- "apiPort": 23452,
- "streamAudio": true,
- "audioGain": 1,
- "fixtureAudio": false,
- "deviceHasInternet": false,
- "hideSensitive": true,
- "blockedSources": [],
- "actions": [{"id":"media.toggle","title":"Play / Pause","kind":"media.toggle"}]
+  "keyFile": "config/session.key",
+  "transport": "usb",
+  "devicePort": 23451,
+  "deviceSerial": null,
+  "apiPort": 23452,
+  "streamAudio": true,
+  "audioGain": 1,
+  "fixtureAudio": false,
+  "deviceHasInternet": true,
+  "hideSensitive": true,
+  "collectWindowsNotifications": false,
+  "allowExperimentalYouTubeEmbed": false,
+  "defaultQualityCap": "auto",
+  "keepScreenAwakeDuringVideo": true,
+  "pauseWindowsOnConfirmedHandoff": true,
+  "pauseMediaOnCriticalNotification": false,
+  "spotifyClientId": null,
+  "spotifyRedirectUri": "http://127.0.0.1:23452/v1/spotify/callback",
+  "spotifyTokenPath": null,
+  "highNotificationSources": [],
+  "criticalNotificationSources": [],
+  "blockedSources": [],
+  "actions": [
+    {
+      "id": "media.toggle",
+      "title": "Play / Pause",
+      "kind": "media.toggle"
+    },
+    {
+      "id": "microphone.toggleMute",
+      "title": "Toggle Mic Mute",
+      "kind": "microphone.toggleMute"
+    }
+  ]
 }
