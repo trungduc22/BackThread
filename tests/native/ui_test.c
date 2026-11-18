@@ -26,8 +26,8 @@ int main(void){
     assert(bt_notification_style(0,true,true)==0);
     assert(bt_notification_style(1,false,true)==1);
     assert(bt_notification_style(2,false,true)==2);
-    assert(bt_notification_style(3,false,true)==3);
+    assert(bt_notification_style(3,false,true)==2);
     assert(bt_notification_style(3,false,false)==2);
-    assert(bt_notification_style(1,true,false)==3);
+    assert(bt_notification_style(1,true,false)==2);
     puts("PASS 27 shared navigation/drawer/notification decisions; UIKit touch/animation acceptance is separate");return 0;
 }

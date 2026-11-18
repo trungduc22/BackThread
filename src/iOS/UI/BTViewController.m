@@ -1,5 +1,6 @@
 #import "BTViewController.h"
 #import "BTTheme.h"
+#import "BTClockView.h"
 #import "BTNavigation.h"
 #import "BTMediaView.h"
 #import "BTCompanionPage.h"
@@ -9,7 +10,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import <CommonCrypto/CommonDigest.h>
 @implementation BTViewController {
-    BTPageCoordinator *_pages;BTCornerDrawer *_drawer;BTMediaView *_media;
+    BTClockView *_clockView;BTPageCoordinator *_pages;BTCornerDrawer *_drawer;BTMediaView *_media;
     BTNotificationCoordinator *_notifications;NSMutableDictionary *_pageCache,*_jobs;
     NSMutableArray *_apps;NSDictionary *_actions,*_windows,*_wifiState,*_pauseToken;
     BOOL _connected,_captureDisconnect,_reordering,_fullscreenNotice;NSString *_transport;UILabel *_preview;NSUInteger _memoryGeneration;
@@ -24,6 +25,7 @@
     _media.playbackChanged=^(NSDictionary *state){BTViewController *owner=weak;if(!owner)return;if(owner->_connected)[owner.agent command:@"media.playback" body:state];if(owner->_handoffReply&&[@[@"playing",@"failed"] containsObject:state[@"state"]]){void(^reply)(NSDictionary *,BOOL)=owner->_handoffReply;owner->_handoffReply=nil;reply(state,[state[@"state"] isEqual:@"playing"]);}};
     _pages=[BTPageCoordinator new];_pages.pageFactory=^UIViewController *(NSInteger index){BTViewController *owner=weak;if(!owner)return [UIViewController new];if(index==0){UIViewController *vc=[UIViewController new];vc.view=owner->_media;return vc;}BTCompanionPage *page=[BTCompanionPage new];page.kind=index;page.interactionChanged=^(BOOL busy){BTViewController *current=weak;if(!current)return;current->_reordering=busy;current->_pages.gesturesBlocked=busy||current->_fullscreenNotice;};page.command=^(NSString *type,NSDictionary *body){[weak dispatch:type body:body];};owner->_pageCache[@(index)]=page;[page loadViewIfNeeded];page.transport=owner->_transport;[page setConnected:owner->_connected];if(index==1)[page receive:@"apps.catalog" body:@{@"reset":@YES,@"apps":owner->_apps}];if(index==2)[page receive:@"action.registry" body:owner->_actions?:@{}];if(index==3)for(NSDictionary *job in owner->_jobs.allValues)[page receive:@"job.progress" body:job];if(index==4)[page receive:@"history" body:@{@"events":owner->_notifications.history?:@[]}];if(index==5)[page receive:@"wifi.state" body:owner->_wifiState?:@{}];return page;};
     [self addChildViewController:_pages];_pages.view.frame=self.view.bounds;_pages.view.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;[self.view addSubview:_pages.view];[_pages didMoveToParentViewController:self];[_pages selectPage:0 animated:NO];
+    _clockView=[[BTClockView alloc] initWithFrame:CGRectMake(self.view.bounds.size.width-222,4,158,44)];_clockView.autoresizingMask=UIViewAutoresizingFlexibleLeftMargin|UIViewAutoresizingFlexibleBottomMargin;[self.view addSubview:_clockView];
     _drawer=[[BTCornerDrawer alloc] initWithFrame:self.view.bounds];_drawer.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;_drawer.selected=^(NSInteger page){BTViewController *owner=weak;if(!owner)return;[owner->_pages selectPage:page animated:YES];};[self.view addSubview:_drawer];
     _notifications=[[BTNotificationCoordinator alloc] initWithHost:self.view];_notifications.historyChanged=^(NSArray *events){BTViewController *owner=weak;if(!owner)return;[owner->_pageCache[@4] receive:@"history" body:@{@"events":events}];};_notifications.presentationChanged=^(BOOL fullscreen,BOOL visible){BTViewController *owner=weak;if(!owner)return;if(visible)[owner->_drawer setOpen:NO animated:YES];owner->_fullscreenNotice=fullscreen&&visible;owner->_pages.gesturesBlocked=owner->_fullscreenNotice||owner->_reordering;if(fullscreen&&visible&&[NSUserDefaults.standardUserDefaults boolForKey:@"pauseForFullscreen"]&&!owner->_pauseToken)owner->_pauseToken=[owner->_media pauseForNotification];if(!visible&&owner->_pauseToken){[owner->_media restoreAfterNotification:owner->_pauseToken];owner->_pauseToken=nil;}};
     _preview=BTLabel(10,UIFontWeightSemibold);_preview.text=@"DESIGN PREVIEW · FIXTURE DATA";_preview.textColor=BTAccent();_preview.frame=CGRectMake(28,6,360,18);_preview.hidden=YES;_preview.userInteractionEnabled=NO;[self.view addSubview:_preview];

@@ -1,3 +1,7 @@
+# Current continuation: 2026-11-19
+
+User resumed Codex to preserve the original UI. Read docs/CONTINUATION_2026-11-19.md before the historical handoff below. Build7 adds clock/iPhone battery/inline phone volume/top-only banners on the local UI2 foundation. Remote9c5fdac has a divergent architecture and remains unmerged; no upstream work was deleted. Build7 has no fresh device acceptance.
+
 # BACKTHREAD — BÀN GIAO HIỆN TẠI CHO ANTIGRAVITY
 
 2026-11-18, Asia/Saigon. Người dùng yêu cầu dừng phát triển và bàn giao ngay vì còn khoảng 13% quota. Tiếp tục repo hiện tại; không khởi tạo lại hoặc reset về GitHub cũ.

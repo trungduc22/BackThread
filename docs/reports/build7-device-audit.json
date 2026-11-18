@@ -1,0 +1,9 @@
+{
+  "timestampUtc": "2026-11-18T17:19:25.826234+00:00",
+  "persistentDeviceChanges": false,
+  "pairingAttempted": false,
+  "applicationTestsRun": false,
+  "trustSessionValidated": false,
+  "jailbroken": "not established",
+  "error": "RuntimeError: Exactly one USB device is required for this targeted audit"
+}

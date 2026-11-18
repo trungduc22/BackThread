@@ -102,7 +102,7 @@ def main():
             time.sleep(.3)
             state = capture(name, {})
             check(name+' visible', state['notification']['visible'])
-            check(name+' presentation', state['notification']['fullscreen'] == (priority == 3))
+            check(name+' presentation', state['notification']['fullscreen'] is False)
             before = state['notification']['history']
             duplicate = inspect({'notification': event})
             check(name+' duplicate ignored', duplicate['notification']['history'] == before)

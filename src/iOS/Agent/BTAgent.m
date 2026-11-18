@@ -66,7 +66,7 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
 }
 - (BTAudioReceiver *)audio { return _audio; }
 - (BOOL)nativePlaybackActive { @synchronized(self){return _nativePlaybackActive;} }
-- (void)setNativePlaybackActive:(BOOL)active { @synchronized(self){_nativePlaybackActive=active;}if(active)[_audio stop]; }
+- (void)setNativePlaybackActive:(BOOL)active { @synchronized(self){_nativePlaybackActive=active;if(active)[_audio stop];} }
 - (void)networkPhase:(NSString *)phase error:(int)code {
     // Own diagnostic only: no keys, peer identity or system configuration.
     NSDictionary *record=@{@"phase":phase,@"errno":@(code),@"port":@23451,@"pid":@(getpid())};
@@ -211,14 +211,14 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         else if([type isEqual:@"wifi.revoke"]){[self send:@"ok" body:@{@"revoked":@YES} reply:rid channel:h.channel];[self clearWifi];}
         else if([type isEqual:@"ping"]) { [self send:@"pong" body:@{} reply:rid channel:1]; }
         else if([type isEqual:@"hello"]) { [self send:@"ok" body:@{@"agent":@"BackThread.Agent",@"simulated":@NO,@"capabilities":@[@"pcm",@"jobs",@"files",@"events",@"UIKit",@"direct-handoff",@"apps",@"ui-inspect",@"temporary-wifi-tls"],@"playbackOwner":self.nativePlaybackActive?@"phone":@"pc"} reply:rid channel:h.channel]; }
-        else if([type isEqual:@"audio.start"]) {
+        else if([type isEqual:@"audio.start"]) { @synchronized(self){
             if(self.nativePlaybackActive){[self fail:@"Independent phone playback owns audio" message:m channel:h.channel];continue;}
             NSError *error=nil;if([b[@"sampleRate"] intValue]!=48000||[b[@"channels"] intValue]!=2||[b[@"bits"] intValue]!=16) { [self fail:@"Only 48 kHz stereo PCM16 supported" message:m channel:h.channel];continue; }
             _audioOn=NO;
             if([_audio start:&error]) { _audioOn=YES;_audioPackets=_audioBytes=_audioGaps=0;_previousAudio=0;[self send:@"ok" body:@{@"ready":@YES} reply:rid channel:h.channel]; }
             else [self fail:error.localizedDescription message:m channel:h.channel];
         }
-        else if([type isEqual:@"audio.stop"]) { _audioOn=NO;[_audio stop];[self send:@"ok" body:@{@"stopped":@YES} reply:rid channel:h.channel]; }
+        } else if([type isEqual:@"audio.stop"]) { _audioOn=NO;[_audio stop];[self send:@"ok" body:@{@"stopped":@YES} reply:rid channel:h.channel]; }
         else if([type isEqual:@"audio.stats"]) { NSMutableDictionary *s=[[_audio statistics] mutableCopy];s[@"packets"]=@(_audioPackets);s[@"bytes"]=@(_audioBytes);s[@"gaps"]=@(_audioGaps);s[@"acceptingPCM"]=@(_audioOn);[self send:@"ok" body:s reply:rid channel:h.channel]; }
         else if([type isEqual:@"audio.volume"]) { NSError *error=nil;if(![b[@"value"] isKindOfClass:NSNumber.class]||![_audio setVolume:[b[@"value"] floatValue] error:&error])[self fail:error.localizedDescription?:@"Invalid audio volume" message:m channel:h.channel];else [self send:@"ok" body:@{} reply:rid channel:h.channel]; }
         else if([type isEqual:@"media.state"]||[type isEqual:@"action.registry"]||[type isEqual:@"apps.catalog"]||[type isEqual:@"wifi.state"]) { [self notify:type body:b];if([rid isKindOfClass:NSString.class])[self send:@"ok" body:@{@"received":@YES} reply:rid channel:h.channel]; }
