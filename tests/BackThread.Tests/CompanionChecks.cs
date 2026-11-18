@@ -55,6 +55,12 @@ internal static class CompanionChecks
             using var tlsLifetime=tls;await Wire.WriteAsync(tls,new(LogicalChannel.Control,0,0,Message.Create("wifi.join",new{sessionId=enrollment.SessionId}).Encode()),ct);
             Task auth=Authentication.ServerAsync(tls,key,ct);var lease=await wifi.ConnectAsync(ct);await auth;
             Check.True(lease.Authenticated&&lease.Name=="wifi");
+            var stages=JsonSerializer.SerializeToElement(wifi.Status,Message.Json);
+            Check.Equal("authenticated",stages.GetProperty("stage").GetString());
+            Check.Equal(1,stages.GetProperty("tcpAccepted").GetInt32());
+            Check.Equal(1,stages.GetProperty("tlsCompleted").GetInt32());
+            Check.Equal(1,stages.GetProperty("enrollmentAccepted").GetInt32());
+            Check.Equal(1,stages.GetProperty("authenticated").GetInt32());
             await Wire.WriteAsync(lease.Stream,new(LogicalChannel.Control,4,0,Message.Create("ping").Encode()),ct);
             Check.Equal("ping",Message.Decode((await Wire.ReadAsync(tls,ct)).Payload).Type);
             using var duplicateWait=CancellationTokenSource.CreateLinkedTokenSource(ct);duplicateWait.CancelAfter(200);
@@ -68,6 +74,7 @@ internal static class CompanionChecks
             using(var tcp=new TcpClient()){await tcp.ConnectAsync(IPAddress.Loopback,enrollment.Port,ct);await Check.Throws<AuthenticationException>(async()=>{using var ignored=await TlsClient(tcp,new string('0',64),ct);});}
             using(var tcp=new TcpClient()){await tcp.ConnectAsync(IPAddress.Loopback,enrollment.Port,ct);using var tls=await TlsClient(tcp,enrollment.CertificateSha256,ct);await Wire.WriteAsync(tls,new(LogicalChannel.Control,0,0,Message.Create("wifi.join",new{sessionId="old-session"}).Encode()),ct);await Check.Throws<IOException>(async()=>await Wire.ReadAsync(tls,ct));}
             using(var tcp=new TcpClient()){await tcp.ConnectAsync(IPAddress.Loopback,enrollment.Port,ct);using var tls=await TlsClient(tcp,enrollment.CertificateSha256,ct);await Wire.WriteAsync(tls,new(LogicalChannel.Control,0,0,Message.Create("wifi.join",new{sessionId=enrollment.SessionId}).Encode()),ct);byte[] wrong=(byte[])key.Clone();wrong[0]^=1;await Check.Throws<UnauthorizedAccessException>(async()=>await Authentication.ServerAsync(tls,wrong,ct));}
+            await Check.Eventually(()=>Task.FromResult(JsonSerializer.SerializeToElement(wifi.Status,Message.Json).GetProperty("failureStage").GetString()=="hmac"));
             using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ct);timeout.CancelAfter(250);await Check.Throws<OperationCanceledException>(async()=>await wifi.ConnectAsync(timeout.Token));Check.True(wifi.Enabled);
         });
     }

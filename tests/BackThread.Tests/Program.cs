@@ -28,6 +28,13 @@ async Task Test(string name, Func<Task> action)
     catch (Exception ex) { failed++; Console.WriteLine("FAIL " + name + ": " + ex); results.Add(new { name, passed = false, milliseconds = watch.ElapsedMilliseconds, error = ex.ToString() }); }
 }
 await Test("windows.system-metrics-real-samples",async()=>{var counter=new PcMetricsCounter();var first=counter.Sample();await Task.Delay(80,ct);var next=counter.Sample();Check.True(first.RamTotalBytes>0&&next.RamUsedBytes<=next.RamTotalBytes);Check.True(next.CpuPercent is >=0 and <=100);});
+await Test("foundation.redacts-credential-shaped-diagnostics", () =>
+{
+    string redacted = NativeShellKit.Security.SecretRedactor.Redact("Connected; Bearer fixture-value; password=fixture-password");
+    Check.True(redacted.StartsWith("Connected", StringComparison.Ordinal));
+    Check.True(redacted.Contains("[REDACTED]") && !redacted.Contains("fixture-"));
+    return Task.CompletedTask;
+});
 await Test("transport.reply-channel-and-late-replies", async () =>
 {
     using var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -249,6 +256,12 @@ await Test("integration.heartbeat-audio-order-and-content", async () =>
     await Check.Eventually(async () => (await s.Connection.RequestAsync(LogicalChannel.Diagnostics, "audio.stats", new { }, ct)).Body.GetProperty("packets").GetInt64() == 100);
     var stats = (await s.Connection.RequestAsync(LogicalChannel.Diagnostics, "audio.stats", new { }, ct)).Body;
     Check.Equal(Convert.ToHexString(expected.GetHashAndReset()).ToLowerInvariant(), stats.GetProperty("sha256").GetString()); Check.Equal(0L, stats.GetProperty("gaps").GetInt64());
+    await s.Connection.RequestAsync(LogicalChannel.Control, "audio.stop", new { }, ct);
+    await s.Connection.SendFrameAsync(LogicalChannel.Audio, PcmRing.Sine(0), 0, ct);
+    await s.Connection.RequestAsync(LogicalChannel.Control, "audio.start", new { sampleRate = 48000, channels = 2, bits = 16 }, ct);
+    var restarted = (await s.Connection.RequestAsync(LogicalChannel.Diagnostics, "audio.stats", new { }, ct)).Body;
+    Check.Equal(0L, restarted.GetProperty("playbackTicks").GetInt64());
+    Check.Equal(0L, restarted.GetProperty("skippedPlaybackTicks").GetInt64());
     Check.Equal("pong", (await s.Connection.RequestAsync(LogicalChannel.Control, "ping", new { }, ct)).Type);
 });
 await Test("integration.transfer-hash-text-download-and-failed-job", async () =>
@@ -459,6 +472,7 @@ if (duration > 0) await Test("soak.concurrent-audio-worker", async () =>
         sender=new {queueMaximumMilliseconds=s.Connection.AudioQueueMaximumMilliseconds,writeMaximumMilliseconds=s.Connection.AudioWriteMaximumMilliseconds,slowWrites=s.Connection.AudioSlowWrites,pacingMaximumLatenessMilliseconds=audio.PacingMaximumLatenessMilliseconds,pacingLateFrames=audio.PacingLateFrames,pacingResets=audio.PacingResets,captureDroppedBytes=audio.Ring.DroppedBytes,captureSilenceBytes=audio.Ring.SilenceBytes},
         receiver = final,lossSamples }, Message.Json));
     Check.True(maximumBuffer <= 19200);
+    Check.Equal(0L, final.GetProperty("skippedPlaybackTicks").GetInt64());
     Check.Equal(0L, final.GetProperty("droppedBytes").GetInt64());
     Check.Equal(0L, final.GetProperty("gaps").GetInt64());
     Check.Equal(0L, final.GetProperty("silenceBytes").GetInt64());

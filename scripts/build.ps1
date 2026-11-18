@@ -19,5 +19,6 @@ try {
   Copy-Item -LiteralPath scripts/Setup-Portable.ps1 -Destination $publishPath -Force
   Copy-Item -LiteralPath docs/PORTABLE_README.txt -Destination (Join-Path $publishPath 'READ-ME-FIRST.txt') -Force
   & ./scripts/collect-licenses.ps1 -Destination (Join-Path $publishPath 'licenses')
+  Copy-Item -LiteralPath src/Windows/Host.Core/Foundation/LICENSE.NativeShellKit.txt -Destination (Join-Path $publishPath 'licenses') -Force
  }
 } finally { Pop-Location }

@@ -21,6 +21,8 @@ public sealed class TemporaryWifiTransport(byte[] key,bool allowLoopbackForTests
         public readonly object Gate=new();
         public required TcpListener Listener;public required X509Certificate2 Certificate;public required WifiEnrollment Enrollment;
         public long Started=Stopwatch.GetTimestamp();public Stream? Active;public Task? Serving;
+        public string Stage="awaiting-tcp", FailureStage="", FailureKind="";
+        public int TcpAccepted, TlsCompleted, EnrollmentAccepted, Authenticated;
         public void Dispose(){Stop.Cancel();Listener.Stop();lock(Gate){Active?.Dispose();Active=null;}Ready.Writer.TryComplete();Certificate.Dispose();}
     }
     private readonly object gate=new();
@@ -31,7 +33,22 @@ public sealed class TemporaryWifiTransport(byte[] key,bool allowLoopbackForTests
     public event Action? Changed;
     public object Status
     {
-        get{lock(gate){var s=current;return new{enabled=s is not null,state=s is null?lastState:s.Active is null?"Waiting for iPhone":"TLS authenticated",remainingSeconds=s is null||s.Enrollment.TtlSeconds==0?0:Math.Max(0,s.Enrollment.TtlSeconds-Stopwatch.GetElapsedTime(s.Started).TotalSeconds),untilDisconnected=s?.Enrollment.TtlSeconds==0,preferUsb=s?.Enrollment.PreferUsb??true};}}
+        get
+        {
+            lock (gate)
+            {
+                var s = current;
+                if (s is null) return new { enabled = false, state = lastState, remainingSeconds = 0, untilDisconnected = false, preferUsb = true };
+                lock (s.Gate) return new
+                {
+                    enabled = true, state = s.Active is null ? "Waiting for iPhone" : "TLS authenticated",
+                    remainingSeconds = s.Enrollment.TtlSeconds == 0 ? 0 : Math.Max(0, s.Enrollment.TtlSeconds - Stopwatch.GetElapsedTime(s.Started).TotalSeconds),
+                    untilDisconnected = s.Enrollment.TtlSeconds == 0, preferUsb = s.Enrollment.PreferUsb,
+                    stage = s.Stage, failureStage = s.FailureStage, failureKind = s.FailureKind,
+                    tcpAccepted = s.TcpAccepted, tlsCompleted = s.TlsCompleted, enrollmentAccepted = s.EnrollmentAccepted, authenticated = s.Authenticated
+                };
+            }
+        }
     }
     public WifiEnrollment Enable(string address,TimeSpan lifetime,bool preferUsb=true)
     {
@@ -61,27 +78,35 @@ public sealed class TemporaryWifiTransport(byte[] key,bool allowLoopbackForTests
         while(!session.Stop.IsCancellationRequested)
         {
             TcpClient? client=null;SslStream? secure=null;
+            string stage="awaiting-tcp";
             try
             {
                 client=await session.Listener.AcceptTcpClientAsync(session.Stop.Token);client.NoDelay=true;
                 while(attempts.Count>0&&Stopwatch.GetElapsedTime(attempts.Peek())>TimeSpan.FromMinutes(1))attempts.Dequeue();
                 bool occupied;lock(session.Gate)occupied=session.Active is not null;
                 if(attempts.Count>=8||occupied){client.Dispose();continue;}attempts.Enqueue(Stopwatch.GetTimestamp());
+                stage="tls";lock(session.Gate){session.Stage=stage;session.TcpAccepted++;}
                 using var timeout=CancellationTokenSource.CreateLinkedTokenSource(session.Stop.Token);timeout.CancelAfter(TimeSpan.FromSeconds(5));
                 using var cancel=timeout.Token.Register(client.Dispose);
                 secure=new SslStream(client.GetStream(),false);
                 await secure.AuthenticateAsServerAsync(new SslServerAuthenticationOptions{ServerCertificate=session.Certificate,EnabledSslProtocols=SslProtocols.Tls12,ClientCertificateRequired=false,CertificateRevocationCheckMode=X509RevocationMode.NoCheck},timeout.Token);
+                stage="enrollment";lock(session.Gate){session.Stage=stage;session.TlsCompleted++;}
                 var join=await Wire.ReadAsync(secure,timeout.Token);var message=Message.Decode(join.Payload);
                 if(join.Channel!=LogicalChannel.Control||message.Type!="wifi.join"||!message.Body.TryGetProperty("sessionId",out var id)||id.GetString()!=session.Enrollment.SessionId)throw new UnauthorizedAccessException("Temporary session identity rejected");
+                stage="hmac";lock(session.Gate){session.Stage=stage;session.EnrollmentAccepted++;}
                 await Authentication.ClientAsync(secure,key,timeout.Token);
+                stage="handover";lock(session.Gate){session.Stage=stage;session.Authenticated++;}
                 SslStream accepted=secure;
-                var owned=new LeaseStream(accepted,()=>{lock(session.Gate)session.Active=null;});
-                lock(session.Gate)session.Active=owned;
+                var owned=new LeaseStream(accepted,()=>{lock(session.Gate){session.Active=null;session.Stage="awaiting-tcp";}});
+                lock(session.Gate){session.Stop.Token.ThrowIfCancellationRequested();session.Active=owned;session.Stage="authenticated";session.FailureStage=session.FailureKind="";}
                 if(!session.Ready.Writer.TryWrite(new(owned,"wifi",true))){owned.Dispose();throw new IOException("Another Wi-Fi handover is pending");}
                 secure=null;client=null;Changed?.Invoke();
             }
             catch(Exception)when(session.Stop.IsCancellationRequested){break;}
-            catch(Exception ex)when(ex is IOException or AuthenticationException or UnauthorizedAccessException or InvalidDataException or OperationCanceledException or SocketException or ArgumentException){LastFailure=ex.GetType().Name+": "+ex.Message+" / "+ex.InnerException?.Message;}
+            catch(Exception ex)when(ex is IOException or AuthenticationException or UnauthorizedAccessException or InvalidDataException or OperationCanceledException or SocketException or ArgumentException){
+                lock(session.Gate){session.Stage="awaiting-tcp";session.FailureStage=stage;session.FailureKind=ex.GetType().Name;}
+                LastFailure=stage+": "+ex.GetType().Name;
+            }
             finally{secure?.Dispose();client?.Dispose();}
         }
     }

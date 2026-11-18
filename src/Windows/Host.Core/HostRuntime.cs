@@ -8,6 +8,7 @@ using BackThread.Media;
 using BackThread.Transport;
 using BackThread.Worker;
 using NAudio.CoreAudioApi;
+using NativeShellKit.Security;
 
 namespace BackThread.Host;
 
@@ -56,13 +57,14 @@ public sealed class HostRuntime(HostConfig config)
             };
         }
     }
-    private void SetState(string value, string error = "") { lock (stateGate) { state = value; lastError = error; } Log?.Invoke(value + (error.Length == 0 ? "" : ": " + error)); }
+    private void WriteLog(string message) => Log?.Invoke(SecretRedactor.Redact(message));
+    private void SetState(string value, string error = "") { lock (stateGate) { state = value; lastError = SecretRedactor.Redact(error); } WriteLog(value + (error.Length == 0 ? "" : ": " + error)); }
     public RemoteWorker Worker => worker ?? throw new IOException("Agent is not connected");
     public async Task RunAsync(CancellationToken ct)
     {
         Apps.Changed+=CatalogChanged;wifi.Changed+=WifiChanged;
         foreach (string source in config.BlockedSources) events.BlockedSources.Add(source);
-        try { await media.InitializeAsync(); } catch (Exception ex) { Log?.Invoke("Media unavailable: " + ex.Message); }
+        try { await media.InitializeAsync(); } catch (Exception ex) { WriteLog("Media unavailable: " + ex.Message); }
         var api = new LocalApi(this, config.ApiPort, key);
         var apiTask = api.RunAsync(ct); int attempt = 0;
         try
@@ -88,7 +90,7 @@ public sealed class HostRuntime(HostConfig config)
                             lock(stateGate)audioError="";
                             phonePlayback=hello.Body.TryGetProperty("playbackOwner",out var owner)&&owner.GetString()=="phone";
                             supportsApps=hello.Body.TryGetProperty("capabilities",out var caps)&&caps.EnumerateArray().Any(x=>x.GetString()=="apps");
-                            SetState("connected"); Log?.Invoke("Agent capabilities: " + hello.Body.GetRawText()); attempt = 0;
+                            SetState("connected"); WriteLog($"Agent negotiated; apps capability: {supportsApps}"); attempt = 0;
                             await c.RequestAsync(LogicalChannel.Control, "action.registry", new { actions = config.Actions.Select(a => new { a.Id, a.Title, icon=a.Kind.StartsWith("media.",StringComparison.Ordinal)?"play":"actions" }) }, session.Token);
                             if(supportsApps)await PublishCatalogAsync(c,session.Token);
                             heartbeat = HeartbeatAsync(c, session.Token); mediaLoop = MediaLoopAsync(c, session.Token);
@@ -173,8 +175,8 @@ public sealed class HostRuntime(HostConfig config)
             catch(OperationCanceledException)when(mode.IsCancellationRequested&&!ct.IsCancellationRequested) { }
             catch(Exception ex)when(!ct.IsCancellationRequested&&(ex is IOException or OperationCanceledException))
             {
-                lock(stateGate)audioError=ex.Message;
-                Log?.Invoke("Audio unavailable; control remains connected: "+ex.Message);
+                lock(stateGate)audioError=SecretRedactor.Redact(ex.Message);
+                WriteLog("Audio unavailable; control remains connected: "+ex.Message);
                 await audioModeChanged.WaitAsync(ct);
             }
             finally {lock(stateGate)if(activeAudio==mode)activeAudio=null;}
@@ -188,7 +190,7 @@ public sealed class HostRuntime(HostConfig config)
         if(audioModeChanged.CurrentCount==0)audioModeChanged.Release();
     }
     private void CatalogChanged(){Interlocked.Exchange(ref catalogDirty,1);if(Interlocked.CompareExchange(ref catalogPublishing,1,0)==0)_=PublishChangedCatalogAsync();}
-    private async Task PublishChangedCatalogAsync(){try{while(Interlocked.Exchange(ref catalogDirty,0)!=0){var c=connection;if(c!=null&&supportsApps)await PublishCatalogAsync(c,CancellationToken.None);}}catch(Exception ex)when(ex is IOException or OperationCanceledException){Log?.Invoke("App catalog update unavailable");}finally{Interlocked.Exchange(ref catalogPublishing,0);if(Volatile.Read(ref catalogDirty)!=0)CatalogChanged();}}
+    private async Task PublishChangedCatalogAsync(){try{while(Interlocked.Exchange(ref catalogDirty,0)!=0){var c=connection;if(c!=null&&supportsApps)await PublishCatalogAsync(c,CancellationToken.None);}}catch(Exception ex)when(ex is IOException or OperationCanceledException){WriteLog("App catalog update unavailable");}finally{Interlocked.Exchange(ref catalogPublishing,0);if(Volatile.Read(ref catalogDirty)!=0)CatalogChanged();}}
     private async Task PublishCatalogAsync(Connection c,CancellationToken ct)
     {
         await catalogSend.WaitAsync(ct);try{var entries=await Apps.WireCatalogAsync();
@@ -206,7 +208,7 @@ public sealed class HostRuntime(HostConfig config)
         while (!ct.IsCancellationRequested)
         {
             try { Metrics=metricsCounter.Sample();await c.SendAsync(LogicalChannel.Media, Message.Create("media.state", new { session = await media.SnapshotAsync(),system=Metrics }), ct); }
-            catch (Exception ex) when (!ct.IsCancellationRequested) { Log?.Invoke("Media update: " + ex.Message); }
+            catch (Exception ex) when (!ct.IsCancellationRequested) { WriteLog("Media update: " + ex.Message); }
             await Task.Delay(1000, ct);
         }
     }
@@ -221,12 +223,12 @@ public sealed class HostRuntime(HostConfig config)
                 await Task.Delay(5000, ct);
             }
         }
-        catch (Exception ex) when (!ct.IsCancellationRequested) { Log?.Invoke("Windows notification collection unavailable: " + ex.Message + "; use the opt-in /v1/events API"); }
+        catch (Exception ex) when (!ct.IsCancellationRequested) { WriteLog("Windows notification collection unavailable: " + ex.Message + "; use the opt-in /v1/events API"); }
     }
     private async ValueTask ReceiveAsync(Frame f, Message? m, CancellationToken ct)
     {
         worker?.Receive(f, m); if (m is null) return;
-        if(m.Type=="audio.error") { string error=m.Body.TryGetProperty("error",out var value)?value.GetString()??"Receiver audio failed":"Receiver audio failed";lock(stateGate)audioError=error;Log?.Invoke("Audio receiver: "+error);return; }
+        if(m.Type=="audio.error") { string error=m.Body.TryGetProperty("error",out var value)?value.GetString()??"Receiver audio failed":"Receiver audio failed";lock(stateGate)audioError=SecretRedactor.Redact(error);WriteLog("Audio receiver: "+error);return; }
         if (m.Type == "job.progress") { var s = m.Body.Deserialize<JobState>(Message.Json); if (s != null) JobProgress?.Invoke(s); return; }
         if(m.Type=="media.owner"){ChangePlaybackOwner(m.Body.GetProperty("owner").GetString()!);await connection!.SendAsync(f.Channel,Message.Create("ok",new{success=true,owner=phonePlayback?"phone":"pc"},replyTo:m.Id),ct);return;}
         if(m.Type=="media.playback"){await connection!.SendAsync(f.Channel,Message.Create("ok",new{success=true},replyTo:m.Id),ct);return;}

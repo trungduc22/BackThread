@@ -26,4 +26,4 @@ try
     var runtime = new HostRuntime(HostConfig.Load(Value("--config") ?? "config/local.json")); runtime.Log += s => Console.WriteLine(DateTimeOffset.Now.ToString("O") + " " + s);
     await runtime.RunAsync(stop.Token); return 0;
 }
-catch (Exception ex) { Console.Error.WriteLine(ex.GetType().Name + ": " + ex.Message); return 1; }
+catch (Exception ex) { Console.Error.WriteLine(ex.GetType().Name + ": " + NativeShellKit.Security.SecretRedactor.Redact(ex.Message)); return 1; }

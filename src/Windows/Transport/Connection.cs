@@ -65,7 +65,8 @@ public sealed class Connection : IAsyncDisposable
         try
         {
             if (!pending.TryAdd(id, new(channel, tcs))) throw new InvalidOperationException();
-            using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct, lifetime.Token);
+            // The reader completes pending requests on EOF. Let a decoded reply win over immediate teardown.
+            using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
             limit.CancelAfter(timeout ?? TimeSpan.FromSeconds(15));
             await SendAsync(channel, Message.Create(type, body, id), limit.Token);
             var response = await tcs.Task.WaitAsync(limit.Token);

@@ -45,7 +45,8 @@ public sealed class AgentServer : IAsyncDisposable
                 await using var c = new Connection(client.GetStream());
                 using var session = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
                 var ring = new PcmRing(); using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-                bool audioOn = false; long packets = 0, bytes = 0, gaps = 0; uint previous = 0; long framesRead = 0, playbackEpoch = 0;
+                bool audioOn = false; long packets = 0, bytes = 0, gaps = 0; uint previous = 0; long framesRead = 0, playbackEpoch = 0, skippedPlaybackTicks = 0, maxPlaybackWakeUs = 0;
+                var playbackGate = new object();
                 long lastArrival=0,maximumArrivalGapUs=0;
                 var pendingTasks = new List<Task>();
                 using var fileSlots=new SemaphoreSlim(2,2);
@@ -102,17 +103,23 @@ public sealed class AgentServer : IAsyncDisposable
                 {
                     Thread.CurrentThread.Name = "BackThread simulated DAC"; Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
                     byte[] sink = new byte[1920]; long epoch = 0, consumed = 0;
+                    long lastWake = Stopwatch.GetTimestamp();
                     while (!session.Token.WaitHandle.WaitOne(Volatile.Read(ref audioOn) ? 5 : 20))
                     {
-                            if (!Volatile.Read(ref audioOn)) continue;
-                            long currentEpoch = Interlocked.Read(ref playbackEpoch);
-                            if (currentEpoch == 0) continue; // negotiation alone is not the first PCM sample
-                            if (currentEpoch != epoch) { epoch = currentEpoch; consumed = 0; }
-                            // Windows timer callbacks can coalesce at ~15.6 ms. Model a hardware sample
-                            // clock, consuming all elapsed 10 ms blocks instead of one block per wake.
+                        long wake = Stopwatch.GetTimestamp();
+                        long wakeUs = Stopwatch.GetElapsedTime(lastWake, wake).Ticks / 10;
+                        lastWake = wake;
+                        lock (playbackGate)
+                        {
+                            if (!audioOn || playbackEpoch == 0) continue;
+                            if (playbackEpoch != epoch) { epoch = playbackEpoch; consumed = 0; }
+                            maxPlaybackWakeUs = Math.Max(maxPlaybackWakeUs, wakeUs);
                             long due = Math.Max(0, (long)(Stopwatch.GetElapsedTime(epoch).TotalMilliseconds - 30) / 10);
-                            if (due - consumed > 10) consumed = due - 10; // bound an exceptional scheduler stall
-                            while (consumed < due) { ring.Read(sink); Interlocked.Increment(ref framesRead); consumed++; }
+                            long skipped = Math.Max(0, due - consumed - 10);
+                            skippedPlaybackTicks += skipped;
+                            consumed += skipped;
+                            while (consumed < due) { ring.Read(sink); framesRead++; consumed++; }
+                        }
                     }
                 }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
                 try
@@ -122,13 +129,14 @@ public sealed class AgentServer : IAsyncDisposable
                         if (DelayMs > 0) await Task.Delay(DelayMs, ct);
                         if (frame.Channel == LogicalChannel.Audio)
                         {
-                            if (!audioOn || frame.Payload.Length % 4 != 0) throw new InvalidDataException("Invalid PCM stream");
+                            if (frame.Payload.Length % 4 != 0) throw new InvalidDataException("Invalid PCM stream");
+                            if (!audioOn) return; // A PCM frame queued before Stop can arrive afterwards.
                             long arrived=Stopwatch.GetTimestamp();
                             if(lastArrival!=0)maximumArrivalGapUs=Math.Max(maximumArrivalGapUs,Stopwatch.GetElapsedTime(lastArrival,arrived).Ticks/10);
                             lastArrival=arrived;
                             if (previous != 0 && frame.Sequence != previous + 1) gaps++;
                             previous = frame.Sequence; hash.AppendData(frame.Payload); ring.Write(frame.Payload);
-                            Interlocked.CompareExchange(ref playbackEpoch, Stopwatch.GetTimestamp(), 0);
+                            lock (playbackGate) { if (playbackEpoch == 0) playbackEpoch = arrived; }
                             packets++; bytes += frame.Payload.Length;
                             if (DisconnectAfterAudioPackets > 0 && packets >= DisconnectAfterAudioPackets) throw new IOException("Injected disconnect");
                             return;
@@ -152,9 +160,26 @@ public sealed class AgentServer : IAsyncDisposable
                                 case "hello": await Reply(new { agent = "BackThread.Simulator", simulated = true, capabilities = new[] { "pcm", "jobs", "files", "events", "faults" } }); break;
                                 case "audio.start":
                                     if (b.GetProperty("sampleRate").GetInt32() != 48000 || b.GetProperty("channels").GetInt32() != 2 || b.GetProperty("bits").GetInt32() != 16) throw new InvalidDataException("Only 48 kHz stereo PCM16 supported");
-                                    Volatile.Write(ref audioOn, false); ring.Clear(); hash.GetHashAndReset(); packets = bytes = gaps = 0; lastArrival=maximumArrivalGapUs=0; previous = 0; Interlocked.Exchange(ref playbackEpoch, 0); Volatile.Write(ref audioOn, true); await Reply(new { ready = true }); break;
-                                case "audio.stop": audioOn = false; ring.Clear(); await Reply(new { stopped = true }); break;
-                                case "audio.stats": await Reply(new { packets, bytes, gaps, bufferedBytes = ring.Count, droppedBytes = ring.DroppedBytes, silenceBytes = ring.SilenceBytes, playbackTicks = framesRead, maximumArrivalGapMilliseconds=maximumArrivalGapUs/1000d,handlerMaximumMilliseconds=c.HandlerMaximumMilliseconds, sha256 = Convert.ToHexString(hash.GetCurrentHash()).ToLowerInvariant() }); break;
+                                    lock (playbackGate)
+                                    {
+                                        ring.Clear();
+                                        playbackEpoch = framesRead = skippedPlaybackTicks = maxPlaybackWakeUs = 0;
+                                        Volatile.Write(ref audioOn, true);
+                                    }
+                                    hash.GetHashAndReset(); packets = bytes = gaps = 0; lastArrival = maximumArrivalGapUs = 0; previous = 0;
+                                    await Reply(new { ready = true }); break;
+                                case "audio.stop":
+                                    lock (playbackGate) { Volatile.Write(ref audioOn, false); ring.Clear(); }
+                                    await Reply(new { stopped = true }); break;
+                                case "audio.stats":
+                                    object audioStats;
+                                    lock (playbackGate)
+                                        audioStats = new { packets, bytes, gaps, bufferedBytes = ring.Count, droppedBytes = ring.DroppedBytes,
+                                            silenceBytes = ring.SilenceBytes, playbackTicks = framesRead, skippedPlaybackTicks,
+                                            maximumPlaybackWakeMilliseconds = maxPlaybackWakeUs / 1000d,
+                                            maximumArrivalGapMilliseconds = maximumArrivalGapUs / 1000d,
+                                            handlerMaximumMilliseconds = c.HandlerMaximumMilliseconds, sha256 = Convert.ToHexString(hash.GetCurrentHash()).ToLowerInvariant() };
+                                    await Reply(audioStats); break;
                                 case "job.submit": await Reply(Jobs.Submit(b.Deserialize<JobSpec>(Message.Json) ?? throw new InvalidDataException())); break;
                                 case "job.query": await Reply(Jobs.Query(b.GetProperty("jobId").GetString()!) ?? throw new FileNotFoundException("Unknown job")); break;
                                 case "job.cancel": await Reply(new { cancelled = Jobs.Cancel(b.GetProperty("jobId").GetString()!) }); break;
