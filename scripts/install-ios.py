@@ -173,9 +173,13 @@ def main():
     action.add_argument('--install', action='store_true', help='Install or upgrade BackThread on the one paired USB device')
     action.add_argument('--uninstall',action='store_true',help='Remove only the selected BackThread app and its container through the normal installer')
     parser.add_argument('--component', choices=('ui','probe'), default='ui')
+    parser.add_argument('--build-dir', type=pathlib.Path, help='Build output under repository artifacts; defaults to ios-build or ios-probe')
     args = parser.parse_args()
     if args.uninstall:raise SystemExit(uninstall(args.component))
-    app = ROOT / ('artifacts/ios-build/stage/BackThread.app' if args.component=='ui' else 'artifacts/ios-probe/stage/BackThreadProbe.app')
+    build = (ROOT / (args.build_dir or pathlib.Path('artifacts/ios-build' if args.component=='ui' else 'artifacts/ios-probe'))).resolve()
+    if not build.is_relative_to(ROOT / 'artifacts') or build == ROOT / 'artifacts':
+        raise ValueError('Select a build directory under this repository artifacts directory')
+    app = build / 'stage' / ('BackThread.app' if args.component=='ui' else 'BackThreadProbe.app')
     identifier=IDENTIFIERS[args.component]
     info = plistlib.loads((app / 'Info.plist').read_bytes())
     if info['CFBundleIdentifier'] != identifier:

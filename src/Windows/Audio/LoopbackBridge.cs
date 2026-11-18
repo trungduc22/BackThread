@@ -12,6 +12,10 @@ public sealed class LoopbackBridge
     public string? LastError { get; private set; }
     public long FramesSent { get; private set; }
     private long lastCapture;
+    private long maximumLatenessMs,lateFrames,pacingResets;
+    public long PacingMaximumLatenessMilliseconds=>Interlocked.Read(ref maximumLatenessMs);
+    public long PacingLateFrames=>Interlocked.Read(ref lateFrames);
+    public long PacingResets=>Interlocked.Read(ref pacingResets);
     /// <summary>WASAPI shared-mode PCM conversion is requested from the Windows audio engine.</summary>
     public async Task RunAsync(Connection connection, bool fixture, CancellationToken ct, Action? pacingStarted = null)
     {
@@ -36,8 +40,12 @@ public sealed class LoopbackBridge
         {
                 long delay = next - timer.ElapsedMilliseconds;
                 if (delay > 0 && ct.WaitHandle.WaitOne((int)delay)) ct.ThrowIfCancellationRequested();
+                long lateness=Math.Max(0,timer.ElapsedMilliseconds-next);
+                long old=Interlocked.Read(ref maximumLatenessMs);
+                while(lateness>old){long observed=Interlocked.CompareExchange(ref maximumLatenessMs,lateness,old);if(observed==old)break;old=observed;}
+                if(lateness>=10)Interlocked.Increment(ref lateFrames);
                 // Skip late scheduling slots rather than building up audio latency.
-                if (timer.ElapsedMilliseconds - next > 50) { Ring.Clear(); next = timer.ElapsedMilliseconds; }
+                if (timer.ElapsedMilliseconds - next > 50) { Interlocked.Increment(ref pacingResets);Ring.Clear(); next = timer.ElapsedMilliseconds; }
                 byte[] pcm = fixture ? PcmRing.Sine(sample) : new byte[PcmRing.BytesPer10Ms];
                 if (!fixture)
                 {

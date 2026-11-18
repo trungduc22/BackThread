@@ -24,7 +24,22 @@ public sealed class HostRuntime(HostConfig config)
     private LoopbackBridge? audio;
     public event Action<string>? Log;
     public event Action<JobState>? JobProgress;
-    public object Status { get { lock (stateGate) return new { state, lastError, audioError, transport = config.Transport, simulated = config.Transport == "localhost", device = audio?.DeviceName, captureError = audio?.LastError, audioFrames = audio?.FramesSent ?? 0, audioDroppedFrames = connection?.DroppedAudio ?? 0,audioWriteMaximumMilliseconds=connection?.AudioWriteMaximumMilliseconds??0,audioSlowWrites=connection?.AudioSlowWrites??0 }; } }
+    public object Status
+    {
+        get
+        {
+            lock(stateGate) return new
+            {
+                state,lastError,audioError,transport=config.Transport,simulated=config.Transport=="localhost",
+                device=audio?.DeviceName,captureError=audio?.LastError,audioFrames=audio?.FramesSent??0,
+                captureBufferedBytes=audio?.Ring.Count??0,captureDroppedBytes=audio?.Ring.DroppedBytes??0,captureSilenceBytes=audio?.Ring.SilenceBytes??0,
+                audioDroppedFrames=connection?.DroppedAudio??0,audioWriteMaximumMilliseconds=connection?.AudioWriteMaximumMilliseconds??0,
+                audioSlowWrites=connection?.AudioSlowWrites??0,audioQueueMaximumMilliseconds=connection?.AudioQueueMaximumMilliseconds??0,
+                audioPacingMaximumLatenessMilliseconds=audio?.PacingMaximumLatenessMilliseconds??0,
+                audioPacingLateFrames=audio?.PacingLateFrames??0,audioPacingResets=audio?.PacingResets??0
+            };
+        }
+    }
     private void SetState(string value, string error = "") { lock (stateGate) { state = value; lastError = error; } Log?.Invoke(value + (error.Length == 0 ? "" : ": " + error)); }
     public RemoteWorker Worker => worker ?? throw new IOException("Agent is not connected");
     public async Task RunAsync(CancellationToken ct)

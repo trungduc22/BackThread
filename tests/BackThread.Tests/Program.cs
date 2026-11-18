@@ -69,6 +69,23 @@ await Test("wire.network-writer-continues-with-paused-caller", async()=>
         }
     }){IsBackground=true};thread.Start();await completed.Task.WaitAsync(ct);thread.Join();
 });
+await Test("transport.audio-queue-wait-includes-blocked-writer", async()=>
+{
+    var gate=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    using var output=new DelayedWriteStream(gate.Task);
+    await using var connection=new Connection(output);
+    try
+    {
+        await connection.SendFrameAsync(LogicalChannel.Files,[],0,ct);
+        await output.Entered.Task.WaitAsync(ct);
+        await connection.SendFrameAsync(LogicalChannel.Audio,new byte[1920],0,ct);
+        await Task.Delay(40,ct);
+        gate.TrySetResult();
+        await Check.Eventually(()=>Task.FromResult(connection.AudioQueueMaximumMilliseconds>=30));
+        Check.Equal(0L,connection.DroppedAudio);
+    }
+    finally {gate.TrySetResult();}
+});
 await Test("config.audio-gain-keeps-system-volume-separate", async()=>
 {
     string path=Path.Combine(root,"gain.json");await File.WriteAllTextAsync(path,"{}",ct);Check.Equal(1f,HostConfig.Load(path).AudioGain);
@@ -166,6 +183,22 @@ await Test("transport.audio-backpressure-is-bounded", async () =>
         Check.True(c.DroppedAudio > 0, "Slow consumer did not trigger audio eviction");
     }
     finally { listener.Stop(); }
+});
+await Test("simulator.slow-file-io-keeps-control-responsive",async()=>
+{
+    await using var server=new AgentServer(0,key,Path.Combine(root,"slow-file")){FileIoDelayMs=3000};
+    server.Start();await using var session=await Session.Open(server.Port,key,ct);
+    string path=Path.Combine(root,"slow-file.dat");byte[] data=RandomNumberGenerator.GetBytes(8192);await File.WriteAllBytesAsync(path,data,ct);
+    Task<Message> upload=session.Worker.UploadAsync(path,"fixture.dat",ct);
+    try
+    {
+        await Check.Eventually(()=>Task.FromResult(server.FileOperationsInFlight>0));
+        Check.True(!upload.IsCompleted,"Injected file delay was not exercised");
+        var pong=await session.Connection.RequestAsync(LogicalChannel.Control,"ping",new{},ct,TimeSpan.FromSeconds(1));
+        Check.Equal("pong",pong.Type);
+    }
+    finally {server.FileIoDelayMs=0;await upload;}
+    Check.True((await session.Worker.ReadArtifactAsync("fixture.dat",0,data.Length,ct)).SequenceEqual(data));
 });
 await Test("integration.heartbeat-audio-order-and-content", async () =>
 {
@@ -375,7 +408,9 @@ if (duration > 0) await Test("soak.concurrent-audio-worker", async () =>
     }
     final = (await s.Connection.RequestAsync(LogicalChannel.Diagnostics, "audio.stats", new { }, ct)).Body.Clone();
     } finally { audioStop.Cancel();try{await stream;}catch(OperationCanceledException)when(audioStop.IsCancellationRequested){} }
-    process.Refresh(); Console.WriteLine("METRIC " + JsonSerializer.Serialize(new { durationSeconds = watch.Elapsed.TotalSeconds, finalStatsTakenBeforeSourceStop=true, jobs, maximumBuffer, startMemory, endMemory = process.WorkingSet64, cpuSeconds = (process.TotalProcessorTime - cpu).TotalSeconds, senderDropped = s.Connection.DroppedAudio, receiver = final,lossSamples }, Message.Json));
+    process.Refresh(); Console.WriteLine("METRIC " + JsonSerializer.Serialize(new { durationSeconds = watch.Elapsed.TotalSeconds, finalStatsTakenBeforeSourceStop=true, jobs, maximumBuffer, startMemory, endMemory = process.WorkingSet64, cpuSeconds = (process.TotalProcessorTime - cpu).TotalSeconds, senderDropped = s.Connection.DroppedAudio,
+        sender=new {queueMaximumMilliseconds=s.Connection.AudioQueueMaximumMilliseconds,writeMaximumMilliseconds=s.Connection.AudioWriteMaximumMilliseconds,slowWrites=s.Connection.AudioSlowWrites,pacingMaximumLatenessMilliseconds=audio.PacingMaximumLatenessMilliseconds,pacingLateFrames=audio.PacingLateFrames,pacingResets=audio.PacingResets,captureDroppedBytes=audio.Ring.DroppedBytes,captureSilenceBytes=audio.Ring.SilenceBytes},
+        receiver = final,lossSamples }, Message.Json));
     Check.True(maximumBuffer <= 19200);
     Check.Equal(0L, final.GetProperty("droppedBytes").GetInt64());
     Check.Equal(0L, final.GetProperty("gaps").GetInt64());

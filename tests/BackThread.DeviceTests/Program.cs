@@ -132,6 +132,14 @@ try
                 measurements["memoryDuringAudio"] = memorySamples;
                 measurements["senderFrames"] = bridge.FramesSent; measurements["senderDroppedFrames"] = connection.DroppedAudio;
                 measurements["captureDevice"] = bridge.DeviceName; measurements["captureError"] = bridge.LastError;
+                measurements["senderTiming"]=new
+                {
+                    queueMaximumMilliseconds=connection.AudioQueueMaximumMilliseconds,
+                    writeMaximumMilliseconds=connection.AudioWriteMaximumMilliseconds,slowWrites=connection.AudioSlowWrites,
+                    pacingMaximumLatenessMilliseconds=bridge.PacingMaximumLatenessMilliseconds,
+                    pacingLateFrames=bridge.PacingLateFrames,pacingResets=bridge.PacingResets,
+                    captureDroppedBytes=bridge.Ring.DroppedBytes,captureSilenceBytes=bridge.Ring.SilenceBytes
+                };
                 Check("PCM frames sent", bridge.FramesSent > 0);
                 Check("statistics sampled while source was active",samples.Count>0);
                 Check("PCM bytes received", samples[^1].GetProperty("bytes").GetInt64() > 0);
