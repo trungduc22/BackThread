@@ -1,5 +1,9 @@
 # Next steps — 0.1.2
 
+## Foundation checkpoint
+
+See the [engineering report and acceptance order](NATIVE_FOUNDATION_REPORT.md). Prioritize timing correlation and isolated audio soak before resuming the workbench UI.
+
 ## Build10 continuation — 2026-11-19
 
 Native0.2.0(10) adds a monochrome blurred battery, native LIVE label (explicit/indefinite sources only), artwork swipe next/previous without page-gesture theft, extensionless signed Googlevideo stream support and native playback diagnostics. Adds a foreground app-private SSH command inbox (open/status/play/pause/seek/return-pc), without a new listener/daemon. Existing UI2 layout and installed Host9 are preserved.

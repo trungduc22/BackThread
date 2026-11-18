@@ -1,5 +1,9 @@
 # Latest continuation: build9
 
+## Foundation continuation
+
+Use `codex/native-foundation` in its separate worktree. The original companion branch and unfinished workbench edits remain recoverable. Read the [engineering report](docs/NATIVE_FOUNDATION_REPORT.md) before changing or deploying anything.
+
 Read docs/BUILD9_NOTES.md before historical notes. Audio was restored and heard after streamAudio=true. User authorized Host9/stable certificate replacement and the site-scoped YouTube Next helper; Host9 is now installed with real CPU/RAM sampling and notification access. Helper is enabled; Windows probe really changed video and the user confirmed Next from the physical iPhone works. Native9 styling still needs user IPA installation and visual inspection.
 
 # Latest continuation: build8

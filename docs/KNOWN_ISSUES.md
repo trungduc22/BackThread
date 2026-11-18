@@ -1,5 +1,9 @@
 # Known issues and limits — 0.1.2
 
+## Foundation checkpoint
+
+The strict simulator audio failure was reproduced with active-source counters. Socket reply ordering, simulator stop handling and Wi-Fi visibility were improved. Physical Wi-Fi and audio remain pending. See [the engineering report](NATIVE_FOUNDATION_REPORT.md).
+
 ## Current UI 2.0 limitations — 2026-11-18
 
 - Latest top-bar-only notifications, system/usage strip, three-way audio routing and inline volume request is not implemented. Existing critical fullscreen behavior must change.

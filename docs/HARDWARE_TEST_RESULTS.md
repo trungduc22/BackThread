@@ -1,5 +1,9 @@
 # Hardware test results — 2026-11-18
 
+## Foundation checkpoint
+
+The foundation build is prepared for ARM64 iOS 12. No new hardware acceptance was performed. See [the engineering report](NATIVE_FOUNDATION_REPORT.md) for local test scope.
+
 ## Build10 continuation — 2026-11-19
 
 Native0.2.0(10) adds a monochrome blurred battery, native LIVE label (explicit/indefinite sources only), artwork swipe next/previous without page-gesture theft, extensionless signed Googlevideo stream support and native playback diagnostics. Adds a foreground app-private SSH command inbox (open/status/play/pause/seek/return-pc), without a new listener/daemon. Existing UI2 layout and installed Host9 are preserved.

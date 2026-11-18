@@ -1,5 +1,7 @@
 # BackThread
 
+The native foundation branch checkpoint adds Host Core, transport correlation and reproducible regression evidence. See the [engineering report](docs/NATIVE_FOUNDATION_REPORT.md).
+
 BackThread connects a Windows 10 computer to an iPhone over Lightning USB for PCM audio, media controls, notifications, and independent file jobs.
 
 **Current source/package checkpoint: native 0.2.0 build10; installed Windows Host remains0.2.0.9.** Build10 adds monochrome glass battery, artwork swipes, LIVE display, direct signed-stream support and scoped foreground SSH control. Windows metadata resolution/HEAD for one YouTube sample passed; native playback and a phone-local resolver are not verified. Previous heard PCM/notification/YouTube Next results remain historical. See [build10 notes](docs/BUILD10_NOTES.md), [verified scope](docs/reports/build10-validation.json), and [companion/automation design](docs/COMPANION_WORKSPACE.md).

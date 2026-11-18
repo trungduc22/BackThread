@@ -1,0 +1,404 @@
+{
+  "scope": "Windows process, loopback simulator, concurrent worker. Not physical acceptance.",
+  "runs": {
+    "baseline": {
+      "baselineCommit": "57ff8d6",
+      "exitCode": 1,
+      "passed": false,
+      "failure": "FAIL soak.concurrent-audio-worker: System.Exception: Expected 0, got 32640",
+      "metrics": {
+        "durationSeconds": 120.7175528,
+        "finalStatsTakenBeforeSourceStop": true,
+        "jobs": 101,
+        "maximumBuffer": 19200,
+        "startMemory": 118206464,
+        "endMemory": 112410624,
+        "cpuSeconds": 49.84375,
+        "senderDropped": 0,
+        "sender": {
+          "queueMaximumMilliseconds": 20.994,
+          "writeMaximumMilliseconds": 10.958,
+          "slowWrites": 0,
+          "pacingMaximumLatenessMilliseconds": 59,
+          "pacingLateFrames": 14,
+          "pacingResets": 1,
+          "captureDroppedBytes": 0,
+          "captureSilenceBytes": 0
+        },
+        "receiver": {
+          "packets": 12066,
+          "bytes": 23166720,
+          "gaps": 0,
+          "bufferedBytes": 15360,
+          "droppedBytes": 32640,
+          "silenceBytes": 51840,
+          "playbackTicks": 12068,
+          "maximumArrivalGapMilliseconds": 152.597,
+          "handlerMaximumMilliseconds": 17.737,
+          "sha256": "ad587921e8e2ee782fe38412477f23e868845a580f095c64f05a0615e92fb1f4"
+        },
+        "lossSamples": [
+          {
+            "elapsedSeconds": 12.2072124,
+            "receiver": {
+              "packets": 1221,
+              "bytes": 2344320,
+              "gaps": 0,
+              "bufferedBytes": 9600,
+              "droppedBytes": 0,
+              "silenceBytes": 1920,
+              "playbackTicks": 1217,
+              "maximumArrivalGapMilliseconds": 55.721,
+              "handlerMaximumMilliseconds": 6.777,
+              "sha256": "bad5ca91c11696d09df3790fcd2177781c86242a9ecd5d90effc30ea982b75d8"
+            },
+            "senderDrops": 0
+          },
+          {
+            "elapsedSeconds": 26.4620307,
+            "receiver": {
+              "packets": 2646,
+              "bytes": 5080320,
+              "gaps": 0,
+              "bufferedBytes": 11520,
+              "droppedBytes": 0,
+              "silenceBytes": 3840,
+              "playbackTicks": 2642,
+              "maximumArrivalGapMilliseconds": 69.067,
+              "handlerMaximumMilliseconds": 7.803,
+              "sha256": "c3592c67fe132d788e7abf41fd17e83339d3357d665085f29c310ebf1ec3e547"
+            },
+            "senderDrops": 0
+          },
+          {
+            "elapsedSeconds": 42.1177002,
+            "receiver": {
+              "packets": 4212,
+              "bytes": 8087040,
+              "gaps": 0,
+              "bufferedBytes": 17280,
+              "droppedBytes": 0,
+              "silenceBytes": 7680,
+              "playbackTicks": 4207,
+              "maximumArrivalGapMilliseconds": 81.451,
+              "handlerMaximumMilliseconds": 14.769,
+              "sha256": "85c66e9c0615941d433b7a665e80038110fe55e017c53b0e14bf63a1128b194a"
+            },
+            "senderDrops": 0
+          },
+          {
+            "elapsedSeconds": 44.3740161,
+            "receiver": {
+              "packets": 4437,
+              "bytes": 8519040,
+              "gaps": 0,
+              "bufferedBytes": 17280,
+              "droppedBytes": 5760,
+              "silenceBytes": 15360,
+              "playbackTicks": 4433,
+              "maximumArrivalGapMilliseconds": 127.025,
+              "handlerMaximumMilliseconds": 14.769,
+              "sha256": "691fc9a9610f93b9596d1fa32338421b93c91f0bf943b8e67ebaabda3cc6830e"
+            },
+            "senderDrops": 0
+          },
+          {
+            "elapsedSeconds": 50.8360254,
+            "receiver": {
+              "packets": 5084,
+              "bytes": 9761280,
+              "gaps": 0,
+              "bufferedBytes": 17280,
+              "droppedBytes": 11520,
+              "silenceBytes": 21120,
+              "playbackTicks": 5080,
+              "maximumArrivalGapMilliseconds": 127.025,
+              "handlerMaximumMilliseconds": 17.737,
+              "sha256": "cc9601a21b28ef11e593ae046eda4e6475d16b2a46634c7a680e7577f81139e5"
+            },
+            "senderDrops": 0
+          },
+          {
+            "elapsedSeconds": 62.9015257,
+            "receiver": {
+              "packets": 6290,
+              "bytes": 12076800,
+              "gaps": 0,
+              "bufferedBytes": 17280,
+              "droppedBytes": 15360,
+              "silenceBytes": 24960,
+              "playbackTicks": 6286,
+              "maximumArrivalGapMilliseconds": 127.025,
+              "handlerMaximumMilliseconds": 17.737,
+              "sha256": "d5fdb9dbcf893cb015679c29675893fc9d4e11436ccf40ea8ba7ce4af64f5693"
+            },
+            "senderDrops": 0
+          },
+          {
+            "elapsedSeconds": 64.5226249,
+            "receiver": {
+              "packets": 6452,
+              "bytes": 12387840,
+              "gaps": 0,
+              "bufferedBytes": 17280,
+              "droppedBytes": 32640,
+              "silenceBytes": 42240,
+              "playbackTicks": 6448,
+              "maximumArrivalGapMilliseconds": 152.597,
+              "handlerMaximumMilliseconds": 17.737,
+              "sha256": "0862d2d10060572f1248178b8cc27ad57e9c413d398c80b49d199513157bc40e"
+            },
+            "senderDrops": 0
+          },
+          {
+            "elapsedSeconds": 76.5357853,
+            "receiver": {
+              "packets": 7648,
+              "bytes": 14684160,
+              "gaps": 0,
+              "bufferedBytes": 9600,
+              "droppedBytes": 32640,
+              "silenceBytes": 44160,
+              "playbackTicks": 7649,
+              "maximumArrivalGapMilliseconds": 152.597,
+              "handlerMaximumMilliseconds": 17.737,
+              "sha256": "4cc814af4cefa3ca101c652db385975dc3c762e9967b5119f93bc6b13f95c511"
+            },
+            "senderDrops": 0
+          },
+          {
+            "elapsedSeconds": 78.6896144,
+            "receiver": {
+              "packets": 7863,
+              "bytes": 15096960,
+              "gaps": 0,
+              "bufferedBytes": 13440,
+              "droppedBytes": 32640,
+              "silenceBytes": 49920,
+              "playbackTicks": 7865,
+              "maximumArrivalGapMilliseconds": 152.597,
+              "handlerMaximumMilliseconds": 17.737,
+              "sha256": "fe1b46194df823b00726e3198b05f6970d9ce120b6379345868ed371aac764b3"
+            },
+            "senderDrops": 0
+          },
+          {
+            "elapsedSeconds": 89.3558944,
+            "receiver": {
+              "packets": 8930,
+              "bytes": 17145600,
+              "gaps": 0,
+              "bufferedBytes": 17280,
+              "droppedBytes": 32640,
+              "silenceBytes": 51840,
+              "playbackTicks": 8931,
+              "maximumArrivalGapMilliseconds": 152.597,
+              "handlerMaximumMilliseconds": 17.737,
+              "sha256": "8861322d1ba3369220b040b1d0308e4ad375debec3effcb631a219b411b19624"
+            },
+            "senderDrops": 0
+          }
+        ]
+      }
+    },
+    "instrumented": {
+      "baselineCommit": "2e5ea97 plus simulator instrumentation",
+      "exitCode": 1,
+      "passed": false,
+      "failure": "FAIL soak.concurrent-audio-worker: System.Exception: Expected 0, got 182400",
+      "metrics": {
+        "durationSeconds": 120.6463593,
+        "finalStatsTakenBeforeSourceStop": true,
+        "jobs": 143,
+        "maximumBuffer": 19200,
+        "startMemory": 118652928,
+        "endMemory": 113004544,
+        "cpuSeconds": 67.125,
+        "senderDropped": 1,
+        "sender": {
+          "queueMaximumMilliseconds": 55.286,
+          "writeMaximumMilliseconds": 2.087,
+          "slowWrites": 0,
+          "pacingMaximumLatenessMilliseconds": 47,
+          "pacingLateFrames": 8,
+          "pacingResets": 0,
+          "captureDroppedBytes": 0,
+          "captureSilenceBytes": 0
+        },
+        "receiver": {
+          "packets": 12041,
+          "bytes": 23118720,
+          "gaps": 1,
+          "bufferedBytes": 17280,
+          "droppedBytes": 182400,
+          "silenceBytes": 155520,
+          "playbackTicks": 12018,
+          "skippedPlaybackTicks": 0,
+          "maximumPlaybackWakeMilliseconds": 53.905,
+          "maximumArrivalGapMilliseconds": 334.728,
+          "handlerMaximumMilliseconds": 36.473,
+          "sha256": "4700fcbe3c8286fd25b5971f25ad354296e51898694e472593fcbccf29fc2841"
+        },
+        "lossSamples": [
+          {
+            "elapsedSeconds": 2.3233519,
+            "receiver": {
+              "packets": 209,
+              "bytes": 401280,
+              "gaps": 0,
+              "bufferedBytes": 17280,
+              "droppedBytes": 57600,
+              "silenceBytes": 28800,
+              "playbackTicks": 185,
+              "skippedPlaybackTicks": 0,
+              "maximumPlaybackWakeMilliseconds": 10.934,
+              "maximumArrivalGapMilliseconds": 249.021,
+              "handlerMaximumMilliseconds": 2.951,
+              "sha256": "decab1ac51f93f7604f510fd4eeeff33dedfc95dc497fb7577c747dc9072b728"
+            },
+            "senderDrops": 0
+          },
+          {
+            "elapsedSeconds": 8.122775,
+            "receiver": {
+              "packets": 789,
+              "bytes": 1514880,
+              "gaps": 1,
+              "bufferedBytes": 17280,
+              "droppedBytes": 182400,
+              "silenceBytes": 155520,
+              "playbackTicks": 766,
+              "skippedPlaybackTicks": 0,
+              "maximumPlaybackWakeMilliseconds": 11.563,
+              "maximumArrivalGapMilliseconds": 334.728,
+              "handlerMaximumMilliseconds": 34.46,
+              "sha256": "4721ea18e93746ebbfb66bfa58bc6ce467b4e7f774729cff69d0c2ef154da339"
+            },
+            "senderDrops": 1
+          }
+        ]
+      }
+    },
+    "final": {
+      "baselineCommit": "ee7da7c",
+      "exitCode": 1,
+      "passed": false,
+      "failure": "FAIL soak.concurrent-audio-worker: System.Exception: Expected 0, got 3840",
+      "metrics": {
+        "durationSeconds": 120.7800625,
+        "finalStatsTakenBeforeSourceStop": true,
+        "jobs": 147,
+        "maximumBuffer": 19200,
+        "startMemory": 119996416,
+        "endMemory": 110174208,
+        "cpuSeconds": 70.71875,
+        "senderDropped": 0,
+        "sender": {
+          "queueMaximumMilliseconds": 17.237,
+          "writeMaximumMilliseconds": 7.355,
+          "slowWrites": 0,
+          "pacingMaximumLatenessMilliseconds": 66,
+          "pacingLateFrames": 8,
+          "pacingResets": 1,
+          "captureDroppedBytes": 0,
+          "captureSilenceBytes": 0
+        },
+        "receiver": {
+          "packets": 12072,
+          "bytes": 23178240,
+          "gaps": 0,
+          "bufferedBytes": 17280,
+          "droppedBytes": 3840,
+          "silenceBytes": 26880,
+          "playbackTicks": 12075,
+          "skippedPlaybackTicks": 0,
+          "maximumPlaybackWakeMilliseconds": 79.285,
+          "maximumArrivalGapMilliseconds": 114.577,
+          "handlerMaximumMilliseconds": 46.44,
+          "sha256": "1bc60aa940c37acd8bccdd6c274f947721143475125d79720ec1e2d6a1bb18ca"
+        },
+        "lossSamples": [
+          {
+            "elapsedSeconds": 20.8229471,
+            "receiver": {
+              "packets": 2083,
+              "bytes": 3999360,
+              "gaps": 0,
+              "bufferedBytes": 11520,
+              "droppedBytes": 0,
+              "silenceBytes": 3840,
+              "playbackTicks": 2079,
+              "skippedPlaybackTicks": 0,
+              "maximumPlaybackWakeMilliseconds": 22.831,
+              "maximumArrivalGapMilliseconds": 70.509,
+              "handlerMaximumMilliseconds": 10.051,
+              "sha256": "41119b3b7bdde82270bf3158281da3ab73ee47050321f8b5e8601d44104de750"
+            },
+            "senderDrops": 0
+          },
+          {
+            "elapsedSeconds": 55.2029836,
+            "receiver": {
+              "packets": 5521,
+              "bytes": 10600320,
+              "gaps": 0,
+              "bufferedBytes": 15360,
+              "droppedBytes": 0,
+              "silenceBytes": 7680,
+              "playbackTicks": 5517,
+              "skippedPlaybackTicks": 0,
+              "maximumPlaybackWakeMilliseconds": 29.251,
+              "maximumArrivalGapMilliseconds": 77.319,
+              "handlerMaximumMilliseconds": 46.44,
+              "sha256": "723d844a2ebd95d0bdc921099df24cba18f18ece69059c1c391daa7b43cdefb0"
+            },
+            "senderDrops": 0
+          },
+          {
+            "elapsedSeconds": 82.3226857,
+            "receiver": {
+              "packets": 8227,
+              "bytes": 15795840,
+              "gaps": 0,
+              "bufferedBytes": 7680,
+              "droppedBytes": 0,
+              "silenceBytes": 11520,
+              "playbackTicks": 8229,
+              "skippedPlaybackTicks": 0,
+              "maximumPlaybackWakeMilliseconds": 79.285,
+              "maximumArrivalGapMilliseconds": 85.657,
+              "handlerMaximumMilliseconds": 46.44,
+              "sha256": "17f554abfef2b4c2b74c1dba56958473f9a6f3e2dec52ddebe2944a595c2dccd"
+            },
+            "senderDrops": 0
+          },
+          {
+            "elapsedSeconds": 102.1378189,
+            "receiver": {
+              "packets": 10208,
+              "bytes": 19599360,
+              "gaps": 0,
+              "bufferedBytes": 19200,
+              "droppedBytes": 3840,
+              "silenceBytes": 26880,
+              "playbackTicks": 10210,
+              "skippedPlaybackTicks": 0,
+              "maximumPlaybackWakeMilliseconds": 79.285,
+              "maximumArrivalGapMilliseconds": 114.577,
+              "handlerMaximumMilliseconds": 46.44,
+              "sha256": "47ad4e119448ca0c4bf7304f7417d22cc51df842d3e76272b4053eec49e9c72c"
+            },
+            "senderDrops": 0
+          }
+        ]
+      }
+    }
+  },
+  "existingTraySample": {
+    "scope": "existing tray, playback state uncontrolled",
+    "seconds": 5.021852,
+    "cpuSeconds": 0.1875,
+    "workingSetBytes": 153862144,
+    "privateBytes": 46665728
+  }
+}
