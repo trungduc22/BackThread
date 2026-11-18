@@ -36,6 +36,8 @@ Use .NET SDK 8.0.428 for BackThread and .NET SDK 10.0.404 for the NativeShellKit
 | Dependency audit | `dotnet list BackThread.sln package --vulnerable --include-transitive --format json` | Exit 0, zero listed advisories at test time |
 | IPA packaging | `python scripts/install-ios.py --build-dir artifacts/ios-build` | File only, SHA-256 `8f1f743e191831fc5d96a239273d590dc77765d90f4a324dbeff608907d49785` |
 
+GitHub CI first passed compilation and 37 managed cases, then failed on GCC misleading indentation in the legacy C wire decoder. The formatting correction preserves the decoder behavior and keeps warnings as errors.
+
 Initial SDK test invocation used the wrong runtime search path and disabled patch roll-forward. Both runtimes then passed using their separate installations. The transient compiler mismatch during SDK source editing was resolved by rebuilding the complete target graph. Managed output is from BackThread's executable runner.
 
 The strict gate still fails. The baseline reported 32,640 receiver-drop bytes and 51,840 zero-fill bytes with no sender queue drops. The final run reported 3,840 receiver-drop bytes, 26,880 zero-fill bytes, 0 sender queue drops, 0 sequence gaps and 0 skipped render ticks. Its maximum arrival gap was 114.58 ms. The intermediate instrumented run also failed. Workloads and host scheduling varied, so these runs do not establish a performance improvement or a single root cause.
