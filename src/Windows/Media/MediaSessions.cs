@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Windows.Media.Control;
 using Windows.Storage.Streams;
 using Windows.Graphics.Imaging;
@@ -9,8 +10,15 @@ public sealed class MediaSessions
 {
     private GlobalSystemMediaTransportControlsSessionManager? manager;
     private string? artworkKey, artwork;
-    public async Task InitializeAsync() => manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
-    public async Task<MediaSnapshot?> SnapshotAsync()
+    public Task InitializeAsync() => OperatingSystem.IsWindows() ? InitializeWindowsAsync() : Task.CompletedTask;
+    public Task<MediaSnapshot?> SnapshotAsync() => OperatingSystem.IsWindows() ? SnapshotWindowsAsync() : Task.FromResult<MediaSnapshot?>(null);
+    public Task<bool> CommandAsync(string command, double seconds = 0, string? source = null) => OperatingSystem.IsWindows() ? CommandWindowsAsync(command, seconds, source) : Task.FromResult(false);
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private async Task InitializeWindowsAsync() => manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private async Task<MediaSnapshot?> SnapshotWindowsAsync()
     {
         var session = manager?.GetCurrentSession(); if (session is null) { artworkKey = null; artwork = null; return null; }
         var info = await session.TryGetMediaPropertiesAsync(); var playback = session.GetPlaybackInfo(); var timeline = session.GetTimelineProperties();
@@ -40,7 +48,9 @@ public sealed class MediaSessions
         var c = playback.Controls;
         return new(session.SourceAppUserModelId, info.Title ?? "", info.Artist ?? "", info.AlbumTitle ?? "", playback.PlaybackStatus.ToString(), Math.Max(0, (timeline.Position - timeline.StartTime).TotalSeconds), Math.Max(0, (timeline.EndTime - timeline.StartTime).TotalSeconds), c.IsPlaybackPositionEnabled, artwork, c.IsPlayEnabled, c.IsPauseEnabled, c.IsNextEnabled, c.IsPreviousEnabled);
     }
-    public async Task<bool> CommandAsync(string command, double seconds = 0, string? source = null)
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private async Task<bool> CommandWindowsAsync(string command, double seconds, string? source)
     {
         var s = source is null ? manager?.GetCurrentSession() : manager?.GetSessions().FirstOrDefault(x => x.SourceAppUserModelId == source);
         if (s is null) return false;

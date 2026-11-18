@@ -27,7 +27,7 @@ def main():
     if builder.run([zig,'version'],logs/'compiler.txt',env)!='0.13.0':raise ValueError('Zig 0.13.0 required')
     linker=args.linker.resolve()
     linker_version=builder.run([linker,'-flavor','darwin','--version'],logs/'linker.txt',env)
-    if not linker_version.startswith('LLD 23.1.5 '):raise ValueError('LLD 23.1.5 required')
+    if not (linker_version.startswith('LLD 23.1.') and len(linker_version)>9 and linker_version[9].isdigit()):raise ValueError('LLD 23.1.x required')
     obj=out/'Probe.o'
     c_mode=args.c_entry or args.audit_image is not None
     source='src/iOS/Probe/loader.c' if args.audit_image else 'src/iOS/Probe/entry.c' if args.c_entry else 'src/iOS/Probe/main.m'

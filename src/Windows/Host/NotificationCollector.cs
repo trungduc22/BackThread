@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using BackThread.Events;
 using Windows.UI.Notifications;
 using Windows.UI.Notifications.Management;
@@ -7,7 +8,11 @@ namespace BackThread.Host;
 /// <summary>Reads only permission previously granted through a packaged, interactive consent flow.</summary>
 public sealed class NotificationCollector
 {
-    public async Task<int> CollectAsync(Func<CompanionEvent, CancellationToken, Task> publish, CancellationToken ct)
+    public Task<int> CollectAsync(Func<CompanionEvent, CancellationToken, Task> publish, CancellationToken ct) =>
+        OperatingSystem.IsWindows() ? CollectWindowsAsync(publish, ct) : Task.FromResult(0);
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static async Task<int> CollectWindowsAsync(Func<CompanionEvent, CancellationToken, Task> publish, CancellationToken ct)
     {
         var listener = UserNotificationListener.Current;
         if (listener.GetAccessStatus() != UserNotificationListenerAccessStatus.Allowed) return 0;

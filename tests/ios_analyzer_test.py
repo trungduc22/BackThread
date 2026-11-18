@@ -17,6 +17,7 @@ analyzer=importlib.util.module_from_spec(spec);spec.loader.exec_module(analyzer)
 
 class AnalyzerReportTests(unittest.TestCase):
     def run_case(self,compiler):
+        (ROOT/'artifacts').mkdir(parents=True,exist_ok=True)
         with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as temporary:
             root=pathlib.Path(temporary);out=root/'artifacts/ios-analysis';out.mkdir(parents=True)
             (out/'results.json').write_text(json.dumps(dict(complete=True,passed=True,runId='old')))

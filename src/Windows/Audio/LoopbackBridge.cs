@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using BackThread.Transport;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
@@ -50,7 +51,15 @@ public sealed class LoopbackBridge
         }
         ct.ThrowIfCancellationRequested();
     }
-    private async Task CaptureLoopAsync(CancellationToken ct)
+    private Task CaptureLoopAsync(CancellationToken ct)
+    {
+        if (OperatingSystem.IsWindows()) return CaptureWindowsLoopAsync(ct);
+        LastError = "WASAPI loopback capture requires Windows";
+        return Task.CompletedTask;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private async Task CaptureWindowsLoopAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {

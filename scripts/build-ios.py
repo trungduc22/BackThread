@@ -55,8 +55,8 @@ def main():
     if version != '0.13.0':
         raise ValueError('Validated cross-build uses Zig 0.13.0; use Theos/Xcode for other toolchains')
     linker_version=run([linker,'-flavor','darwin','--version'],logs/'linker.txt',env)
-    if not linker_version.startswith('LLD 23.1.5 '):
-        raise ValueError('Validated cross-build requires LLD 23.1.5; record and validate another version separately')
+    if not (linker_version.startswith('LLD 23.1.') and len(linker_version)>9 and linker_version[9].isdigit()):
+        raise ValueError('Validated cross-build requires LLD 23.1.x; record and validate another version separately')
     base = [zig, 'cc', '-target', 'aarch64-ios.12.0', '-isysroot', sdk, '-iframework', sdk / 'System/Library/Frameworks', '-isystem', sdk / 'usr/include', '-O2', '-g0', '-fno-sanitize=all', '-Wall', '-Wextra', '-Werror', '-Werror=unguarded-availability-new', f'-ffile-prefix-map={ROOT}=.']
     compiled = []
     for source in SOURCES:

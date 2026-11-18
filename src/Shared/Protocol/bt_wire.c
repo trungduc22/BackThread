@@ -9,7 +9,8 @@ static uint32_t limit(uint16_t c) { return c==2?8192:c==6?32808:c>=1&&c<=7?65536
 int bt_header_decode(const uint8_t *p,BTHeader *h) {
     if(bt_u32(p+4)!=BT_MAGIC||bt_u16(p+8)!=1) return -1;
     h->length=bt_u32(p);h->channel=bt_u16(p+10);h->sequence=bt_u32(p+12);h->timestamp=bt_u64(p+16);
-    if(!limit(h->channel)||h->length>limit(h->channel)) return -1;return 0;
+    if(!limit(h->channel)||h->length>limit(h->channel)) return -1;
+    return 0;
 }
 int bt_header_encode(uint8_t *p,const BTHeader *h) {
     if(!limit(h->channel)||h->length>limit(h->channel)) return -1;

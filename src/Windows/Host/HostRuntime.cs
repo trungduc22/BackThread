@@ -158,7 +158,8 @@ public sealed class HostRuntime(HostConfig config)
         {
             case "media.toggle": return new { success = await media.CommandAsync("toggle") };
             case "microphone.toggleMute":
-                using (var enumerator = new MMDeviceEnumerator()) using (var mic = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications)) { mic.AudioEndpointVolume.Mute = !mic.AudioEndpointVolume.Mute; return new { muted = mic.AudioEndpointVolume.Mute }; }
+                if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Microphone mute requires Windows");
+                return ToggleWindowsMicrophoneMute();
             case "launch":
                 if (action.Executable is null || !Path.IsPathFullyQualified(action.Executable) || !File.Exists(action.Executable) || !action.Executable.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Configure a full path to an executable");
                 var start = new ProcessStartInfo(action.Executable) { UseShellExecute = false, CreateNoWindow = true };
@@ -166,6 +167,15 @@ public sealed class HostRuntime(HostConfig config)
                 using (var process = Process.Start(start)) return new { launched = process != null };
             default: throw new InvalidDataException("Unsupported action kind");
         }
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static object ToggleWindowsMicrophoneMute()
+    {
+        using var enumerator = new MMDeviceEnumerator();
+        using var mic = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
+        mic.AudioEndpointVolume.Mute = !mic.AudioEndpointVolume.Mute;
+        return new { muted = mic.AudioEndpointVolume.Mute };
     }
     public async Task<object> PublishAsync(CompanionEvent e, CancellationToken ct)
     {
