@@ -1,0 +1,111 @@
+{
+  "timestampUtc": "2026-11-18T02:05:39.436543+00:00",
+  "baseCommit": "738a49747ca3d9955ab310e3cd26f627663cc29c",
+  "nativeCompilation": {
+    "translationUnits": 7,
+    "architecture": "arm64",
+    "minimumOS": "12.0",
+    "sdk": "12.4",
+    "warnings": 0,
+    "errors": 0,
+    "warningsAsErrors": true
+  },
+  "clangAnalyzer": [
+    {
+      "source": "src/iOS/UI/main.m",
+      "exitCode": 0,
+      "diagnosticCount": 0,
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/UI/BTViewController.m",
+      "exitCode": 0,
+      "diagnosticCount": 0,
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/Agent/BTAgent.m",
+      "exitCode": 0,
+      "diagnosticCount": 0,
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/Agent/main.m",
+      "exitCode": 0,
+      "diagnosticCount": 0,
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/AudioReceiver/BTAudioReceiver.m",
+      "exitCode": 0,
+      "diagnosticCount": 0,
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/AudioReceiver/BTPcmRing.c",
+      "exitCode": 0,
+      "diagnosticCount": 0,
+      "reportProduced": true
+    },
+    {
+      "source": "src/Shared/Protocol/bt_wire.c",
+      "exitCode": 0,
+      "diagnosticCount": 0,
+      "reportProduced": true
+    }
+  ],
+  "artifactTests": {
+    "passed": 8,
+    "failed": 0,
+    "command": "python tests/ios_build_test.py"
+  },
+  "reproducibility": {
+    "consecutiveBuilds": 2,
+    "allFiveArtifactHashesIdentical": true,
+    "artifacts": {
+      "BackThread": {
+        "bytes": 167664,
+        "sha256": "b131db0b1d8638e2433993e077448133c9a33f87ac872f41e2d034340770e7ce"
+      },
+      "BackThread.Agent": {
+        "bytes": 141008,
+        "sha256": "a05259a8e445b4ba561364d5c1e0c40480dff83f1684c558e160866b7e968b59"
+      },
+      "libBackThread.Agent.a": {
+        "bytes": 161160,
+        "sha256": "9458cacadcfd66acfa3e581967d31f840abb32b699a47c24000e2f8553b88d98"
+      },
+      "app.backthread.companion_0.1.1_iphoneos-arm.deb": {
+        "bytes": 59456,
+        "sha256": "4b77444c59328037b9dccead2f31ab55cd4a4f3d875c9e72e1ed730281d15fdd"
+      },
+      "app.backthread.agent_0.1.1_iphoneos-arm.deb": {
+        "bytes": 40398,
+        "sha256": "c1f4022f8a292a2d5106aa978ac8d8fb6ea4a0e325fb13d740dfda0cbab88860"
+      }
+    }
+  },
+  "windows": {
+    "productSourceChanged": false,
+    "regularTestsPassed": 19,
+    "regularTestsFailed": 0,
+    "nativeCorePassed": true,
+    "longSoakRerun": false,
+    "unintendedShortSoak": {
+      "requestedSeconds": 0,
+      "effectiveSeconds": 1,
+      "passed": false,
+      "silenceBytes": 3840,
+      "silenceMilliseconds": 20,
+      "harnessCorrected": true
+    }
+  },
+  "phone": {
+    "nativeMainReached": false,
+    "standardInstallerAccepted": false,
+    "speakerVerified": false,
+    "processRssBytes": null,
+    "nativeAudioCounters": null,
+    "physicalReconnectTested": false
+  }
+}

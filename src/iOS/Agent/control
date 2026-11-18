@@ -1,0 +1,9 @@
+Package: app.backthread.agent
+Name: BackThread Agent
+Version: 0.1.1
+Architecture: iphoneos-arm
+Description: Manually started BackThread USB agent. No launchd service or private key is installed.
+Maintainer: BackThread contributors
+Author: BackThread contributors
+Section: Utilities
+Depends: firmware (>= 12.0)

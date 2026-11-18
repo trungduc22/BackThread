@@ -1,0 +1,56 @@
+{
+  "timestampUtc": "2026-11-18T01:55:49.757927+00:00",
+  "persistentDeviceChanges": false,
+  "pairingAttempted": false,
+  "applicationTestsRun": false,
+  "trustSessionValidated": true,
+  "jailbroken": "not established",
+  "pairedCertificatePinned": true,
+  "ProductType": "iPhone7,2",
+  "ProductVersion": "12.5.8",
+  "ActivationState": "Activated",
+  "ports": {
+    "22": {
+      "usbmuxResult": 3,
+      "reachable": false
+    },
+    "44": {
+      "usbmuxResult": 0,
+      "reachable": true,
+      "sshBanner": "SSH-2.0-dropbear_2020.81"
+    },
+    "2222": {
+      "usbmuxResult": 3,
+      "reachable": false
+    },
+    "23451": {
+      "usbmuxResult": 3,
+      "reachable": false
+    }
+  },
+  "services": {
+    "com.apple.afc": {
+      "available": true,
+      "error": null
+    },
+    "com.apple.afc2": {
+      "available": false,
+      "error": "InvalidService"
+    },
+    "com.apple.mobile.installation_proxy": {
+      "available": true,
+      "error": null
+    },
+    "com.apple.syslog_relay": {
+      "available": true,
+      "error": null
+    }
+  },
+  "syslog": {
+    "bytesObserved": 149,
+    "backThreadLines": [],
+    "unrelatedLogContentStored": false
+  },
+  "standardInstallerServiceAvailable": true,
+  "deploymentValidated": false
+}

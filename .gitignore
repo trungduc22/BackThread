@@ -4,6 +4,8 @@
 .theos/
 packages/
 artifacts/
+__pycache__/
+*.pyc
 *.user
 *.secret
 *.key

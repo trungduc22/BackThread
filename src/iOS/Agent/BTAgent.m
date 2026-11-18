@@ -6,6 +6,8 @@
 #import <Security/Security.h>
 #import <sys/socket.h>
 #import <netinet/in.h>
+#import <netinet/tcp.h>
+#import <stdatomic.h>
 #import <unistd.h>
 #import <sys/stat.h>
 #import <mach/mach.h>
@@ -25,12 +27,16 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
     NSString *_root;
     BTAudioReceiver *_audio;
     int _listener,_client;
-    BOOL _stopping,_audioOn,_authenticated;
+    atomic_bool _stopping;
+    BOOL _audioOn,_authenticated,_started;
+    uint64_t _generation;
     NSLock *_tx;
     uint32_t _sequences[8],_previousAudio;
     uint64_t _audioPackets,_audioBytes,_audioGaps;
-    dispatch_queue_t _network,_worker,_commands;
+    dispatch_queue_t _network,_worker,_commands,_fileIO;
     dispatch_semaphore_t _commandSlots;
+    dispatch_semaphore_t _fileSlots;
+    NSMutableSet *_committing;
     NSMutableDictionary *_jobs,*_jobSpecs;
     NSMutableSet *_cancelled;
     NSMutableArray *_events;
@@ -41,10 +47,11 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
 - (instancetype)initWithKey:(NSData *)key storage:(NSString *)storage {
     if(key.length!=32)return nil;
     if((self=[super init])) {
-        _key=[key copy];_root=[storage copy];_listener=-1;_client=-1;_tx=[NSLock new];_audio=[BTAudioReceiver new];
+        _key=[key copy];_root=[storage copy];_listener=-1;_client=-1;atomic_init(&_stopping,NO);_tx=[NSLock new];_audio=[BTAudioReceiver new];
         _network=dispatch_queue_create("app.backthread.network",DISPATCH_QUEUE_SERIAL);
         _worker=dispatch_queue_create("app.backthread.worker",dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL,QOS_CLASS_UTILITY,0));
         _commands=dispatch_queue_create("app.backthread.commands",DISPATCH_QUEUE_SERIAL);_commandSlots=dispatch_semaphore_create(16);
+        _fileIO=dispatch_queue_create("app.backthread.fileio",dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL,QOS_CLASS_UTILITY,0));_fileSlots=dispatch_semaphore_create(2);_committing=[NSMutableSet new];
         [[NSFileManager defaultManager] createDirectoryAtPath:_root withIntermediateDirectories:YES attributes:@{NSFileProtectionKey:NSFileProtectionCompleteUntilFirstUserAuthentication} error:nil];
         NSDictionary *saved=[NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:[_root stringByAppendingPathComponent:@".jobs.json"]]?:[NSData data] options:NSJSONReadingMutableContainers error:nil];
         _jobs=[saved isKindOfClass:NSDictionary.class]?[saved mutableCopy]:[NSMutableDictionary new];_jobSpecs=[NSMutableDictionary new];_cancelled=[NSMutableSet new];_events=[NSMutableArray new];
@@ -54,10 +61,13 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
 - (BTAudioReceiver *)audio { return _audio; }
 - (void)notify:(NSString *)type body:(NSDictionary *)body { void(^callback)(NSString *,NSDictionary *)=self.stateChanged;if(callback)dispatch_async(dispatch_get_main_queue(),^{callback(type,body);}); }
 - (BOOL)send:(NSString *)type body:(NSDictionary *)body reply:(id)reply channel:(uint16_t)channel {
+    return [self send:type body:body reply:reply channel:channel generation:0];
+}
+- (BOOL)send:(NSString *)type body:(NSDictionary *)body reply:(id)reply channel:(uint16_t)channel generation:(uint64_t)generation {
     NSMutableDictionary *m=[@{@"type":type,@"body":body?:@{}} mutableCopy];if([reply isKindOfClass:NSString.class])m[@"replyTo"]=reply;
     if([type isEqual:@"media.command"]||[type isEqual:@"action.invoke"]||[type isEqual:@"job.cancel"])m[@"id"]=[[[NSUUID UUID] UUIDString] lowercaseString];
     NSData *data=[NSJSONSerialization dataWithJSONObject:m options:0 error:nil];if(!data||data.length>65536)return NO;
-    [_tx lock];int fd=_client;if(!_authenticated&&![type hasPrefix:@"auth."]){[_tx unlock];return NO;}uint8_t header[BT_HEADER_SIZE];BTHeader h={(uint32_t)data.length,channel,++_sequences[channel],0};
+    [_tx lock];int fd=_client;if((generation&&generation!=_generation)||(!_authenticated&&![type hasPrefix:@"auth."])){[_tx unlock];return NO;}uint8_t header[BT_HEADER_SIZE];BTHeader h={(uint32_t)data.length,channel,++_sequences[channel],0};
     BOOL ok=fd>=0&&bt_header_encode(header,&h)==0&&exact(fd,header,sizeof(header),YES)&&exact(fd,(void *)data.bytes,data.length,YES);if(!ok&&fd>=0)shutdown(fd,SHUT_RDWR);[_tx unlock];return ok;
 }
 - (NSDictionary *)read:(int)fd header:(BTHeader *)h payload:(NSData **)payload {
@@ -77,29 +87,33 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
     BOOL ok=[self send:@"auth.ok" body:@{@"proof":proof(_key,@"agent",server,b[@"clientNonce"]),@"protocol":@1} reply:nil channel:1];[_tx lock];_authenticated=ok;[_tx unlock];return ok;
 }
 - (void)start {
+    [_tx lock];if(_started){[_tx unlock];return;}_started=YES;_stopping=NO;[_tx unlock];
     dispatch_async(_network,^{@autoreleasepool {
-        self->_stopping=NO;int fd=socket(AF_INET,SOCK_STREAM,0);if(fd<0){[self notify:@"connection" body:@{@"state":@"socket failed"}];return;}
-        self->_listener=fd;int yes=1;setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof(yes));
+        if(self->_stopping){[self->_tx lock];self->_started=NO;[self->_tx unlock];return;}
+        int fd=socket(AF_INET,SOCK_STREAM,0);if(fd<0){[self->_tx lock];self->_started=NO;[self->_tx unlock];[self notify:@"connection" body:@{@"state":@"socket failed"}];return;}
+        [self->_tx lock];self->_listener=fd;[self->_tx unlock];int yes=1;setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof(yes));
         struct sockaddr_in address={0};address.sin_len=sizeof(address);address.sin_family=AF_INET;address.sin_port=htons(23451);address.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
-        if(bind(fd,(struct sockaddr *)&address,sizeof(address))||listen(fd,2)){close(fd);self->_listener=-1;[self notify:@"connection" body:@{@"state":@"Cannot bind localhost:23451"}];return;}
+        if(bind(fd,(struct sockaddr *)&address,sizeof(address))||listen(fd,2)){[self->_tx lock];self->_listener=-1;self->_started=NO;close(fd);[self->_tx unlock];[self notify:@"connection" body:@{@"state":@"Cannot bind localhost:23451"}];return;}
         [self notify:@"connection" body:@{@"state":@"Waiting for USB host"}];
         while(!self->_stopping) {
             int client=accept(fd,NULL,NULL);if(client<0){if(errno==EINTR)continue;break;}
             struct timeval timeout={5,0},sendTimeout={3,0};setsockopt(client,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));setsockopt(client,SOL_SOCKET,SO_SNDTIMEO,&sendTimeout,sizeof(sendTimeout));setsockopt(client,SOL_SOCKET,SO_NOSIGPIPE,&yes,sizeof(yes));
-            [self->_tx lock];self->_client=client;self->_authenticated=NO;memset(self->_sequences,0,sizeof(self->_sequences));[self->_tx unlock];
+            setsockopt(client,IPPROTO_TCP,TCP_NODELAY,&yes,sizeof(yes));
+            [self->_tx lock];self->_client=client;self->_authenticated=NO;self->_generation++;memset(self->_sequences,0,sizeof(self->_sequences));[self->_tx unlock];
             @try { if([self authenticate:client]) { timeout.tv_sec=12;setsockopt(client,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));[self notify:@"connection" body:@{@"state":@"Connected by USB"}];[self session:client]; } }
             @catch(NSException *exception) { [self notify:@"error" body:@{@"error":exception.reason?:@"Protocol error"}]; }
             [self->_tx lock];self->_client=-1;self->_authenticated=NO;shutdown(client,SHUT_RDWR);close(client);[self->_tx unlock];
             self->_audioOn=NO;[self->_audio stop];[self notify:@"connection" body:@{@"state":@"Disconnected — waiting for host"}];
         }
-        if(self->_listener==fd){close(fd);self->_listener=-1;}
+        [self->_tx lock];if(self->_listener==fd){close(fd);self->_listener=-1;}self->_started=NO;[self->_tx unlock];
     }});
 }
-- (void)stop { _stopping=YES;if(_listener>=0)shutdown(_listener,SHUT_RDWR);[_tx lock];if(_client>=0)shutdown(_client,SHUT_RDWR);[_tx unlock];[_audio stop]; }
+- (void)stop { _stopping=YES;[_tx lock];if(_listener>=0)shutdown(_listener,SHUT_RDWR);if(_client>=0)shutdown(_client,SHUT_RDWR);[_tx unlock];[_audio stop]; }
 - (void)command:(NSString *)type body:(NSDictionary *)body {
     if([type isEqual:@"job.cancel"]){NSString *jid=body[@"jobId"];@synchronized(self){if(jid&&[@[@"queued",@"running"] containsObject:_jobs[jid][@"state"]])[_cancelled addObject:jid];}return;}
     if(dispatch_semaphore_wait(_commandSlots,DISPATCH_TIME_NOW)!=0)return;
-    dispatch_async(_commands,^{@autoreleasepool { [self send:type body:body reply:nil channel:3];dispatch_semaphore_signal(self->_commandSlots); }});
+    [_tx lock];uint64_t generation=_generation;BOOL connected=_authenticated;[_tx unlock];if(!connected){dispatch_semaphore_signal(_commandSlots);return;}
+    dispatch_async(_commands,^{@autoreleasepool { [self send:type body:body reply:nil channel:3 generation:generation];dispatch_semaphore_signal(self->_commandSlots); }});
 }
 - (NSString *)path:(NSString *)name {
     if(![name isKindOfClass:NSString.class]||name.length==0||name.length>120||[name hasPrefix:@"."]||[name hasSuffix:@"."]||[name rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"] invertedSet]].location!=NSNotFound)return nil;
@@ -113,9 +127,18 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         BTHeader h;NSData *payload;NSDictionary *m=[self read:fd header:&h payload:&payload];if(!m)break;
         if(h.channel==2) {
             if(!_audioOn||payload.length%4)break;
+            if(!_audio.running){NSLog(@"BackThread: AudioQueue stopped, OSStatus=%@",[_audio statistics][@"lastOSStatus"]);break;}
             if(_previousAudio&&h.sequence!=_previousAudio+1)_audioGaps++;_previousAudio=h.sequence;_audioPackets++;_audioBytes+=payload.length;[_audio receive:payload];continue;
         }
-        if(h.channel==6) { if(![self append:payload])break;continue; }
+        if(h.channel==6) {
+            if(dispatch_semaphore_wait(_fileSlots,DISPATCH_TIME_NOW)!=0)break;
+            [_tx lock];uint64_t generation=_generation;[_tx unlock];
+            dispatch_async(_fileIO,^{@autoreleasepool {
+                @try { if(![self append:payload generation:generation]){[self->_tx lock];if(self->_generation==generation&&self->_client>=0)shutdown(self->_client,SHUT_RDWR);[self->_tx unlock];} }
+                @catch(NSException *e){[self->_tx lock];if(self->_generation==generation&&self->_client>=0)shutdown(self->_client,SHUT_RDWR);[self->_tx unlock];}
+                @finally{dispatch_semaphore_signal(self->_fileSlots);}
+            }});continue;
+        }
         NSString *type=m[@"type"];NSDictionary *b=m[@"body"];id rid=m[@"id"];
         if([type isEqual:@"ping"]) { [self send:@"pong" body:@{} reply:rid channel:1]; }
         else if([type isEqual:@"hello"]) { [self send:@"ok" body:@{@"agent":@"BackThread.Agent",@"simulated":@NO,@"capabilities":@[@"pcm",@"jobs",@"files",@"events",@"UIKit",@"direct-handoff"]} reply:rid channel:h.channel]; }
@@ -128,6 +151,7 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         else if([type isEqual:@"audio.stats"]) { NSMutableDictionary *s=[[_audio statistics] mutableCopy];s[@"packets"]=@(_audioPackets);s[@"bytes"]=@(_audioBytes);s[@"gaps"]=@(_audioGaps);[self send:@"ok" body:s reply:rid channel:h.channel]; }
         else if([type isEqual:@"audio.volume"]) { [_audio setVolume:[b[@"value"] floatValue]];[self send:@"ok" body:@{} reply:rid channel:h.channel]; }
         else if([type isEqual:@"media.state"]||[type isEqual:@"action.registry"]||[type isEqual:@"media.handoff"]) { [self notify:type body:b];[self send:@"ok" body:@{@"received":@YES} reply:rid channel:h.channel]; }
+        else if([type isEqual:@"error"]) { [self notify:@"error" body:b]; }
         else if([type isEqual:@"event.publish"]) { BOOL accepted=[self event:b];[self send:@"ok" body:@{@"accepted":@(accepted)} reply:rid channel:h.channel]; }
         else if([type isEqual:@"event.history"]) { [self send:@"ok" body:@{@"events":[_events copy]} reply:rid channel:h.channel]; }
         else if([type isEqual:@"job.submit"]) { [self submit:b message:m channel:h.channel]; }
@@ -154,6 +178,7 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
 - (void)begin:(NSDictionary *)b message:(NSDictionary *)m channel:(uint16_t)c {
     NSString *part=[self part:b[@"transferId"]],*name=[self path:b[@"name"]];long long size=[b[@"size"] longLongValue];
     if(!part||!name||size<0||size>2147483648LL||!hexString(b[@"sha256"],64)){[self fail:@"Invalid transfer" message:m channel:c];return;}
+    @synchronized(self){if([_committing containsObject:[b[@"transferId"] lowercaseString]]){[self fail:@"Transfer commit is still active" message:m channel:c];return;}}
     NSString *meta=[part stringByAppendingString:@".json"];NSData *old=[NSData dataWithContentsOfFile:meta];
     if(old){NSDictionary *previous=[NSJSONSerialization JSONObjectWithData:old options:0 error:nil];if(![previous isEqual:b]){[self fail:@"Transfer identifier conflict" message:m channel:c];return;}}
     else {
@@ -173,25 +198,29 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
     unsigned long long offset=[[[NSFileManager defaultManager] attributesOfItemAtPath:part error:nil][NSFileSize] unsignedLongLongValue];
     if(offset>(unsigned long long)size){[self fail:@"Partial file exceeds declared size" message:m channel:c];return;}[self send:@"ok" body:@{@"offset":@(offset)} reply:m[@"id"] channel:c];
 }
-- (BOOL)append:(NSData *)data {
+- (BOOL)append:(NSData *)data generation:(uint64_t)generation {
+    [_tx lock];BOOL current=_authenticated&&_generation==generation&&!_stopping;[_tx unlock];if(!current)return NO;
     if(data.length<40||data.length>32808)return NO;NSString *tid=[[NSString alloc] initWithBytes:data.bytes length:32 encoding:NSASCIIStringEncoding];NSString *part=[self part:tid];if(!part)return NO;
+    @synchronized(self){if([_committing containsObject:tid.lowercaseString])return NO;}
     NSDictionary *spec=[NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:[part stringByAppendingString:@".json"]]?:[NSData data] options:0 error:nil];if(!spec)return NO;
     uint64_t offset=bt_u64((const uint8_t *)data.bytes+32);NSFileHandle *file=[NSFileHandle fileHandleForWritingAtPath:part];if(!file)return NO;unsigned long long length=[file seekToEndOfFile];
     if(offset>length||offset+data.length-40>[spec[@"size"] unsignedLongLongValue]||(offset<length&&offset+data.length-40>length)){[file closeFile];return NO;}
     if(offset==length){[file writeData:[data subdataWithRange:NSMakeRange(40,data.length-40)]];[file synchronizeFile];length=[file offsetInFile];}[file closeFile];
-    return [self send:@"file.ack" body:@{@"transferId":tid,@"offset":@(length)} reply:nil channel:5];
+    return [self send:@"file.ack" body:@{@"transferId":tid,@"offset":@(length)} reply:nil channel:5 generation:generation];
 }
 - (void)commit:(NSDictionary *)b message:(NSDictionary *)m channel:(uint16_t)c client:(int)client {
-    NSString *part=[self part:b[@"transferId"]];if(!part){[self fail:@"Invalid transfer" message:m channel:c];return;}
-    @synchronized(self){if(_queuedJobs>=8){[self fail:@"Worker queue full" message:m channel:c];return;}_queuedJobs++;}
+    (void)client;if(!hexString(b[@"transferId"],32)){[self fail:@"Invalid transfer" message:m channel:c];return;}
+    [_tx lock];uint64_t generation=_generation;[_tx unlock];NSString *tid=[b[@"transferId"] lowercaseString];
+    NSString *part=[self part:tid];if(!part){[self fail:@"Invalid transfer" message:m channel:c];return;}
+    @synchronized(self){if(_queuedJobs>=8||[_committing containsObject:tid]){[self fail:@"Worker queue full or transfer commit already active" message:m channel:c];return;}_queuedJobs++;[_committing addObject:tid];}
     dispatch_async(_worker,^{@autoreleasepool { @try {
         NSString *meta=[part stringByAppendingString:@".json"];NSDictionary *spec=[NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:meta]?:[NSData data] options:0 error:nil];
         NSString *destination=[self path:spec[@"name"]];NSError *error=nil;NSString *sha=[self hash:part job:nil error:&error];
         unsigned long long length=[[[NSFileManager defaultManager] attributesOfItemAtPath:part error:nil][NSFileSize] unsignedLongLongValue];
-        if(!destination||!sha||length!=[spec[@"size"] unsignedLongLongValue]||![sha isEqual:[spec[@"sha256"] lowercaseString]]){if(self->_client==client)[self fail:error.localizedDescription?:@"Incomplete transfer or checksum mismatch" message:m channel:c];}
-        else if(rename(part.fileSystemRepresentation,destination.fileSystemRepresentation)){if(self->_client==client)[self fail:@"Atomic archive rename failed" message:m channel:c];}
-        else {[[NSFileManager defaultManager] removeItemAtPath:meta error:nil];if(self->_client==client)[self send:@"ok" body:@{@"name":spec[@"name"],@"size":@(length),@"sha256":sha} reply:m[@"id"] channel:c];}
-    } @catch(NSException *e){if(self->_client==client)[self fail:e.reason message:m channel:c];} @finally{@synchronized(self){self->_queuedJobs--;}} }});
+        if(!destination||!sha||length!=[spec[@"size"] unsignedLongLongValue]||![sha isEqual:[spec[@"sha256"] lowercaseString]])[self send:@"error" body:@{@"error":error.localizedDescription?:@"Incomplete transfer or checksum mismatch"} reply:m[@"id"] channel:c generation:generation];
+        else if(rename(part.fileSystemRepresentation,destination.fileSystemRepresentation))[self send:@"error" body:@{@"error":@"Atomic archive rename failed"} reply:m[@"id"] channel:c generation:generation];
+        else {[[NSFileManager defaultManager] removeItemAtPath:meta error:nil];[self send:@"ok" body:@{@"name":spec[@"name"],@"size":@(length),@"sha256":sha} reply:m[@"id"] channel:c generation:generation];}
+    } @catch(NSException *e){[self send:@"error" body:@{@"error":e.reason?:@"Commit failed"} reply:m[@"id"] channel:c generation:generation];} @finally{@synchronized(self){self->_queuedJobs--;[self->_committing removeObject:tid];}} }});
 }
 - (void)download:(NSDictionary *)b message:(NSDictionary *)m channel:(uint16_t)c {
     NSString *path=[self path:b[@"name"]],*tid=b[@"transferId"];long long offset=[b[@"offset"] longLongValue];int count=[b[@"count"] intValue];
@@ -206,7 +235,8 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
 - (BOOL)cancelled:(NSString *)jid { @synchronized(self){return _stopping||(jid&&[_cancelled containsObject:jid]);} }
 - (NSString *)hash:(NSString *)path job:(NSString *)jid error:(NSError **)error {
     FILE *file=fopen(path.fileSystemRepresentation,"rb");if(!file){if(error)*error=[NSError errorWithDomain:NSPOSIXErrorDomain code:errno userInfo:nil];return nil;}
-    CC_SHA256_CTX hash;CC_SHA256_Init(&hash);uint8_t buffer[32768];size_t n;BOOL failed=NO;uint64_t done=0;struct stat st;fstat(fileno(file),&st);double last=0;
+    struct stat st;if(fstat(fileno(file),&st)){if(error)*error=[NSError errorWithDomain:NSPOSIXErrorDomain code:errno userInfo:nil];fclose(file);return nil;}
+    CC_SHA256_CTX hash;CC_SHA256_Init(&hash);uint8_t buffer[32768];size_t n;BOOL failed=NO;uint64_t done=0;double last=0;
     while((n=fread(buffer,1,sizeof(buffer),file))>0) {
         while(self.memoryPressure&&![self cancelled:jid])usleep(100000);
         if([self cancelled:jid]){failed=YES;break;}CC_SHA256_Update(&hash,buffer,(CC_LONG)n);done+=n;

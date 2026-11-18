@@ -1,0 +1,53 @@
+  Determining projects to restore...
+  Restored C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Transport\BackThread.Transport.csproj (in 242 ms).
+  Restored C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Media\BackThread.Media.csproj (in 263 ms).
+  Restored C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Events\BackThread.Events.csproj (in 5 ms).
+  Restored C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Worker\BackThread.Worker.csproj (in 40 ms).
+  Restored C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Audio\BackThread.Audio.csproj (in 1.91 sec).
+  Restored C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Simulator\BackThread.Simulator.csproj (in 1.91 sec).
+  Restored C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Host\BackThread.Host.csproj (in 1.6 sec).
+  1 of 8 projects are up-to-date for restore.
+  BackThread.Events -> C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Events\bin\Release\net8.0\BackThread.Events.dll
+  BackThread.Transport -> C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Transport\bin\Release\net8.0\BackThread.Transport.dll
+  BackThread.Media -> C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Media\bin\Release\net8.0-windows10.0.19041.0\BackThread.Media.dll
+  BackThread.Worker -> C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Worker\bin\Release\net8.0\BackThread.Worker.dll
+  BackThread.Audio -> C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Audio\bin\Release\net8.0-windows10.0.19041.0\BackThread.Audio.dll
+  BackThread.Simulator -> C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Simulator\bin\Release\net8.0-windows10.0.19041.0\BackThread.Simulator.dll
+  BackThread.Host -> C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Host\bin\Release\net8.0-windows10.0.19041.0\BackThread.Host.dll
+  BackThread.Tests -> C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\tests\BackThread.Tests\bin\Release\net8.0-windows10.0.19041.0\BackThread.Tests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:36.84
+PASS wire.fragmentation-and-json
+PASS wire.reject-size-version-channel-truncation
+PASS pcm.clipping-nan-and-bounded-ring
+PASS storage.path-traversal-and-reserved-names
+PASS validation.null-json-fields
+PASS storage.reserves-quota-before-reception
+PASS events.privacy-expiry-dedup-flood-bound
+PASS handoff.requires-connectivity-and-direct-resource
+PASS auth.wrong-key-rejected-and-recovery
+PASS auth.replay-rejected
+PASS wire.malformed-socket-and-reconnect
+PASS transport.audio-backpressure-is-bounded
+PASS integration.heartbeat-audio-order-and-content
+PASS integration.transfer-hash-text-download-and-failed-job
+PASS storage.resume-duplicate-incomplete-and-checksum
+PASS worker.cancel-low-memory-duplicate-and-restart
+PASS integration.socket-reset-reconnect-and-format-error
+PASS integration.notification-routing
+PASS host.local-api-authentication-and-auto-reconnect
+METRIC {"durationSeconds":1.7025065,"jobs":1,"maximumBuffer":11520,"startMemory":88125440,"endMemory":88428544,"cpuSeconds":0.703125,"senderDropped":0,"receiver":{"packets":167,"bytes":320640,"gaps":0,"bufferedBytes":9600,"droppedBytes":0,"silenceBytes":3840,"playbackTicks":164,"sha256":"3b9e0e379fde30493fa7d27570065320e8592c96f4e8640a049d54fce6613c46"}}
+FAIL soak.concurrent-audio-worker: System.Exception: Expected 0, got 3840
+   at BackThread.Tests.Check.Equal[T](T expected, T actual) in C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\tests\BackThread.Tests\Support.cs:line 11
+   at Program.<>c__DisplayClass0_0.<<<Main>$>b__21>d.MoveNext() in C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\tests\BackThread.Tests\Program.cs:line 251
+--- End of stack trace from previous location ---
+   at Program.<>c__DisplayClass0_0.<<<Main>$>b__21>d.MoveNext() in C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\tests\BackThread.Tests\Program.cs:line 252
+--- End of stack trace from previous location ---
+   at Program.<>c__DisplayClass0_0.<<<Main>$>b__21>d.MoveNext() in C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\tests\BackThread.Tests\Program.cs:line 252
+--- End of stack trace from previous location ---
+   at Program.<>c__DisplayClass0_0.<<<Main>$>g__Test|0>d.MoveNext() in C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\tests\BackThread.Tests\Program.cs:line 26
+19/20 passed; report: C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\artifacts\test-results.json

@@ -5,6 +5,9 @@
 #import <MediaPlayer/MediaPlayer.h>
 #import <ImageIO/ImageIO.h>
 
+static NSString *BTText(id value,NSString *fallback) { return [value isKindOfClass:NSString.class]?value:fallback; }
+static double BTNumber(id value) { return [value isKindOfClass:NSNumber.class]?[value doubleValue]:0; }
+
 @implementation BTViewController {
     UILabel *_connection,*_title,*_artist,*_source,*_workerStatus,*_timeline,*_noticeTitle,*_noticeBody;
     UIImageView *_art;
@@ -19,6 +22,7 @@
     NSDictionary *_session;
     NSString *_lastJob;
     NSString *_artworkKey;
+    NSUInteger _memoryWarningGeneration;
     AVPlayer *_player;
 }
 - (UILabel *)label:(CGFloat)size {
@@ -38,6 +42,7 @@
     UIStackView *metadata=[[UIStackView alloc] initWithArrangedSubviews:@[_title,_artist,_source]];metadata.axis=UILayoutConstraintAxisVertical;metadata.spacing=6;
     UIStackView *track=[[UIStackView alloc] initWithArrangedSubviews:@[_art,metadata]];track.spacing=20;track.alignment=UIStackViewAlignmentCenter;
     _previous=[self button:@"Previous" selector:@selector(previous)];_play=[self button:@"Play / Pause" selector:@selector(toggle)];_next=[self button:@"Next" selector:@selector(next)];
+    _previous.enabled=_play.enabled=_next.enabled=NO;
     UIStackView *controls=[[UIStackView alloc] initWithArrangedSubviews:@[_previous,_play,_next]];controls.distribution=UIStackViewDistributionFillEqually;
     _seek=[UISlider new];_seek.enabled=NO;[_seek addTarget:self action:@selector(seek) forControlEvents:UIControlEventTouchUpInside|UIControlEventTouchUpOutside];_timeline=[self label:11];
     MPVolumeView *volume=[[MPVolumeView alloc] initWithFrame:CGRectZero];volume.showsRouteButton=YES;[volume.heightAnchor constraintEqualToConstant:30].active=YES;
@@ -58,7 +63,7 @@
 }
 - (NSDate *)expiry:(NSDictionary *)event { NSISO8601DateFormatter *f=[NSISO8601DateFormatter new];f.formatOptions=NSISO8601DateFormatWithInternetDateTime|NSISO8601DateFormatWithFractionalSeconds;NSDate *date=[f dateFromString:event[@"expiresUtc"]?:@""];if(!date){f.formatOptions=NSISO8601DateFormatWithInternetDateTime;date=[f dateFromString:event[@"expiresUtc"]?:@""];}return date; }
 - (void)refreshHistory {
-    NSIndexSet *expired=[_events indexesOfObjectsPassingTest:^BOOL(NSDictionary *event,NSUInteger i,BOOL *stop){NSDate *date=[self expiry:event];return !date||date.timeIntervalSinceNow<=0;}];[_events removeObjectsAtIndexes:expired];
+    NSIndexSet *expired=[_events indexesOfObjectsPassingTest:^BOOL(NSDictionary *event,NSUInteger i,BOOL *stop){(void)i;(void)stop;NSDate *date=[self expiry:event];return !date||date.timeIntervalSinceNow<=0;}];[_events removeObjectsAtIndexes:expired];
     for(UIView *v in [_history.arrangedSubviews copy]){[_history removeArrangedSubview:v];[v removeFromSuperview];}
     for(NSDictionary *event in [_events reverseObjectEnumerator]){UILabel *l=[self label:14];l.text=[NSString stringWithFormat:@"%@ · %@\n%@",event[@"source"],event[@"title"],event[@"body"]];[_history addArrangedSubview:l];}
 }
@@ -73,13 +78,13 @@
 - (void)dismissNotice { [_noticeTimer invalidate];_noticeTimer=nil;_notice.hidden=YES; }
 - (void)receive:(NSString *)type body:(NSDictionary *)body {
     if(!self.isViewLoaded)[self loadViewIfNeeded];
-    if([type isEqual:@"connection"])_connection.text=[@"BackThread · " stringByAppendingString:body[@"state"]?:@""];
+    if([type isEqual:@"connection"])_connection.text=[@"BackThread · " stringByAppendingString:BTText(body[@"state"],@"")];
     else if([type isEqual:@"media.state"]) {
         NSDictionary *s=body[@"session"];if(![s isKindOfClass:NSDictionary.class])s=@{};_session=s;
-        _title.text=[s[@"title"] length]?s[@"title"]:@"Ready when you are";_artist.text=s[@"artist"]?:@"Play media on Windows to begin";_source.text=s[@"source"]?:@"";
-        [_play setTitle:[s[@"state"] isEqual:@"Playing"]?@"Pause":@"Play" forState:UIControlStateNormal];_play.enabled=s.count>0;_next.enabled=[s[@"canNext"] boolValue];_previous.enabled=[s[@"canPrevious"] boolValue];
-        if(!_seek.tracking){_seek.maximumValue=MAX(1,[s[@"durationSeconds"] floatValue]);_seek.value=[s[@"positionSeconds"] floatValue];}_seek.enabled=[s[@"canSeek"] boolValue];
-        _timeline.text=[NSString stringWithFormat:@"%.0f / %.0f seconds",[s[@"positionSeconds"] doubleValue],[s[@"durationSeconds"] doubleValue]];
+        NSString *title=BTText(s[@"title"],@"");_title.text=title.length?title:@"Ready when you are";_artist.text=BTText(s[@"artist"],@"Play media on Windows to begin");_source.text=BTText(s[@"source"],@"");
+        [_play setTitle:[s[@"state"] isEqual:@"Playing"]?@"Pause":@"Play" forState:UIControlStateNormal];_play.enabled=s.count>0;_next.enabled=BTNumber(s[@"canNext"])!=0;_previous.enabled=BTNumber(s[@"canPrevious"])!=0;
+        if(!_seek.tracking){_seek.maximumValue=MAX(1,BTNumber(s[@"durationSeconds"]));_seek.value=BTNumber(s[@"positionSeconds"]);}_seek.enabled=BTNumber(s[@"canSeek"])!=0;
+        _timeline.text=[NSString stringWithFormat:@"%.0f / %.0f seconds",BTNumber(s[@"positionSeconds"]),BTNumber(s[@"durationSeconds"])];
         NSString *art=s[@"artworkBase64"];
         if([art isKindOfClass:NSString.class]&&art.length<=32000) {
             if(![_artworkKey isEqual:art]) { _artworkKey=[art copy];NSData *data=[[NSData alloc] initWithBase64EncodedString:art options:0];CGImageSourceRef source=data?CGImageSourceCreateWithData((__bridge CFDataRef)data,NULL):NULL;_art.image=nil;
@@ -89,7 +94,7 @@
     }
     else if([type isEqual:@"action.registry"]) {
         for(UIView *v in [_actions.arrangedSubviews copy]){[_actions removeArrangedSubview:v];[v removeFromSuperview];}
-        NSArray *actions=body[@"actions"];if([actions isKindOfClass:NSArray.class])for(NSDictionary *a in actions){if(_actions.arrangedSubviews.count>=32)break;UIButton *button=[self button:a[@"title"] selector:@selector(action:)];button.accessibilityIdentifier=a[@"id"];[_actions addArrangedSubview:button];}
+        NSArray *actions=body[@"actions"];if([actions isKindOfClass:NSArray.class])for(id a in actions){if(_actions.arrangedSubviews.count>=32)break;if(![a isKindOfClass:NSDictionary.class]||![a[@"id"] isKindOfClass:NSString.class]||![a[@"title"] isKindOfClass:NSString.class])continue;UIButton *button=[self button:a[@"title"] selector:@selector(action:)];button.accessibilityIdentifier=a[@"id"];[_actions addArrangedSubview:button];}
     }
     else if([type isEqual:@"job.progress"]) { _lastJob=body[@"jobId"];_workerStatus.text=[NSString stringWithFormat:@"%@ · %@ · %.0f%%\n%@",_lastJob,body[@"state"],[body[@"progress"] doubleValue]*100,body[@"error"]?:body[@"result"]?:@""]; }
     else if([type isEqual:@"event.publish"]) {
@@ -101,17 +106,17 @@
         NSTimeInterval visible=MIN(priority>=2?8:3,MAX(.1,[self expiry:body].timeIntervalSinceNow));_noticeTimer=[NSTimer scheduledTimerWithTimeInterval:visible target:self selector:@selector(dismissNotice) userInfo:nil repeats:NO];
     }
     else if([type isEqual:@"media.handoff"]) {
-        NSURL *url=[NSURL URLWithString:body[@"url"]?:@""];
+        NSURL *url=[NSURL URLWithString:BTText(body[@"url"],@"")];
         if(![url.scheme.lowercaseString isEqual:@"https"]||url.user||url.password){_connection.text=@"Handoff rejected: HTTPS media required";return;}
         [_player pause];_player=[AVPlayer playerWithURL:url];[_player play];_connection.text=@"Direct media handed to AVPlayer; playback is unverified";
     }
-    else if([type isEqual:@"error"])_connection.text=body[@"error"];
+    else if([type isEqual:@"error"])_connection.text=BTText(body[@"error"],@"The host rejected the request");
 }
 - (void)pair {
     UIAlertController *alert=[UIAlertController alertControllerWithTitle:@"Provision host key" message:@"Paste the 64-character session key created by BackThread.Host. Save it, then close and reopen this app to use the key." preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *f){f.secureTextEntry=YES;f.autocorrectionType=UITextAutocorrectionTypeNo;f.autocapitalizationType=UITextAutocapitalizationTypeNone;}];
     [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Save key" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a){
+    [alert addAction:[UIAlertAction actionWithTitle:@"Save key" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a){(void)a;
         NSString *key=alert.textFields.firstObject.text;NSCharacterSet *invalid=[[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdefABCDEF"] invertedSet];if(key.length!=64||[key rangeOfCharacterFromSet:invalid].location!=NSNotFound){self->_connection.text=@"Key must contain exactly 64 hexadecimal characters";return;}
         NSString *dir=[NSHomeDirectory() stringByAppendingPathComponent:@"Library/BackThread"];[[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:@{NSFileProtectionKey:NSFileProtectionCompleteUntilFirstUserAuthentication} error:nil];NSString *path=[dir stringByAppendingPathComponent:@"session.key"];NSError *error=nil;
         if(![key writeToFile:path atomically:YES encoding:NSASCIIStringEncoding error:&error]){self->_connection.text=error.localizedDescription;return;}
@@ -119,6 +124,6 @@
         self->_connection.text=@"Key saved. Close and reopen BackThread to start with the new key.";
     }]];[self presentViewController:alert animated:YES completion:nil];
 }
-- (void)didReceiveMemoryWarning { [super didReceiveMemoryWarning];_art.image=nil;_artworkKey=nil;[_events removeAllObjects];[self refreshHistory];self.agent.memoryPressure=YES;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,10*NSEC_PER_SEC),dispatch_get_main_queue(),^{self.agent.memoryPressure=NO;}); }
+- (void)didReceiveMemoryWarning { [super didReceiveMemoryWarning];_art.image=nil;_artworkKey=nil;[_events removeAllObjects];[self refreshHistory];self.agent.memoryPressure=YES;NSUInteger generation=++_memoryWarningGeneration;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,10*NSEC_PER_SEC),dispatch_get_main_queue(),^{if(generation==self->_memoryWarningGeneration)self.agent.memoryPressure=NO;}); }
 - (void)dealloc { [_noticeTimer invalidate];[_player pause]; }
 @end

@@ -2,7 +2,7 @@
 
 BackThread connects a Windows 10 computer to an iPhone over Lightning USB for PCM audio, media controls, notifications, and independent file jobs.
 
-**Current state:** the Windows implementation and real-protocol simulator build on .NET 8. Native iOS 12 Agent, UIKit UI, and AudioQueue sources are included, but have not been compiled or installed. The attached iPhone 6 reports iOS 12.5.8; its SSH and BackThread ports are unavailable. This release is an engineering checkpoint, not a verified Windows-to-iPhone audio product. Read [feature status](docs/FEATURE_STATUS.md) and [hardware results](docs/HARDWARE_TEST_RESULTS.md).
+**Current state:** the Windows Host and protocol simulator remain working. The native Agent and UIKit app now compile, link and package as ARM64 for iOS 12.0 using an actual iPhoneOS 12.4 SDK. Two ad-hoc-signed Debian packages and a test IPA are available. The physical iPhone 6 / iOS 12.5.8 is paired and reachable through Dropbear SSH on USB port 44. Device System Policy denied standalone execution, and Apple's installer rejected the app signature (`0xe8008014`). **No native BackThread code has run on the phone and no iPhone speaker output is verified.** Read [feature status](docs/FEATURE_STATUS.md) and [hardware results](docs/HARDWARE_TEST_RESULTS.md).
 
 Implemented Windows components include authenticated usbmux and localhost transport, WASAPI loopback, GSMTC media controls, bounded event routing, resumable binary transfers, SHA-256 verification, text and metadata jobs, an authenticated local integration API, and a WinForms tray. The simulator executes actual jobs and receives actual PCM frames; it does not play through an iPhone speaker.
 
@@ -15,6 +15,7 @@ dotnet build BackThread.sln -c Release
 ./scripts/test.ps1
 ./scripts/test.ps1 -SoakSeconds 120
 python ./scripts/diagnose-hardware.py --output artifacts/hardware-audit.json
+python ./scripts/inspect-ios-device.py --output artifacts/ios-device-audit.json
 dotnet run --project src/Windows/Host -- --diagnose
 ```
 
@@ -42,7 +43,7 @@ An iOS build toolchain and authorized installation method are required. Build in
 
 The agent listens on iPhone loopback port 23451. Windows reaches it through Apple Mobile Device Service on localhost port 27015. No extra port forward is required for BackThread. OpenSSH diagnostics use a separately configured loopback forward and strict host-key verification.
 
-**The current session did not produce an iOS package or verify speaker output.** Device preparation, jailbreak, firmware changes, and Activation Lock are outside this project.
+The UI package embeds the Agent. A separate manually started Agent package is also built; run only one listener on port 23451. Neither package installs a launchd service or session key. An ad-hoc signature establishes artifact integrity, not device authorization. Device preparation, jailbreak, firmware changes and Activation Lock remain outside this project.
 
 ## Guides
 

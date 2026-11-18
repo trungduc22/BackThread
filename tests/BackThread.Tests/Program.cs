@@ -229,7 +229,7 @@ if (Environment.GetEnvironmentVariable("BACKTHREAD_WINDOWS_PROBES") == "1") awai
 });
 
 // Explicit opt-in sustained run. Uses the real protocol and worker concurrently; no physical playback claim.
-int duration = int.TryParse(Environment.GetEnvironmentVariable("BACKTHREAD_SOAK_SECONDS"), out int seconds) ? Math.Clamp(seconds, 1, 3600) : 0;
+int duration = int.TryParse(Environment.GetEnvironmentVariable("BACKTHREAD_SOAK_SECONDS"), out int seconds) && seconds > 0 ? Math.Clamp(seconds, 1, 3600) : 0;
 if (duration > 0) await Test("soak.concurrent-audio-worker", async () =>
 {
     await using var server = new AgentServer(0, key, Path.Combine(root, "soak")); server.Start(); await using var s = await Session.Open(server.Port, key, ct);

@@ -4,8 +4,8 @@
  <key>CFBundleIdentifier</key><string>app.backthread.companion</string>
  <key>CFBundleExecutable</key><string>BackThread</string>
  <key>CFBundleName</key><string>BackThread</string>
- <key>CFBundleVersion</key><string>1</string>
- <key>CFBundleShortVersionString</key><string>0.1.0</string>
+ <key>CFBundleVersion</key><string>2</string>
+ <key>CFBundleShortVersionString</key><string>0.1.1</string>
  <key>CFBundlePackageType</key><string>APPL</string>
  <key>MinimumOSVersion</key><string>12.0</string>
  <key>LSRequiresIPhoneOS</key><true/>
@@ -13,5 +13,12 @@
  <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
  <key>UIDeviceFamily</key><array><integer>1</integer></array>
  <key>UIRequiresFullScreen</key><true/>
- <key>UILaunchStoryboardName</key><string></string>
+ <key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string></array>
+ <key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
+ <key>UILaunchImages</key><array><dict>
+  <key>UILaunchImageName</key><string>LaunchLandscape</string>
+  <key>UILaunchImageMinimumOSVersion</key><string>8.0</string>
+  <key>UILaunchImageOrientation</key><string>Landscape</string>
+  <key>UILaunchImageSize</key><string>{375, 667}</string>
+ </dict></array>
 </dict></plist>

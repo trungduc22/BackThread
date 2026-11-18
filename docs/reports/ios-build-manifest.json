@@ -1,0 +1,99 @@
+{
+  "compiler": "Zig 0.13.0 / Clang 18.1.6",
+  "sdk": "12.4",
+  "deploymentTarget": "12.0",
+  "translationUnits": 7,
+  "warningsAsErrors": true,
+  "nativeRuntimeTested": false,
+  "installedOnDevice": false,
+  "speakerVerified": false,
+  "components": [
+    "BackThread.Agent (embedded and standalone)",
+    "BackThread.UI"
+  ],
+  "image": {
+    "architecture": "arm64",
+    "fileType": 2,
+    "flags": 3244165,
+    "linkedLibraries": [
+      "/usr/lib/libobjc.A.dylib",
+      "/System/Library/Frameworks/UIKit.framework/UIKit",
+      "/System/Library/Frameworks/Foundation.framework/Foundation",
+      "/System/Library/Frameworks/AVFoundation.framework/AVFoundation",
+      "/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox",
+      "/System/Library/Frameworks/MediaPlayer.framework/MediaPlayer",
+      "/System/Library/Frameworks/Security.framework/Security",
+      "/System/Library/Frameworks/ImageIO.framework/ImageIO",
+      "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics",
+      "/System/Library/Frameworks/QuartzCore.framework/QuartzCore",
+      "/usr/lib/libSystem.B.dylib",
+      "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation",
+      "/usr/lib/system/libcommonCrypto.dylib",
+      "/usr/lib/system/libdispatch.dylib",
+      "/usr/lib/system/libdyld.dylib",
+      "/usr/lib/system/libsystem_blocks.dylib",
+      "/usr/lib/system/libsystem_c.dylib",
+      "/usr/lib/system/libsystem_kernel.dylib",
+      "/usr/lib/system/libsystem_malloc.dylib",
+      "/usr/lib/system/libsystem_platform.dylib",
+      "/usr/lib/system/libsystem_pthread.dylib",
+      "/usr/lib/system/libunwind.dylib"
+    ],
+    "signed": true,
+    "platform": 2,
+    "minimumOS": "12.0.0",
+    "sdkVersion": "12.0.0"
+  },
+  "agentImage": {
+    "architecture": "arm64",
+    "fileType": 2,
+    "flags": 3244165,
+    "linkedLibraries": [
+      "/usr/lib/libobjc.A.dylib",
+      "/System/Library/Frameworks/Foundation.framework/Foundation",
+      "/System/Library/Frameworks/AVFoundation.framework/AVFoundation",
+      "/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox",
+      "/System/Library/Frameworks/Security.framework/Security",
+      "/usr/lib/libSystem.B.dylib",
+      "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation",
+      "/usr/lib/system/libcommonCrypto.dylib",
+      "/usr/lib/system/libdispatch.dylib",
+      "/usr/lib/system/libdyld.dylib",
+      "/usr/lib/system/libsystem_blocks.dylib",
+      "/usr/lib/system/libsystem_c.dylib",
+      "/usr/lib/system/libsystem_info.dylib",
+      "/usr/lib/system/libsystem_kernel.dylib",
+      "/usr/lib/system/libsystem_malloc.dylib",
+      "/usr/lib/system/libsystem_platform.dylib",
+      "/usr/lib/system/libsystem_pthread.dylib",
+      "/usr/lib/system/libunwind.dylib"
+    ],
+    "signed": true,
+    "platform": 2,
+    "minimumOS": "12.0.0",
+    "sdkVersion": "12.0.0"
+  },
+  "sdkStubDocuments": 1762,
+  "artifacts": {
+    "BackThread": {
+      "bytes": 167664,
+      "sha256": "b131db0b1d8638e2433993e077448133c9a33f87ac872f41e2d034340770e7ce"
+    },
+    "BackThread.Agent": {
+      "bytes": 141008,
+      "sha256": "a05259a8e445b4ba561364d5c1e0c40480dff83f1684c558e160866b7e968b59"
+    },
+    "libBackThread.Agent.a": {
+      "bytes": 161160,
+      "sha256": "9458cacadcfd66acfa3e581967d31f840abb32b699a47c24000e2f8553b88d98"
+    },
+    "app.backthread.companion_0.1.1_iphoneos-arm.deb": {
+      "bytes": 59456,
+      "sha256": "4b77444c59328037b9dccead2f31ab55cd4a4f3d875c9e72e1ed730281d15fdd"
+    },
+    "app.backthread.agent_0.1.1_iphoneos-arm.deb": {
+      "bytes": 40398,
+      "sha256": "c1f4022f8a292a2d5106aa978ac8d8fb6ea4a0e325fb13d740dfda0cbab88860"
+    }
+  }
+}

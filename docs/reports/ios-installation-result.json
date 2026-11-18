@@ -1,0 +1,39 @@
+{
+  "bundleIdentifier": "app.backthread.companion",
+  "ipaSha256": "1b1d08e7abc352a13ae877bb5e8c7ced612161ee29c1a3f89978c94eb5b4a7b6",
+  "method": "paired AFC + Installation Proxy",
+  "statuses": [
+    {
+      "PercentComplete": 5,
+      "Status": "CreatingStagingDirectory"
+    },
+    {
+      "PercentComplete": 15,
+      "Status": "ExtractingPackage"
+    },
+    {
+      "PercentComplete": 20,
+      "Status": "InspectingPackage"
+    },
+    {
+      "PercentComplete": 20,
+      "Status": "TakingInstallLock"
+    },
+    {
+      "PercentComplete": 30,
+      "Status": "PreflightingApplication"
+    },
+    {
+      "PercentComplete": 40,
+      "Status": "VerifyingApplication"
+    },
+    {
+      "Error": "ApplicationVerificationFailed",
+      "ErrorDetail": -402620396,
+      "ErrorDescription": "Failed to verify code signature of /private/var/installd/Library/Caches/com.apple.mobile.installd.staging/temp.f8i1wn/extracted/Payload/BackThread.app : 0xe8008014 (The executable contains an invalid signature.)"
+    }
+  ],
+  "installed": false,
+  "stagingRemoved": true,
+  "pairedCertificatePinned": true
+}

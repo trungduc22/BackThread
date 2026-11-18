@@ -1,51 +1,74 @@
 # iOS 12 build and authorized installation
 
-**No iOS binary or package was built in this session.** This Windows environment has no usable WSL distribution, Theos installation, Apple SDK, arm64 Apple linker/signing chain, or reachable SSH service. The native sources are not a substitute for an actual build result.
+The current sources have actually compiled and linked on Windows as baseline ARM64 / minimum iOS 12.0, with the iPhoneOS 12.4 SDK. Both an embedded-Agent UIKit app package and a standalone Agent package were produced. Ad-hoc signatures pass local integrity checks. **Installation/execution on the attached phone failed; no speaker output is verified.** See [hardware results](HARDWARE_TEST_RESULTS.md) and [native audit](IOS_NATIVE_AUDIT.md).
 
-## Required external environment
+## Recorded Windows cross-build
 
-- macOS with a compatible Apple iOS SDK/toolchain, or an existing Theos Linux/WSL setup with a legally available compatible SDK and arm64 toolchain.
-- Theos makefiles, make, linker, package utilities, and appropriate application signing configuration.
-- iPhone 6 / iOS 12.5.8 already prepared for the selected authorized installation method. Jailbreak and device preparation remain outside BackThread.
+Supply these exact external tools (provenance and hashes in [IOS_TOOLCHAIN.md](IOS_TOOLCHAIN.md)); they are not vendored in Git or deliverables. Run from the repository root:
 
-Follow [Theos installation instructions](https://theos.dev/docs/installation-linux). Do not install or change a jailbreak to make this repository build. No external toolchain/SDK is vendored in the project.
+```powershell
+$env:SOURCE_DATE_EPOCH='0'
+python scripts/build-ios.py `
+ --zig artifacts/ios-toolchain/zig/ziglang/zig.exe `
+ --sdk artifacts/ios-toolchain/sdk/iPhoneOS12.4.sdk `
+ --codesign artifacts/ios-toolchain/codesign/apple-codesign-0.29.0-x86_64-pc-windows-msvc/rcodesign.exe
+python scripts/analyze-ios.py `
+ --zig artifacts/ios-toolchain/zig/ziglang/zig.exe `
+ --sdk artifacts/ios-toolchain/sdk/iPhoneOS12.4.sdk
+python tests/ios_build_test.py
+python scripts/install-ios.py  # prepares an IPA only; no device writes
+```
 
-## Build
+Python 3.15 was used; build helpers use only its standard library. The builder requires Zig 0.13.0. Output stays under `artifacts/ios-build`; only its checked staging directory is recreated. It compiles all seven translation units with `-Wall -Wextra -Werror -Werror=unguarded-availability-new`, uses ARC/blocks for Objective-C, links actual SDK stubs, checks the Mach-O target, signs without a timestamp or external user profile, verifies code/resource hashes, and packages deterministically. The image's SDK load-command field is emitted as 12.0 by this linker; actual headers/stubs are the recorded 12.4 SDK. Deployment minimum is 12.0 in both Mach-O and Info.plist.
 
-The Makefile targets arm64 with an iOS 12.0 minimum and a rootful `/Applications` application bundle, appropriate to the requested iOS 12 target. There is no tweak injection, launchd daemon, SpringBoard hook or unrelated service modification.
+Zig 0.13 cannot consume some multi-document SDK TBD reexports directly. The helper splits existing documents by their declared install names, retaining public umbrella reexport declarations, without adding exports or copying frameworks. `tbd-document-manifest.json` records each selected source document and its SHA-256. Final linked libraries are public Apple frameworks and system libraries. No Apple SDK code/framework binary is bundled.
+
+Outputs:
+
+| Artifact | Contents / installation scope |
+|---|---|
+| `stage/BackThread.app` | UIKit app with embedded Agent, PCM ring/AudioQueue and worker |
+| `BackThread.Agent` | Manually started Agent executable using the same implementation; no UIKit |
+| `libBackThread.Agent.a` | Static Agent/receiver/shared-wire archive for linking |
+| `app.backthread.companion_0.1.1_iphoneos-arm.deb` | Only `/Applications/BackThread.app/*`; app-scoped uicache registration/removal scripts |
+| `app.backthread.agent_0.1.1_iphoneos-arm.deb` | Only `/var/mobile/BackThread/bin/BackThread.Agent`; no service, key or launchd entry |
+| `BackThread.ipa` | Standard `Payload/BackThread.app` ZIP prepared by install-ios.py; current ad-hoc build is rejected by Apple's installer |
+| `build-manifest.json` | Architecture, deployment target, linked libraries and all executable/archive/Debian hashes; runtime/install/speaker flags remain false |
+
+The `.deb` architecture label `iphoneos-arm` follows rootful iOS package convention; the contained Mach-O code is **ARM64**. Neither package contains an SSH credential, pairing record, session key or provisioning identity. The UI embeds an Agent, so do not run it together with the standalone Agent on the same port.
+
+Repeat the build with the same inputs and `SOURCE_DATE_EPOCH` and compare `artifacts` in the two manifests. Two consecutive builds were byte-identical for all five recorded artifacts. This is a toolchain-specific reproducibility check, not a runtime test.
+
+## Existing Theos/macOS route (not executed here)
+
+The checked-in Makefiles also target rootful ARM64 / minimum iOS 12.0. An existing compatible Theos setup, supplied SDK and signing configuration are required. No Theos or Xcode installation was available in this session, so this route is unverified.
 
 ```bash
 export THEOS=/path/to/existing/theos
-# Ensure an externally configured rootless scheme is not applied to this iOS 12 target.
 unset THEOS_PACKAGE_SCHEME
 bash scripts/build-ios.sh
 ```
 
-The script invokes `make clean package FINALPACKAGE=1` in `src/iOS`; packages, if successful, appear under Theos's project packages directory. It deliberately does not install anything. Do not distribute a package until it actually compiles and completes the physical checks below. Apple framework availability/signing/resource packaging must be verified by that build.
+The script builds UI and standalone Agent separately using `make clean package FINALPACKAGE=1`. Theos packages appear under each project's package directory. The script performs no install or launch-service changes. The shared launch PNG is a tracked resource, so both build routes include it.
 
-## Native layout
+## Installation boundary
 
-- `Agent/BTAgent.m`: loopback accept/auth/frame dispatch, file storage, bounded worker, journal and UI event delivery.
-- `AudioReceiver/BTAudioReceiver.m`: AVAudioSession playback and AudioQueue output, bounded ring, interruptions and media-service reset handling.
-- `UI/BTViewController.m`: landscape media controls, native volume/routes, actions, job status/history and transient notifications.
-- `Resources/Info.plist`: application identity, iOS minimum, orientations and audio background mode.
-- `../Shared/Protocol/bt_wire.c`: framing also compiled in the Windows native core regression.
+Use only the user's existing authorized app/package installer. The attached device's root filesystem is read only and lacks dpkg; the Debian packages cannot currently be installed there through that route. Standard paired AFC/Installation Proxy was also tested and rejected the ad-hoc app signature at verification (`0xe8008014`). Local signature hashes do not establish Apple signing trust. A compatible authorized execution path or a valid Apple signing identity/profile is required before retrying. Do not remount system filesystems or change trust/security/jailbreak components.
 
-## Install and provision
+`python scripts/install-ios.py --install` explicitly requests a standard installer attempt for the built BackThread bundle on the one paired USB device. It validates bundle identity and local integrity, pins the paired device certificate, uploads only a uniquely named BackThread IPA to PublicStaging, sends a normal Install request, records status/error replies and removes that staging file. It does not pair, activate, disable verification or change other apps. The observed attempt failed as recorded; repeating it unchanged is unnecessary.
 
-Use only the user's existing authorized app/package installation method. If a prepared device already supports package installation via SSH, copy the reviewed built package and install that application package using that environment's normal package manager. Do not restore, erase, modify the boot chain, alter jailbreak components or disable Jetsam. No automatic install command is run by this repository.
+## Key provisioning and launch, once installation is authorized
 
-Launch BackThread. Tap Pair and privately provision the host-generated 64-character hex key. Save, close and reopen the app. The key resides in the app's `Library/BackThread/session.key` with mode 0600 and protection until first unlock. No listener starts until a valid key is present. The app's files and job journal stay in `Documents/BackThread`.
+For UIKit, launch BackThread, tap Pair, privately provision the Host-generated 64-character hex session key, save and reopen. The key stays in the app's `Library/BackThread/session.key` with mode 0600 and file protection until first unlock. Jobs/files stay in its `Documents/BackThread`. No listener starts without a valid key.
 
-Keep the app open for the first connection. With `transport: "usb"`, Host reaches port 23451 through the single Lightning cable. No internet is required for PCM, media control, events or jobs.
+The standalone tool accepts only:
 
-## Physical acceptance still required
+```text
+BackThread.Agent --key-file /var/mobile/BackThread/session.key --state /var/mobile/BackThread/state
+```
 
-1. Build/link/sign/package successfully and verify it launches on the actual A8 device.
-2. Authenticate and exchange ping/control messages; reject wrong keys and malformed frames.
-3. Confirm audibility with a human, then test screen-off playback, interruptions, output routes, volume and reconnects.
-4. Transfer/verify files, cancel jobs and restart the app during partial transfers.
-5. Measure process RSS, memory-warning behavior, Jetsam logs, battery/thermal impact and at least a 30-minute mixed workload.
-6. Check landscape Auto Layout on the 667×375-point phone, gestures, notification expiry/history, artwork, media commands and action authorization.
+This is a manual foreground process, with SIGINT/SIGTERM shutdown and root-to-mobile privilege drop before Foundation initialization. It requires mobile-readable key and mobile-writable app-owned state. **Its execution is currently denied on this phone.** No automatic daemon or persistence is installed. UIKit and standalone background scheduling/audio privileges are unverified until they actually run.
 
-No audio output, launchd behavior, native memory footprint, independent internet handoff or physical disconnect action is marked verified before these checks run. Background workers can be suspended when audio stops or the app is terminated; the current design does not guarantee daemon-like execution.
+The Host uses `transport: "usb"` to reach iPhone loopback port 23451 through Apple Mobile Device Service. No extra BackThread port forward, Wi-Fi, cloud service or iPhone internet is required for PCM and jobs. SSH is separate and currently uses device port 44. `scripts/usb-stdio.py --device-port 44` can be used as an OpenSSH ProxyCommand with a verified isolated known-host record. `scripts/usb-port-forward.py` is an alternative temporary loopback-only forward with at most four active tunnels and a bounded lifetime. Neither is a phone service installer.
+
+Follow [NEXT_STEPS.md](NEXT_STEPS.md) for real handshake, first PCM/speaker confirmation, UIKit/worker, memory and reconnection acceptance. Compile/package success must remain separate from those results.

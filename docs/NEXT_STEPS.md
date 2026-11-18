@@ -1,25 +1,29 @@
-# Resume from this checkpoint
+# Resume iPhone integration
 
-## Primary hardware gate
+Continue from this native integration checkpoint. **The priority remains the first genuine PCM playback through the iPhone speaker.** The Windows Host/simulator are working, and both iOS components now compile/package. Further features are secondary.
 
-Use a machine with an existing compatible iOS SDK/arm64 Theos or Apple toolchain. Build the current native sources before changing the architecture. Fix actual compiler/linker/resource/signing failures in place and record the exact toolchain/version. Do not mark Objective-C “compiled” until it really is.
+## Current hardware gate
 
-Once the user-prepared device has an authorized installation path, install only the reviewed BackThread app package. Provision a fresh private key, launch the app and rerun `--diagnose`. The expected transition is from usbmux result 3 to an authenticated application connection on port 23451. Do not alter firmware, activation state, boot components or jailbreak services.
+The attached iPhone 6 / iOS 12.5.8 is paired, reports `Activated` in the latest read-only session, and exposes Dropbear SSH on USB port 44. BackThread's standalone Agent is denied execution by System Policy. Apple's standard Installation Proxy rejects the UI's ad-hoc signature with `ApplicationVerificationFailed`, `0xe8008014`. Port 23451 remains closed. See [hardware evidence](HARDWARE_TEST_RESULTS.md).
 
-Run the physical acceptance sequence in BUILD_IOS.md, beginning with ping/hello and a short PCM fixture. Human speaker confirmation, physical unplug/replug and trust prompts are manual checks. Record them as pending until actually observed.
+Resume device work only with an existing authorized app installation/execution path, or a project-provided Apple signing identity and suitable provisioning profile for normal installation. Do not alter activation, firmware, trust caches, AMFI, sandbox policy, jailbreak packages or unrelated launch services. No such changes are needed to continue the independent build checks.
 
-## Engineering priorities after the native build
+## First real playback sequence
 
-1. Verify AudioQueue lifecycle and interrupt/route behavior under screen lock. Measure actual acoustic latency with a reproducible loop/recording setup.
-2. Move native file writes/fsync off the socket reader with a strictly bounded utility I/O queue if device measurements show audio stalls. Test generation-safe replies across reconnects.
-3. Validate the native quota/free-space checks on device, then add safe cleanup/retention for app-owned partial archives. Persist job spec fingerprints if cross-restart ID conflict rejection is required.
-4. Align UTF-8 word-count semantics between C/Objective-C and .NET, then add Unicode boundary fixtures.
-5. Run a 30-minute physical combined workload, collect actual RSS/Jetsam/thermal/battery evidence, then conduct a longer unattended test. Never disable Jetsam globally.
-6. Test native touch → Host media/action → actual application behavior, large and missing artwork, fullscreen expiry/history, and UI memory warnings.
-7. Add an opt-in packaged Windows notification consent flow; keep arbitrary app event integrations on the local API.
-8. Complete AVPlayer handoff result/error reporting and coordinate PCM pause/resume before offering Mode C as an offload feature. Keep YouTube unsupported without a compliant provider.
-9. Consider a worker-only launchd component only after device lifecycle evidence justifies it; define bounded authenticated app/daemon IPC and keep audio ownership in a supported process.
+1. Re-run `python scripts/inspect-ios-device.py --output artifacts/ios-device-audit.json`. Check current state; a reachable installer or root shell alone is insufficient proof that BackThread can execute.
+2. Build using [BUILD_IOS.md](BUILD_IOS.md), run the artifact checks, then install only BackThread through the prepared environment's normal installer. `python scripts/install-ios.py --install` tests the standard paired AFC/Installation Proxy route for the current build; it does not bypass signature checks. Repeating the same rejected signature adds no evidence.
+3. Confirm the process reaches `main` and port 23451 opens. Use either UIKit's embedded Agent or the manually started standalone Agent, one at a time. No daemon is installed. Staged files under `/var/mobile/BackThread` are earlier diagnostic copies; replace only through the reviewed BackThread installation path when usable.
+4. Provision a shared fresh private session key. A matching diagnostic key already exists in ignored `artifacts/ios-private/device-session.key` and `/var/mobile/BackThread/session.key` for the standalone route. Never put its contents in logs, commits or package archives. UIKit uses its own app-container key via Pair.
+5. Copy `config/example.json` to ignored `config/local.json`; use `transport: "usb"`, `streamAudio: true`, `fixtureAudio: true`, `deviceHasInternet: false`, and the matching key path. Start `BackThread.Host --config config/local.json` and confirm authenticated hello/heartbeat plus receiver stats. The real Host talks to usbmux directly; no BackThread TCP forward is needed.
+6. Start with a short low-level PCM fixture. Require actual AudioQueue callbacks, increasing received bytes, `running: true`, `primed: true`, `lastOSStatus: 0`, and a speaker route. A human must confirm audibility; counters do not establish speaker sound. Record a pending listening check until confirmed.
+7. Switch `fixtureAudio` to false and test actual WASAPI loopback through the phone. Check gaps, dropped/silence bytes, stop/start and reconnects before adding worker load. Record priming separately from steady-state underruns.
+8. Validate UIKit media/touch/actions/events, then real file upload/hash/download and cancellation with audio active. Verify generation-fenced replies after reconnect. Collect the named `memory` diagnostic for process RSS and bounded BackThread log output.
+9. Test screen lock, interruption/resume, route/volume changes, app termination/relaunch and a physical USB unplug/replug. Run a 30-minute combined workload before longer testing; collect RSS/Jetsam/crash, audio counters and reconnection results. Never disable Jetsam.
 
-## Reproducible validation
+## Independent checks while the device is blocked
 
-`dotnet build BackThread.sln -c Release`, `scripts/test.ps1`, `scripts/test.ps1 -SoakSeconds 120`, shared C tests, hardware diagnostics, `--audio-probe` and `--media-self-test` are the existing entry points. See docs/reports for actual results, including the initial simulator-clock defect and the final corrected soak. The agent does not continue running development work after this chat ends.
+- Native compile/link/package, Clang analyzer, artifact/signature/package tests and reproducibility checks are documented in BUILD_IOS.md and IOS_NATIVE_AUDIT.md. Keep the target baseline ARM64 / minimum iOS 12.0.
+- Run `scripts/test.ps1` after any shared/Windows changes; the corrected default is 19 managed checks plus shared C tests. `-SoakSeconds 120` explicitly opts into the additional simulator soak. Simulator outcomes must stay separate from real device acceptance.
+- Native quota enforcement, Unicode word semantics, background lifetime, runtime layout and real audio timing remain unverified. Resolve issues revealed by the first actual device run before expanding features or adding launchd architecture.
+
+The session ends with the documented signing/execution blocker; no autonomous work continues after the chat ends.

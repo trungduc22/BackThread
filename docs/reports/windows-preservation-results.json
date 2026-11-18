@@ -1,0 +1,102 @@
+{
+  "timestampUtc": "2026-11-18T01:38:52.4577831+00:00",
+  "simulated": true,
+  "results": [
+    {
+      "name": "wire.fragmentation-and-json",
+      "passed": true,
+      "milliseconds": 168
+    },
+    {
+      "name": "wire.reject-size-version-channel-truncation",
+      "passed": true,
+      "milliseconds": 11
+    },
+    {
+      "name": "pcm.clipping-nan-and-bounded-ring",
+      "passed": true,
+      "milliseconds": 17
+    },
+    {
+      "name": "storage.path-traversal-and-reserved-names",
+      "passed": true,
+      "milliseconds": 34
+    },
+    {
+      "name": "validation.null-json-fields",
+      "passed": true,
+      "milliseconds": 216
+    },
+    {
+      "name": "storage.reserves-quota-before-reception",
+      "passed": true,
+      "milliseconds": 211
+    },
+    {
+      "name": "events.privacy-expiry-dedup-flood-bound",
+      "passed": true,
+      "milliseconds": 19
+    },
+    {
+      "name": "handoff.requires-connectivity-and-direct-resource",
+      "passed": true,
+      "milliseconds": 24
+    },
+    {
+      "name": "auth.wrong-key-rejected-and-recovery",
+      "passed": true,
+      "milliseconds": 297
+    },
+    {
+      "name": "auth.replay-rejected",
+      "passed": true,
+      "milliseconds": 303
+    },
+    {
+      "name": "wire.malformed-socket-and-reconnect",
+      "passed": true,
+      "milliseconds": 133
+    },
+    {
+      "name": "transport.audio-backpressure-is-bounded",
+      "passed": true,
+      "milliseconds": 7
+    },
+    {
+      "name": "integration.heartbeat-audio-order-and-content",
+      "passed": true,
+      "milliseconds": 3290
+    },
+    {
+      "name": "integration.transfer-hash-text-download-and-failed-job",
+      "passed": true,
+      "milliseconds": 368
+    },
+    {
+      "name": "storage.resume-duplicate-incomplete-and-checksum",
+      "passed": true,
+      "milliseconds": 85
+    },
+    {
+      "name": "worker.cancel-low-memory-duplicate-and-restart",
+      "passed": true,
+      "milliseconds": 102
+    },
+    {
+      "name": "integration.socket-reset-reconnect-and-format-error",
+      "passed": true,
+      "milliseconds": 171
+    },
+    {
+      "name": "integration.notification-routing",
+      "passed": true,
+      "milliseconds": 101
+    },
+    {
+      "name": "host.local-api-authentication-and-auto-reconnect",
+      "passed": true,
+      "milliseconds": 3027
+    }
+  ],
+  "failed": 0
+}
