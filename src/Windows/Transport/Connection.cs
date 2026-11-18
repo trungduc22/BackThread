@@ -13,8 +13,10 @@ public sealed class Connection : IAsyncDisposable
     private readonly Channel<QueuedFrame> control = Channel.CreateBounded<QueuedFrame>(new BoundedChannelOptions(32) { FullMode = BoundedChannelFullMode.Wait });
     private readonly Channel<QueuedFrame> audio;
     private readonly Channel<QueuedFrame> bulk = Channel.CreateBounded<QueuedFrame>(new BoundedChannelOptions(2) { FullMode = BoundedChannelFullMode.Wait });
-    private readonly SemaphoreSlim ready = new(0);
-    private readonly ConcurrentDictionary<string, TaskCompletionSource<Message>> pending = new();
+    private readonly SemaphoreSlim ready = new(0, 1);
+    private readonly SemaphoreSlim requestSlots = new(64, 64);
+    private sealed record PendingRequest(LogicalChannel Channel, TaskCompletionSource<Message> Completion);
+    private readonly ConcurrentDictionary<string, PendingRequest> pending = new();
     private readonly uint[] sequences = new uint[8];
     private readonly CancellationTokenSource lifetime = new();
     private readonly Task writer;
@@ -57,19 +59,20 @@ public sealed class Connection : IAsyncDisposable
     }
     public async Task<Message> RequestAsync(LogicalChannel channel, string type, object body, CancellationToken ct, TimeSpan? timeout = null)
     {
-        if (pending.Count >= 64) throw new IOException("Too many pending requests");
+        if (!requestSlots.Wait(0)) throw new IOException("Too many pending requests");
         string id = Guid.NewGuid().ToString("N");
         var tcs = new TaskCompletionSource<Message>(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (!pending.TryAdd(id, tcs)) throw new InvalidOperationException();
-        using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct); limit.CancelAfter(timeout ?? TimeSpan.FromSeconds(15));
         try
         {
+            if (!pending.TryAdd(id, new(channel, tcs))) throw new InvalidOperationException();
+            using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct, lifetime.Token);
+            limit.CancelAfter(timeout ?? TimeSpan.FromSeconds(15));
             await SendAsync(channel, Message.Create(type, body, id), limit.Token);
             var response = await tcs.Task.WaitAsync(limit.Token);
             if (response.Type == "error") throw new IOException(response.Body.GetProperty("error").GetString());
             return response;
         }
-        finally { pending.TryRemove(id, out _); }
+        finally { pending.TryRemove(id, out _); requestSlots.Release(); }
     }
     public async Task RunAsync(Func<Frame, Message?, CancellationToken, ValueTask> handler, CancellationToken ct)
     {
@@ -82,14 +85,19 @@ public sealed class Connection : IAsyncDisposable
                 var frame = await Wire.ReadAsync(stream, readTimeout.Token);
                 Interlocked.Exchange(ref lastReceive, Environment.TickCount64);
                 Message? message = frame.Channel is LogicalChannel.Audio or LogicalChannel.Files ? null : Message.Decode(frame.Payload);
-                if (message?.ReplyTo is { } id && pending.TryGetValue(id, out var p)) { p.TrySetResult(message); continue; }
+                if (message?.ReplyTo is { } id)
+                {
+                    if (pending.TryGetValue(id, out var request) && request.Channel == frame.Channel)
+                        request.Completion.TrySetResult(message);
+                    continue; // Late or mismatched replies are never dispatched as new commands.
+                }
                 if (message?.Type == "ping") { await SendAsync(LogicalChannel.Control, Message.Create("pong", replyTo: message.Id), linked.Token); continue; }
                 long started=Stopwatch.GetTimestamp();
                 await handler(frame, message, linked.Token);
                 RecordMaximum(ref handlerMaximumUs,Stopwatch.GetElapsedTime(started).Ticks/10);
             }
         }
-        finally { foreach (var p in pending.Values) p.TrySetException(new IOException("Connection closed")); lifetime.Cancel(); }
+        finally { foreach (var p in pending.Values) p.Completion.TrySetException(new IOException("Connection closed")); lifetime.Cancel(); }
     }
     private async Task WriteLoopAsync()
     {
@@ -112,7 +120,7 @@ public sealed class Connection : IAsyncDisposable
         catch (Exception ex)
         {
             lifetime.Cancel(); stream.Dispose();
-            foreach (var p in pending.Values) p.TrySetException(ex);
+            foreach (var p in pending.Values) p.Completion.TrySetException(ex);
         }
     }
     private void RecordWrite(Frame frame,long started)
@@ -146,12 +154,12 @@ public sealed class Connection : IAsyncDisposable
                 }
             }
         }catch(Exception)when(lifetime.IsCancellationRequested){}
-        catch(Exception ex){lifetime.Cancel();stream.Dispose();foreach(var pendingRequest in pending.Values)pendingRequest.TrySetException(ex);}
+        catch(Exception ex){lifetime.Cancel();stream.Dispose();foreach(var pendingRequest in pending.Values)pendingRequest.Completion.TrySetException(ex);}
     }
     public async ValueTask DisposeAsync()
     {
         lifetime.Cancel(); stream.Dispose(); control.Writer.TryComplete(); audio.Writer.TryComplete(); bulk.Writer.TryComplete();
-        foreach (var p in pending.Values) p.TrySetException(new IOException("Connection disposed"));
+        foreach (var p in pending.Values) p.Completion.TrySetException(new IOException("Connection disposed"));
         await writer;
         ready.Dispose(); lifetime.Dispose();
     }

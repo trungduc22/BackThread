@@ -28,6 +28,37 @@ async Task Test(string name, Func<Task> action)
     catch (Exception ex) { failed++; Console.WriteLine("FAIL " + name + ": " + ex); results.Add(new { name, passed = false, milliseconds = watch.ElapsedMilliseconds, error = ex.ToString() }); }
 }
 await Test("windows.system-metrics-real-samples",async()=>{var counter=new PcMetricsCounter();var first=counter.Sample();await Task.Delay(80,ct);var next=counter.Sample();Check.True(first.RamTotalBytes>0&&next.RamUsedBytes<=next.RamTotalBytes);Check.True(next.CpuPercent is >=0 and <=100);});
+await Test("transport.reply-channel-and-late-replies", async () =>
+{
+    using var listener = new TcpListener(IPAddress.Loopback, 0);
+    listener.Start();
+    using var client = new TcpClient();
+    await client.ConnectAsync(IPAddress.Loopback, ((IPEndPoint)listener.LocalEndpoint).Port, ct);
+    using var peer = await listener.AcceptTcpClientAsync(ct);
+    using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+    await using var connection = new Connection(client.GetStream());
+    int commands = 0;
+    var reader = connection.RunAsync((_, _, _) => { Interlocked.Increment(ref commands); return ValueTask.CompletedTask; }, stop.Token);
+    try
+    {
+        var result = connection.RequestAsync(LogicalChannel.Jobs, "job.query", new { jobId = "fixture" }, stop.Token);
+        var request = Message.Decode((await Wire.ReadAsync(peer.GetStream(), stop.Token)).Payload);
+        async Task Write(LogicalChannel c, uint sequence, Message m) =>
+            await Wire.WriteAsync(peer.GetStream(), new Frame(c, sequence, 0, m.Encode()), stop.Token);
+        await Write(LogicalChannel.Control, 1, Message.Create("error", new { error = "wrong channel" }, replyTo: request.Id));
+        await Write(LogicalChannel.Jobs, 1, Message.Create("ok", new { confirmed = true }, replyTo: request.Id));
+        Check.True((await result).Body.GetProperty("confirmed").GetBoolean());
+        await Write(LogicalChannel.Control, 2, Message.Create("action.invoke", replyTo: "expired-id"));
+        await Write(LogicalChannel.Control, 3, Message.Create("ping", id: "barrier"));
+        Check.Equal("barrier", Message.Decode((await Wire.ReadAsync(peer.GetStream(), stop.Token)).Payload).ReplyTo);
+        Check.Equal(0, Volatile.Read(ref commands));
+    }
+    finally
+    {
+        stop.Cancel();
+        try { await reader; } catch (OperationCanceledException) { }
+    }
+});
 await Test("wire.fragmentation-and-json", async () =>
 {
     var f = new Frame(LogicalChannel.Jobs, 123, 987654321, Message.Create("job.query", new { jobId = "abc" }, "request").Encode());
