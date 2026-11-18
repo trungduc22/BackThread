@@ -1,10 +1,5 @@
 #import "BTVideoSurfaceView.h"
 #import "BTTheme.h"
-#import <QuartzCore/QuartzCore.h>
-
-static NSString *BTVidStr(id val, NSString *fallback) {
-    return [val isKindOfClass:NSString.class] ? val : fallback;
-}
 
 @implementation BTVideoSurfaceView {
     UIView *_videoContainer;
@@ -12,10 +7,7 @@ static NSString *BTVidStr(id val, NSString *fallback) {
     UIView *_topHud;
     UIView *_bottomHud;
     UILabel *_modeBadge;
-    BTEqualizerView *_equalizerView;
     UILabel *_titleLabel;
-    UILabel *_clockLabel;
-    UILabel *_telemetryChip;
     UILabel *_ambientChip;
     UIView *_ambientProgressTrack;
     UIView *_ambientProgressFill;
@@ -28,19 +20,9 @@ static NSString *BTVidStr(id val, NSString *fallback) {
     UIButton *_ambientButton;
     UISlider *_seekSlider;
     UILabel *_timeLabel;
-    UISegmentedControl *_outputModeSegment;
-    UIButton *_volumeLayerButton;
-    UISlider *_volumeSlider;
     UIView *_emptyStateView;
     UILabel *_emptyStateLabel;
     NSTimer *_hudHideTimer;
-    NSTimer *_clockTimer;
-    NSDateFormatter *_clockFormatter;
-    NSDictionary *_audioControlState;
-    NSDictionary *_hostTelemetry;
-    NSString *_selectedVolumeLayer;
-    BOOL _userSelectedVolumeLayer;
-    CFTimeInterval _lastVolumeSendTime;
     BOOL _hudVisible;
     BOOL _isPlaying;
     BOOL _aspectFill;
@@ -51,18 +33,6 @@ static NSString *BTVidStr(id val, NSString *fallback) {
         self.backgroundColor = [UIColor blackColor];
         self.clipsToBounds = YES;
         _hudVisible = YES;
-        _selectedVolumeLayer = @"player";
-        _audioControlState = @{
-            @"mode": @"Both",
-            @"pcVolumeScalar": @0.8,
-            @"phoneAppGain": @1.0,
-            @"phonePlayerVolume": @1.0,
-            @"activeVolumeLayer": @"player"
-        };
-
-        _clockFormatter = [NSDateFormatter new];
-        _clockFormatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
-        _clockFormatter.dateFormat = @"HH:mm:ss";
 
         _videoContainer = [UIView new];
         _videoContainer.backgroundColor = [UIColor blackColor];
@@ -81,7 +51,7 @@ static NSString *BTVidStr(id val, NSString *fallback) {
         [self addSubview:_emptyStateView];
 
         _topHud = [UIView new];
-        _topHud.backgroundColor = [UIColor colorWithWhite:0.06 alpha:0.86];
+        _topHud.backgroundColor = [UIColor colorWithWhite:0.06 alpha:0.84];
         _topHud.layer.cornerRadius = 12;
         _topHud.translatesAutoresizingMaskIntoConstraints = NO;
 
@@ -90,20 +60,8 @@ static NSString *BTVidStr(id val, NSString *fallback) {
         [BTTheme styleChipLabel:_modeBadge accent:[BTTheme accentTeal]];
         [_modeBadge.heightAnchor constraintEqualToConstant:24].active = YES;
 
-        _equalizerView = [BTEqualizerView new];
-        _equalizerView.barColor = [BTTheme accentTeal];
-
         _titleLabel = [BTTheme labelWithSize:14 weight:UIFontWeightSemibold color:[BTTheme textPrimary]];
         _titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
-
-        _clockLabel = [BTTheme labelWithSize:12 weight:UIFontWeightBold color:[BTTheme accentTeal]];
-        _clockLabel.font = [UIFont monospacedDigitSystemFontOfSize:12 weight:UIFontWeightBold];
-        [_clockLabel setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
-
-        _telemetryChip = [BTTheme labelWithSize:10 weight:UIFontWeightSemibold color:[BTTheme textSecondary]];
-        _telemetryChip.font = [UIFont monospacedDigitSystemFontOfSize:10 weight:UIFontWeightSemibold];
-        _telemetryChip.text = @"PC --";
-        [_telemetryChip setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
 
         _aspectButton = [BTTheme pillButtonWithTitle:@"Fill" target:self action:@selector(toggleAspect)];
         _returnButton = [BTTheme pillButtonWithTitle:@"To Windows" target:self action:@selector(returnToWindows)];
@@ -114,23 +72,21 @@ static NSString *BTVidStr(id val, NSString *fallback) {
         [_returnButton setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
         [_collapseButton setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
 
-        UIStackView *topRow = [[UIStackView alloc] initWithArrangedSubviews:@[
-            _modeBadge, _equalizerView, _titleLabel, _clockLabel, _telemetryChip, _aspectButton, _returnButton, _collapseButton
-        ]];
+        UIStackView *topRow = [[UIStackView alloc] initWithArrangedSubviews:@[_modeBadge, _titleLabel, _aspectButton, _returnButton, _collapseButton]];
         topRow.axis = UILayoutConstraintAxisHorizontal;
         topRow.alignment = UIStackViewAlignmentCenter;
-        topRow.spacing = 6;
+        topRow.spacing = 8;
         topRow.translatesAutoresizingMaskIntoConstraints = NO;
         [_topHud addSubview:topRow];
         [self addSubview:_topHud];
 
         _bottomHud = [UIView new];
-        _bottomHud.backgroundColor = [UIColor colorWithWhite:0.06 alpha:0.86];
+        _bottomHud.backgroundColor = [UIColor colorWithWhite:0.06 alpha:0.84];
         _bottomHud.layer.cornerRadius = 12;
         _bottomHud.translatesAutoresizingMaskIntoConstraints = NO;
 
         _playPauseButton = [BTTheme primaryButtonWithTitle:@"Pause" target:self action:@selector(playPause)];
-        [_playPauseButton.widthAnchor constraintGreaterThanOrEqualToConstant:72].active = YES;
+        [_playPauseButton.widthAnchor constraintGreaterThanOrEqualToConstant:78].active = YES;
 
         _seekSlider = [UISlider new];
         _seekSlider.minimumTrackTintColor = [BTTheme accentTeal];
@@ -146,45 +102,12 @@ static NSString *BTVidStr(id val, NSString *fallback) {
         _ambientButton = [BTTheme pillButtonWithTitle:@"Ambient" target:self action:@selector(toggleAmbient)];
         [_ambientButton setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
 
-        UIStackView *seekRow = [[UIStackView alloc] initWithArrangedSubviews:@[_playPauseButton, _seekSlider, _timeLabel, _ambientButton]];
-        seekRow.axis = UILayoutConstraintAxisHorizontal;
-        seekRow.alignment = UIStackViewAlignmentCenter;
-        seekRow.spacing = 8;
-
-        _outputModeSegment = [[UISegmentedControl alloc] initWithItems:@[@"Only PC", @"Only Phone", @"Both"]];
-        _outputModeSegment.selectedSegmentIndex = 2;
-        _outputModeSegment.tintColor = [BTTheme accentTeal];
-        [_outputModeSegment setTitleTextAttributes:@{NSFontAttributeName: [UIFont systemFontOfSize:10 weight:UIFontWeightSemibold]} forState:UIControlStateNormal];
-        [_outputModeSegment.heightAnchor constraintEqualToConstant:28].active = YES;
-        [_outputModeSegment.widthAnchor constraintGreaterThanOrEqualToConstant:195].active = YES;
-        [_outputModeSegment addTarget:self action:@selector(outputModeChanged) forControlEvents:UIControlEventValueChanged];
-
-        _volumeLayerButton = [BTTheme pillButtonWithTitle:@"AVPlayer: 100%" target:self action:@selector(cycleVolumeLayer)];
-        _volumeLayerButton.titleLabel.font = [UIFont monospacedDigitSystemFontOfSize:11 weight:UIFontWeightBold];
-        _volumeLayerButton.contentEdgeInsets = UIEdgeInsetsMake(3, 8, 3, 8);
-        [_volumeLayerButton.heightAnchor constraintEqualToConstant:30].active = YES;
-        [_volumeLayerButton.widthAnchor constraintGreaterThanOrEqualToConstant:106].active = YES;
-        [_volumeLayerButton setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
-
-        _volumeSlider = [UISlider new];
-        _volumeSlider.minimumValue = 0.0f;
-        _volumeSlider.maximumValue = 1.0f;
-        _volumeSlider.value = 1.0f;
-        _volumeSlider.minimumTrackTintColor = [BTTheme accentTeal];
-        _volumeSlider.maximumTrackTintColor = [BTTheme pillColor];
-        [_volumeSlider addTarget:self action:@selector(volumeLiveChanged) forControlEvents:UIControlEventValueChanged];
-        [_volumeSlider addTarget:self action:@selector(volumeCommitted) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
-
-        UIStackView *audioRow = [[UIStackView alloc] initWithArrangedSubviews:@[_outputModeSegment, _volumeLayerButton, _volumeSlider]];
-        audioRow.axis = UILayoutConstraintAxisHorizontal;
-        audioRow.alignment = UIStackViewAlignmentCenter;
-        audioRow.spacing = 8;
-
-        UIStackView *bottomStack = [[UIStackView alloc] initWithArrangedSubviews:@[seekRow, audioRow]];
-        bottomStack.axis = UILayoutConstraintAxisVertical;
-        bottomStack.spacing = 5;
-        bottomStack.translatesAutoresizingMaskIntoConstraints = NO;
-        [_bottomHud addSubview:bottomStack];
+        UIStackView *bottomRow = [[UIStackView alloc] initWithArrangedSubviews:@[_playPauseButton, _seekSlider, _timeLabel, _ambientButton]];
+        bottomRow.axis = UILayoutConstraintAxisHorizontal;
+        bottomRow.alignment = UIStackViewAlignmentCenter;
+        bottomRow.spacing = 10;
+        bottomRow.translatesAutoresizingMaskIntoConstraints = NO;
+        [_bottomHud addSubview:bottomRow];
         [self addSubview:_bottomHud];
 
         _compactExpandButton = [BTTheme pillButtonWithTitle:@"Full PiP" target:self action:@selector(expandFocus)];
@@ -193,7 +116,7 @@ static NSString *BTVidStr(id val, NSString *fallback) {
         [self addSubview:_compactExpandButton];
 
         _ambientChip = [BTTheme labelWithSize:11 weight:UIFontWeightSemibold color:[BTTheme textPrimary]];
-        _ambientChip.backgroundColor = [UIColor colorWithWhite:0.05 alpha:0.60];
+        _ambientChip.backgroundColor = [UIColor colorWithWhite:0.05 alpha:0.55];
         _ambientChip.layer.cornerRadius = 8;
         _ambientChip.clipsToBounds = YES;
         _ambientChip.textAlignment = NSTextAlignmentCenter;
@@ -238,10 +161,10 @@ static NSString *BTVidStr(id val, NSString *fallback) {
             [_bottomHud.leadingAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.leadingAnchor constant:10],
             [_bottomHud.trailingAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.trailingAnchor constant:-10],
             [_bottomHud.bottomAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.bottomAnchor constant:-8],
-            [bottomStack.leadingAnchor constraintEqualToAnchor:_bottomHud.leadingAnchor constant:10],
-            [bottomStack.trailingAnchor constraintEqualToAnchor:_bottomHud.trailingAnchor constant:-10],
-            [bottomStack.topAnchor constraintEqualToAnchor:_bottomHud.topAnchor constant:6],
-            [bottomStack.bottomAnchor constraintEqualToAnchor:_bottomHud.bottomAnchor constant:-6],
+            [bottomRow.leadingAnchor constraintEqualToAnchor:_bottomHud.leadingAnchor constant:10],
+            [bottomRow.trailingAnchor constraintEqualToAnchor:_bottomHud.trailingAnchor constant:-10],
+            [bottomRow.topAnchor constraintEqualToAnchor:_bottomHud.topAnchor constant:6],
+            [bottomRow.bottomAnchor constraintEqualToAnchor:_bottomHud.bottomAnchor constant:-6],
 
             [_compactExpandButton.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-8],
             [_compactExpandButton.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-8],
@@ -249,7 +172,7 @@ static NSString *BTVidStr(id val, NSString *fallback) {
             [_ambientChip.trailingAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.trailingAnchor constant:-12],
             [_ambientChip.bottomAnchor constraintEqualToAnchor:_ambientProgressTrack.topAnchor constant:-8],
             [_ambientChip.heightAnchor constraintEqualToConstant:24],
-            [_ambientChip.widthAnchor constraintGreaterThanOrEqualToConstant:150],
+            [_ambientChip.widthAnchor constraintGreaterThanOrEqualToConstant:110],
 
             [_ambientProgressTrack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
             [_ambientProgressTrack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
@@ -266,32 +189,9 @@ static NSString *BTVidStr(id val, NSString *fallback) {
         tap.cancelsTouchesInView = NO;
         [_videoContainer addGestureRecognizer:tap];
 
-        [self refreshClock];
-        [self renderAudioControls];
         [self applyPresentationVisibility];
     }
     return self;
-}
-
-- (void)didMoveToWindow {
-    [super didMoveToWindow];
-    if (self.window) {
-        [self refreshClock];
-        if (!_clockTimer) {
-            __weak typeof(self) weakSelf = self;
-            _clockTimer = [NSTimer scheduledTimerWithTimeInterval:1.0 repeats:YES block:^(NSTimer *timer) {
-                (void)timer;
-                [weakSelf refreshClock];
-            }];
-        }
-    } else {
-        [_clockTimer invalidate];
-        _clockTimer = nil;
-    }
-}
-
-- (void)refreshClock {
-    _clockLabel.text = [_clockFormatter stringFromDate:[NSDate date]];
 }
 
 - (void)attachPlayerLayer:(AVPlayerLayer *)playerLayer {
@@ -372,14 +272,10 @@ static NSString *BTVidStr(id val, NSString *fallback) {
     _hudHideTimer = nil;
     if (_presentationMode != BTVideoPresentationFocus || !_isPlaying) return;
     __weak typeof(self) weakSelf = self;
-    _hudHideTimer = [NSTimer scheduledTimerWithTimeInterval:4.5 repeats:NO block:^(NSTimer *timer) {
+    _hudHideTimer = [NSTimer scheduledTimerWithTimeInterval:4.0 repeats:NO block:^(NSTimer *timer) {
         (void)timer;
         BTVideoSurfaceView *strong = weakSelf;
         if (!strong || strong->_presentationMode != BTVideoPresentationFocus || !strong->_isPlaying) return;
-        if (strong->_seekSlider.tracking || strong->_volumeSlider.tracking) {
-            [strong resetHudTimer];
-            return;
-        }
         strong->_hudVisible = NO;
         [strong applyPresentationVisibility];
     }];
@@ -418,123 +314,19 @@ static NSString *BTVidStr(id val, NSString *fallback) {
     if (self.onAmbientToggleTapped) self.onAmbientToggleTapped();
 }
 
-- (void)outputModeChanged {
-    _userSelectedVolumeLayer = NO;
-    NSString *mode = @"Both";
-    if (_outputModeSegment.selectedSegmentIndex == 0) mode = @"PcOnly";
-    else if (_outputModeSegment.selectedSegmentIndex == 1) mode = @"PhoneOnly";
-    [BTTheme pulseView:_outputModeSegment accent:[BTTheme accentTeal]];
-    if (self.onAudioOutputModeSelected) self.onAudioOutputModeSelected(mode);
-    [self resetHudTimer];
-}
-
-- (void)cycleVolumeLayer {
-    _userSelectedVolumeLayer = YES;
-    if ([_selectedVolumeLayer isEqualToString:@"player"]) _selectedVolumeLayer = @"pc";
-    else if ([_selectedVolumeLayer isEqualToString:@"pc"]) _selectedVolumeLayer = @"app";
-    else _selectedVolumeLayer = @"player";
-    [self renderAudioControls];
-    [self resetHudTimer];
-}
-
-- (float)acknowledgedScalarForLayer:(NSString *)layer {
-    if ([layer isEqualToString:@"app"]) {
-        return [_audioControlState[@"phoneAppGain"] isKindOfClass:NSNumber.class]
-            ? [_audioControlState[@"phoneAppGain"] floatValue] : 1.0f;
-    }
-    if ([layer isEqualToString:@"pc"]) {
-        return [_audioControlState[@"pcVolumeScalar"] isKindOfClass:NSNumber.class]
-            ? [_audioControlState[@"pcVolumeScalar"] floatValue] : 1.0f;
-    }
-    return [_audioControlState[@"phonePlayerVolume"] isKindOfClass:NSNumber.class]
-        ? [_audioControlState[@"phonePlayerVolume"] floatValue] : 1.0f;
-}
-
-- (NSString *)labelForLayer:(NSString *)layer scalar:(float)scalar {
-    long pct = (long)llroundf(fmaxf(0.0f, fminf(1.0f, scalar)) * 100.0f);
-    if ([layer isEqualToString:@"app"]) return [NSString stringWithFormat:@"App Gain: %ld%%", pct];
-    if ([layer isEqualToString:@"pc"]) return [NSString stringWithFormat:@"PC Vol: %ld%%", pct];
-    return [NSString stringWithFormat:@"AVPlayer: %ld%%", pct];
-}
-
-- (void)volumeLiveChanged {
-    [_volumeLayerButton setTitle:[self labelForLayer:_selectedVolumeLayer scalar:_volumeSlider.value]
-                        forState:UIControlStateNormal];
-    CFTimeInterval now = CACurrentMediaTime();
-    if (now - _lastVolumeSendTime >= 0.12) {
-        _lastVolumeSendTime = now;
-        if (self.onVolumeChanged) self.onVolumeChanged(_volumeSlider.value, _selectedVolumeLayer);
-    }
-    [self resetHudTimer];
-}
-
-- (void)volumeCommitted {
-    _lastVolumeSendTime = CACurrentMediaTime();
-    [_volumeLayerButton setTitle:[self labelForLayer:_selectedVolumeLayer scalar:_volumeSlider.value]
-                        forState:UIControlStateNormal];
-    if (self.onVolumeChanged) self.onVolumeChanged(_volumeSlider.value, _selectedVolumeLayer);
-    [self resetHudTimer];
-}
-
-- (void)updateWithAudioControlState:(NSDictionary *)audioControlState {
-    if (![audioControlState isKindOfClass:NSDictionary.class]) return;
-    _audioControlState = [audioControlState copy];
-    if (!_userSelectedVolumeLayer) {
-        NSString *ackedLayer = BTVidStr(audioControlState[@"activeVolumeLayer"], @"player");
-        if ([ackedLayer isEqualToString:@"pc"] || [ackedLayer isEqualToString:@"app"] || [ackedLayer isEqualToString:@"player"]) {
-            _selectedVolumeLayer = ackedLayer;
-        }
-    }
-    [self renderAudioControls];
-}
-
-- (void)renderAudioControls {
-    NSString *mode = BTVidStr(_audioControlState[@"mode"], @"Both");
-    NSInteger seg = 2;
-    if ([mode isEqualToString:@"PcOnly"]) seg = 0;
-    else if ([mode isEqualToString:@"PhoneOnly"]) seg = 1;
-    if (_outputModeSegment.selectedSegmentIndex != seg) {
-        _outputModeSegment.selectedSegmentIndex = seg;
-    }
-
-    float acked = [self acknowledgedScalarForLayer:_selectedVolumeLayer];
-    if (!_volumeSlider.tracking) {
-        _volumeSlider.value = fmaxf(0.0f, fminf(1.0f, acked));
-    }
-    [_volumeLayerButton setTitle:[self labelForLayer:_selectedVolumeLayer scalar:_volumeSlider.tracking ? _volumeSlider.value : acked]
-                        forState:UIControlStateNormal];
-}
-
-- (void)updateWithHostTelemetry:(NSDictionary *)hostTelemetry {
-    _hostTelemetry = [hostTelemetry copy];
-    if (![hostTelemetry isKindOfClass:NSDictionary.class] || ![hostTelemetry[@"available"] boolValue]) {
-        _telemetryChip.text = @"PC --";
-        return;
-    }
-    id cpu = hostTelemetry[@"cpuUsagePercent"];
-    id ram = hostTelemetry[@"memoryUsedPercent"];
-    NSString *cpuStr = [cpu isKindOfClass:NSNumber.class] ? [NSString stringWithFormat:@"%.0f%%", [cpu doubleValue]] : @"--";
-    NSString *ramStr = [ram isKindOfClass:NSNumber.class] ? [NSString stringWithFormat:@"%.0f%%", [ram doubleValue]] : @"--";
-    BOOL btConn = [hostTelemetry[@"bluetoothConnected"] isKindOfClass:NSNumber.class] && [hostTelemetry[@"bluetoothConnected"] boolValue];
-    NSInteger btCount = [hostTelemetry[@"bluetoothConnectedCount"] isKindOfClass:NSNumber.class]
-        ? [hostTelemetry[@"bluetoothConnectedCount"] integerValue] : 0;
-    NSString *btStr = (btConn && btCount > 0) ? [NSString stringWithFormat:@"BT:%ld", (long)btCount] : @"BT:0";
-    _telemetryChip.text = [NSString stringWithFormat:@"CPU %@ · RAM %@ · %@", cpuStr, ramStr, btStr];
-}
-
 - (void)updateWithSnapshot:(NSDictionary *)snapshot usbConnected:(BOOL)usbConnected {
     BOOL active = [snapshot[@"independentActive"] boolValue];
     _isPlaying = [snapshot[@"isPlaying"] boolValue];
     BOOL ready = [snapshot[@"readyForDisplay"] boolValue] || [snapshot[@"videoWidth"] intValue] > 0;
-    NSString *mode = BTVidStr(snapshot[@"mode"], @"DirectInternet");
-    NSString *title = BTVidStr(snapshot[@"title"], @"External PiP");
+    NSString *mode = [snapshot[@"mode"] isKindOfClass:NSString.class] ? snapshot[@"mode"] : @"DirectInternet";
+    NSString *title = [snapshot[@"title"] isKindOfClass:NSString.class] ? snapshot[@"title"] : @"External PiP";
     double pos = [snapshot[@"positionSeconds"] doubleValue];
     double dur = [snapshot[@"durationSeconds"] doubleValue];
 
     _emptyStateView.hidden = active && ready;
     if (!active) {
-        NSString *stage = BTVidStr(snapshot[@"stage"], @"idle");
-        NSString *err = BTVidStr(snapshot[@"error"], @"");
+        NSString *stage = [snapshot[@"stage"] isKindOfClass:NSString.class] ? snapshot[@"stage"] : @"idle";
+        NSString *err = [snapshot[@"error"] isKindOfClass:NSString.class] ? snapshot[@"error"] : @"";
         if (err.length > 0) {
             _emptyStateLabel.text = [NSString stringWithFormat:@"Handoff Error: %@", err];
         } else if ([stage isEqual:@"connecting"] || [stage isEqual:@"buffering"] || [stage isEqual:@"validating"]) {
@@ -550,8 +342,6 @@ static NSString *BTVidStr(id val, NSString *fallback) {
     UIColor *accent = [mode isEqual:@"BufferedUsb"] ? [BTTheme accentAmber] : [BTTheme accentTeal];
     _modeBadge.text = usbConnected ? [NSString stringWithFormat:@" %@ ", shortMode] : [NSString stringWithFormat:@" %@ · Wi-Fi ", shortMode];
     [BTTheme styleChipLabel:_modeBadge accent:accent];
-    _equalizerView.barColor = accent;
-    _equalizerView.playing = _isPlaying && active;
 
     _titleLabel.text = title.length ? title : @"External PiP Media";
     [_playPauseButton setTitle:_isPlaying ? @"Pause" : @"Play" forState:UIControlStateNormal];
@@ -563,7 +353,7 @@ static NSString *BTVidStr(id val, NSString *fallback) {
     }
     _seekSlider.enabled = active && dur > 0.5;
     _timeLabel.text = [NSString stringWithFormat:@"%@ / %@", [BTTheme formatDuration:pos], [BTTheme formatDuration:dur]];
-    _ambientChip.text = [NSString stringWithFormat:@" %@ · %@ · %@ ", [_clockFormatter stringFromDate:[NSDate date]], shortMode, [BTTheme formatDuration:pos]];
+    _ambientChip.text = [NSString stringWithFormat:@" %@ · %@ ", shortMode, [BTTheme formatDuration:pos]];
 
     if (_ambientProgressTrack.bounds.size.width > 0) {
         double ratio = dur > 0.5 ? MAX(0.0, MIN(1.0, pos / maxDur)) : 0.0;
@@ -578,7 +368,6 @@ static NSString *BTVidStr(id val, NSString *fallback) {
 
 - (void)dealloc {
     [_hudHideTimer invalidate];
-    [_clockTimer invalidate];
 }
 
 @end

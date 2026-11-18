@@ -12,10 +12,9 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 @interface BTHistoryPanelView : UIView
-@property(nonatomic, copy, nullable) void (^onReplayBannerTapped)(NSDictionary *event);
+@property(nonatomic, copy, nullable) void (^onReplayFullscreenTapped)(NSDictionary *event);
 @property(nonatomic, copy, nullable) void (^onClearTapped)(void);
 - (void)updateWithEvents:(NSArray<NSDictionary *> *)events;
 @end
 
 NS_ASSUME_NONNULL_END
-

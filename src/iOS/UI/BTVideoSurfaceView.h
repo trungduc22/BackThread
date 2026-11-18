@@ -17,15 +17,10 @@ typedef NS_ENUM(NSInteger, BTVideoPresentationMode) {
 @property(nonatomic, copy, nullable) void (^onExpandFocusTapped)(void);
 @property(nonatomic, copy, nullable) void (^onAmbientToggleTapped)(void);
 @property(nonatomic, copy, nullable) void (^onCloseFocusTapped)(void);
-@property(nonatomic, copy, nullable) void (^onAudioOutputModeSelected)(NSString *mode);
-@property(nonatomic, copy, nullable) void (^onVolumeChanged)(float value, NSString *layer);
 
 - (void)attachPlayerLayer:(AVPlayerLayer *)playerLayer;
 - (void)updateWithSnapshot:(NSDictionary *)snapshot usbConnected:(BOOL)usbConnected;
-- (void)updateWithAudioControlState:(NSDictionary *)audioControlState;
-- (void)updateWithHostTelemetry:(nullable NSDictionary *)hostTelemetry;
 - (void)showOverlayTemporarily;
 @end
 
 NS_ASSUME_NONNULL_END
-
