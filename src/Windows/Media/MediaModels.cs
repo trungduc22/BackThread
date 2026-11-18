@@ -50,6 +50,27 @@ public enum AudioFocusPolicy
     DuckVideo
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum AudioOutputMode
+{
+    PcOnly,
+    PhoneOnly,
+    Both
+}
+
+public sealed record AudioControlState(
+    AudioOutputMode Mode,
+    float PcVolumeScalar,
+    bool PcMuted,
+    bool PcMuteSavedByBackThread,
+    bool PcEndpointAvailable,
+    string ActiveVolumeLayer,
+    float PhoneAppGain,
+    float PhonePlayerVolume,
+    string CaptureSignalStatus,
+    string? DeviceName = null,
+    string? Warning = null);
+
 public sealed record MediaCapabilities(
     bool SupportsDirectInternet,
     bool SupportsBufferedUsb,

@@ -184,3 +184,22 @@ def write_debian(path,control_entries,data_entries,epoch=0,data_directories=()):
             output.write(header + content)
             if len(content) % 2:
                 output.write(b'\n')
+
+
+def write_ipa(path, app, epoch=0):
+    """Build a deterministic Payload/BackThread.app .ipa archive."""
+    import datetime
+    import zipfile
+    dt = datetime.datetime.fromtimestamp(max(315532800, epoch), datetime.timezone.utc)
+    date_time = (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+    with zipfile.ZipFile(path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        for file_path in sorted(p for p in app.rglob('*') if p.is_file()):
+            rel = file_path.relative_to(app).as_posix()
+            if '..' in pathlib.PurePosixPath(rel).parts:
+                raise ValueError('Unsafe IPA member path')
+            info = zipfile.ZipInfo(f'Payload/BackThread.app/{rel}', date_time=date_time)
+            mode = 0o755 if file_path.name == 'BackThread' else 0o644
+            info.external_attr = (0o100000 | mode) << 16
+            info.compress_type = zipfile.ZIP_DEFLATED
+            zf.writestr(info, file_path.read_bytes())
+

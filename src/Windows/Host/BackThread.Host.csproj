@@ -4,5 +4,6 @@
   <FrameworkReference Include="Microsoft.AspNetCore.App" />
   <ProjectReference Include="../Transport/BackThread.Transport.csproj" /><ProjectReference Include="../Audio/BackThread.Audio.csproj" />
   <ProjectReference Include="../Media/BackThread.Media.csproj" /><ProjectReference Include="../Events/BackThread.Events.csproj" /><ProjectReference Include="../Worker/BackThread.Worker.csproj" />
+  <InternalsVisibleTo Include="BackThread.Tests" />
  </ItemGroup>
 </Project>

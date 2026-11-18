@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using BackThread.Transport;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
@@ -14,10 +15,56 @@ public sealed class LoopbackBridge
     public string? LastError { get; private set; }
     public long FramesSent { get; private set; }
     private long lastCapture;
-    private long maximumLatenessMs,lateFrames,pacingResets;
-    public long PacingMaximumLatenessMilliseconds=>Interlocked.Read(ref maximumLatenessMs);
-    public long PacingLateFrames=>Interlocked.Read(ref lateFrames);
-    public long PacingResets=>Interlocked.Read(ref pacingResets);
+    private long maximumLatenessMs, lateFrames, pacingResets;
+    private long nonZeroPackets, zeroPackets, lastNonZeroTick;
+    private int lastPeakSample;
+
+    public long PacingMaximumLatenessMilliseconds => Interlocked.Read(ref maximumLatenessMs);
+    public long PacingLateFrames => Interlocked.Read(ref lateFrames);
+    public long PacingResets => Interlocked.Read(ref pacingResets);
+    public long NonZeroCapturePackets => Interlocked.Read(ref nonZeroPackets);
+    public long ZeroCapturePackets => Interlocked.Read(ref zeroPackets);
+    public int PeakSampleLevel => Volatile.Read(ref lastPeakSample);
+
+    public string GetCaptureSignalStatus(bool fixture, bool streamActive, bool pcEndpointMuted)
+    {
+        if (!streamActive) return "stopped";
+        if (fixture) return "fixture";
+        long now = Environment.TickCount64;
+        long lastNz = Interlocked.Read(ref lastNonZeroTick);
+        if (Interlocked.Read(ref nonZeroPackets) > 0 && lastNz != 0 && now - lastNz <= 3000)
+            return "signal-present";
+        if (pcEndpointMuted && Interlocked.Read(ref zeroPackets) > 0)
+            return "silent-driver-coupled";
+        return "silent-idle";
+    }
+
+    internal void ObserveCapturedPcm(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length < 2) return;
+        Ring.Write(bytes);
+        Interlocked.Exchange(ref lastCapture, Environment.TickCount64);
+        var samples = MemoryMarshal.Cast<byte, short>(bytes.Slice(0, bytes.Length & ~1));
+        int peak = 0;
+        for (int i = 0; i < samples.Length; i++)
+        {
+            short s = samples[i];
+            int abs = s == short.MinValue ? 32767 : (s < 0 ? -s : s);
+            if (abs > peak) peak = abs;
+            if (peak > 16) break;
+        }
+        Volatile.Write(ref lastPeakSample, peak);
+        if (peak > 8)
+        {
+            Interlocked.Increment(ref nonZeroPackets);
+            Interlocked.Exchange(ref lastNonZeroTick, Environment.TickCount64);
+        }
+        else
+        {
+            Interlocked.Increment(ref zeroPackets);
+        }
+    }
+
     /// <summary>WASAPI shared-mode PCM conversion is requested from the Windows audio engine.</summary>
     public async Task RunAsync(Connection connection, bool fixture, CancellationToken ct, Action? pacingStarted = null)
     {
@@ -99,7 +146,7 @@ public sealed class LoopbackBridge
                 using var capture = new WasapiLoopbackCapture(device) { WaveFormat = new WaveFormat(48000, 16, 2) };
                 DeviceName = device.FriendlyName; string id = device.ID;
                 var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                capture.DataAvailable += (_, e) => { Ring.Write(e.Buffer.AsSpan(0, e.BytesRecorded)); Interlocked.Exchange(ref lastCapture, Environment.TickCount64); };
+                capture.DataAvailable += (_, e) => ObserveCapturedPcm(e.Buffer.AsSpan(0, e.BytesRecorded));
                 capture.RecordingStopped += (_, e) => { if (e.Exception != null) LastError = e.Exception.Message; stopped.TrySetResult(); };
                 capture.StartRecording(); LastError = null;
                 try

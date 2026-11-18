@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using BackThread.Audio;
 using BackThread.Events;
 using BackThread.Host;
 using BackThread.Media;
@@ -20,6 +21,75 @@ internal static class HybridMediaTests
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             => Task.FromResult(responder(request));
+    }
+
+    private sealed class MockAudioController : IMultimediaAudioController
+    {
+        private readonly object gate = new();
+        private float volumeScalar;
+        private bool muted;
+        private bool muteSaved;
+        private bool originalMute;
+        public int EnsureMuteCalls { get; private set; }
+        public int RestoreCalls { get; private set; }
+
+        public MockAudioController(float initialVolume = 0.72f, bool initialMuted = false)
+        {
+            volumeScalar = initialVolume;
+            muted = initialMuted;
+        }
+
+        public EndpointVolumeSnapshot GetState()
+        {
+            lock (gate) return new(true, "Mock Speakers (USB Audio)", volumeScalar, muted, muteSaved);
+        }
+
+        public EndpointVolumeSnapshot SetVolumeScalar(float scalar)
+        {
+            lock (gate)
+            {
+                // Quantize slightly to prove callers read back the acknowledged endpoint scalar.
+                volumeScalar = (float)(Math.Round(Math.Clamp(scalar, 0f, 1f) * 50.0) / 50.0);
+                return new(true, "Mock Speakers (USB Audio)", volumeScalar, muted, muteSaved);
+            }
+        }
+
+        public EndpointVolumeSnapshot EnsureMutedForPhoneOnly()
+        {
+            lock (gate)
+            {
+                EnsureMuteCalls++;
+                if (!muteSaved)
+                {
+                    originalMute = muted;
+                    muteSaved = true;
+                }
+                if (!muted) muted = true;
+                return new(true, "Mock Speakers (USB Audio)", volumeScalar, muted, muteSaved);
+            }
+        }
+
+        public EndpointVolumeSnapshot RestoreMuteIfSaved()
+        {
+            lock (gate)
+            {
+                if (!muteSaved) return new(true, "Mock Speakers (USB Audio)", volumeScalar, muted, false);
+                RestoreCalls++;
+                muted = originalMute;
+                muteSaved = false;
+                return new(true, "Mock Speakers (USB Audio)", volumeScalar, muted, false);
+            }
+        }
+
+        public void Dispose() => RestoreMuteIfSaved();
+    }
+
+    private sealed class MockTelemetryProvider(SystemTelemetrySnapshot initial) : ISystemTelemetryProvider
+    {
+        public SystemTelemetrySnapshot Current { get; set; } = initial;
+
+        public ValueTask<SystemTelemetrySnapshot> SampleAsync(CancellationToken ct) =>
+            ValueTask.FromResult(Current);
     }
 
     public static async Task RunAllAsync(
@@ -567,6 +637,296 @@ internal static class HybridMediaTests
                     Check.True(loadedExample.PauseWindowsOnConfirmedHandoff);
                     Check.True(!loadedExample.AllowExperimentalYouTubeEmbed);
                 }
+            }
+            finally
+            {
+                hostStop.Cancel();
+                await running;
+            }
+        });
+
+        await test("audio.output-modes-pc-mute-save-restore-and-driver-check", async () =>
+        {
+            await using var server = new AgentServer(0, key, Path.Combine(root, "audio-modes"));
+            server.Start();
+            int apiPort;
+            {
+                var r = new TcpListener(IPAddress.Loopback, 0); r.Start(); apiPort = ((IPEndPoint)r.LocalEndpoint).Port; r.Stop();
+            }
+            string keyPath = Path.Combine(root, "audio-modes.key");
+            await File.WriteAllTextAsync(keyPath, Convert.ToHexString(key), ct);
+
+            var mockAudio = new MockAudioController(initialVolume: 0.72f, initialMuted: false);
+            var cfg = new HostConfig
+            {
+                KeyFile = keyPath,
+                Transport = "localhost",
+                DevicePort = server.Port,
+                ApiPort = apiPort,
+                StreamAudio = false,
+                CollectWindowsNotifications = false,
+                AudioOutputMode = AudioOutputMode.Both
+            };
+
+            using (var host = new HostRuntime(cfg, audioController: mockAudio))
+            {
+                using var hostStop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                var running = host.RunAsync(hostStop.Token);
+                try
+                {
+                    await Check.Eventually(() => Task.FromResult(JsonSerializer.SerializeToElement(host.Status, Message.Json).GetProperty("state").GetString() == "connected"));
+
+                    // Initially Both: PC speaker unmuted, live PCM allowed.
+                    Check.True(!mockAudio.GetState().Muted);
+                    Check.True(host.Router.ShouldStreamLivePcm);
+
+                    // Switching to PhoneOnly saves prior PC mute state and mutes PC speakers.
+                    var phoneOnly = await host.SetAudioOutputModeAsync(AudioOutputMode.PhoneOnly, ct);
+                    Check.Equal(AudioOutputMode.PhoneOnly, phoneOnly.Mode);
+                    Check.True(phoneOnly.PcMuted);
+                    Check.True(phoneOnly.PcMuteSavedByBackThread);
+                    Check.True(mockAudio.GetState().Muted);
+                    Check.True(host.Router.ShouldStreamLivePcm);
+
+                    // Switching to PcOnly restores original unmuted state and stops live PCM.
+                    var pcOnly = await host.SetAudioOutputModeAsync(AudioOutputMode.PcOnly, ct);
+                    Check.Equal(AudioOutputMode.PcOnly, pcOnly.Mode);
+                    Check.True(!pcOnly.PcMuted);
+                    Check.True(!pcOnly.PcMuteSavedByBackThread);
+                    Check.True(!mockAudio.GetState().Muted);
+                    Check.True(!host.Router.ShouldStreamLivePcm);
+
+                    // Back to PhoneOnly then Dispose must guarantee restoring unmuted PC state.
+                    await host.SetAudioOutputModeAsync(AudioOutputMode.PhoneOnly, ct);
+                    Check.True(mockAudio.GetState().Muted);
+                }
+                finally
+                {
+                    hostStop.Cancel();
+                    await running;
+                }
+            }
+            Check.True(!mockAudio.GetState().Muted, "Disconnect/Dispose did not restore saved PC mute state");
+            Check.True(!mockAudio.GetState().MuteSavedByBackThread);
+
+            // If PC was ALREADY muted before PhoneOnly, RestoreMuteIfSaved must preserve pre-existing mute=true.
+            using var preMuted = new MockAudioController(initialVolume: 0.50f, initialMuted: true);
+            preMuted.EnsureMutedForPhoneOnly();
+            Check.True(preMuted.GetState().Muted);
+            preMuted.RestoreMuteIfSaved();
+            Check.True(preMuted.GetState().Muted);
+
+            // Capture driver-coupled silence detection on LoopbackBridge.
+            var bridge = new LoopbackBridge();
+            bridge.ObserveCapturedPcm(new byte[PcmRing.BytesPer10Ms]);
+            Check.Equal("silent-driver-coupled", bridge.GetCaptureSignalStatus(fixture: false, streamActive: true, pcEndpointMuted: true));
+            bridge.ObserveCapturedPcm(PcmRing.Sine(0));
+            Check.Equal("signal-present", bridge.GetCaptureSignalStatus(fixture: false, streamActive: true, pcEndpointMuted: true));
+        });
+
+        await test("audio.volume-layers-reflect-actual-acked-values", async () =>
+        {
+            await using var server = new AgentServer(0, key, Path.Combine(root, "audio-vol"));
+            server.Start();
+            int apiPort;
+            {
+                var r = new TcpListener(IPAddress.Loopback, 0); r.Start(); apiPort = ((IPEndPoint)r.LocalEndpoint).Port; r.Stop();
+            }
+            string keyPath = Path.Combine(root, "audio-vol.key");
+            await File.WriteAllTextAsync(keyPath, Convert.ToHexString(key), ct);
+
+            var mockAudio = new MockAudioController(initialVolume: 0.50f, initialMuted: false);
+            var cfg = new HostConfig
+            {
+                KeyFile = keyPath,
+                Transport = "localhost",
+                DevicePort = server.Port,
+                ApiPort = apiPort,
+                StreamAudio = false,
+                CollectWindowsNotifications = false
+            };
+
+            using var host = new HostRuntime(cfg, audioController: mockAudio);
+            using var hostStop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var running = host.RunAsync(hostStop.Token);
+            using var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{apiPort}"), Timeout = TimeSpan.FromSeconds(5) };
+            client.DefaultRequestHeaders.Authorization = new("Bearer", Convert.ToHexString(key).ToLowerInvariant());
+
+            try
+            {
+                await Check.Eventually(async () =>
+                {
+                    try { return (await client.GetFromJsonAsync<JsonElement>("/v1/status", ct)).GetProperty("state").GetString() == "connected"; }
+                    catch { return false; }
+                });
+
+                // Requesting pc volume 0.37f gets quantized by mock endpoint to 0.38f; HostRuntime must return readback 0.38f.
+                var resPc = await client.PostAsJsonAsync("/v1/audio/volume", new { value = 0.37f, layer = "pc" }, ct);
+                resPc.EnsureSuccessStatusCode();
+                var acPc = await resPc.Content.ReadFromJsonAsync<JsonElement>(ct);
+                Check.Equal("pc", acPc.GetProperty("activeVolumeLayer").GetString());
+                Check.True(Math.Abs(acPc.GetProperty("pcVolumeScalar").GetDouble() - 0.38) < 0.001);
+
+                var resApp = await client.PostAsJsonAsync("/v1/audio/volume", new { value = 0.65f, layer = "app" }, ct);
+                resApp.EnsureSuccessStatusCode();
+                var acApp = await resApp.Content.ReadFromJsonAsync<JsonElement>(ct);
+                Check.Equal("app", acApp.GetProperty("activeVolumeLayer").GetString());
+                Check.True(Math.Abs(acApp.GetProperty("phoneAppGain").GetDouble() - 0.65) < 0.001);
+
+                var resPlayer = await client.PostAsJsonAsync("/v1/audio/volume", new { value = 0.42f, layer = "player" }, ct);
+                resPlayer.EnsureSuccessStatusCode();
+                var acPlayer = await resPlayer.Content.ReadFromJsonAsync<JsonElement>(ct);
+                Check.Equal("player", acPlayer.GetProperty("activeVolumeLayer").GetString());
+                Check.True(Math.Abs(acPlayer.GetProperty("phonePlayerVolume").GetDouble() - 0.42) < 0.001);
+
+                var modeRes = await client.PostAsJsonAsync("/v1/audio/mode", new { mode = "PhoneOnly" }, ct);
+                modeRes.EnsureSuccessStatusCode();
+                Check.Equal("PhoneOnly", (await modeRes.Content.ReadFromJsonAsync<JsonElement>(ct)).GetProperty("mode").GetString());
+            }
+            finally
+            {
+                hostStop.Cancel();
+                await running;
+            }
+        });
+
+        await test("telemetry.real-bluetooth-connected-never-guessed-from-radio", async () =>
+        {
+            await using var server = new AgentServer(0, key, Path.Combine(root, "tel-bt"));
+            server.Start();
+            int apiPort;
+            {
+                var r = new TcpListener(IPAddress.Loopback, 0); r.Start(); apiPort = ((IPEndPoint)r.LocalEndpoint).Port; r.Stop();
+            }
+            string keyPath = Path.Combine(root, "tel-bt.key");
+            await File.WriteAllTextAsync(keyPath, Convert.ToHexString(key), ct);
+
+            // Radio is ON, but 0 Aep.IsConnected devices -> BluetoothConnected must remain false.
+            var telemetry = new MockTelemetryProvider(new SystemTelemetrySnapshot(
+                TimestampUnixMs: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                CpuUsagePercent: 34.5,
+                MemoryUsedMb: 6400,
+                MemoryTotalMb: 16384,
+                MemoryUsedPercent: 39.1,
+                BatteryPercent: 82.0,
+                AcOnline: true,
+                BatteryStatus: "Charging",
+                WifiConnected: true,
+                WifiName: "Studio-5G",
+                BluetoothRadioState: "On",
+                BluetoothConnectedCount: 0,
+                BluetoothConnected: false,
+                Available: true,
+                Platform: "Windows"));
+
+            var cfg = new HostConfig
+            {
+                KeyFile = keyPath,
+                Transport = "localhost",
+                DevicePort = server.Port,
+                ApiPort = apiPort,
+                StreamAudio = false,
+                CollectWindowsNotifications = false
+            };
+
+            using var host = new HostRuntime(cfg, telemetryProvider: telemetry);
+            using var hostStop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var running = host.RunAsync(hostStop.Token);
+            using var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{apiPort}"), Timeout = TimeSpan.FromSeconds(5) };
+            client.DefaultRequestHeaders.Authorization = new("Bearer", Convert.ToHexString(key).ToLowerInvariant());
+
+            try
+            {
+                await Check.Eventually(async () =>
+                {
+                    try
+                    {
+                        var tel = await client.GetFromJsonAsync<JsonElement>("/v1/telemetry", ct);
+                        return tel.GetProperty("available").GetBoolean();
+                    }
+                    catch { return false; }
+                });
+
+                var snap1 = await client.GetFromJsonAsync<JsonElement>("/v1/telemetry", ct);
+                Check.Equal("On", snap1.GetProperty("bluetoothRadioState").GetString());
+                Check.Equal(0, snap1.GetProperty("bluetoothConnectedCount").GetInt32());
+                Check.True(!snap1.GetProperty("bluetoothConnected").GetBoolean(), "Must never guess Bluetooth connected when radio is On with 0 connected devices");
+                Check.True(snap1.GetProperty("wifiConnected").GetBoolean());
+                Check.Equal(6400L, snap1.GetProperty("memoryUsedMb").GetInt64());
+
+                // Also verify a live Bluetooth connection transitions count to 1 & connected=true on next poll.
+                telemetry.Current = telemetry.Current with { BluetoothConnectedCount = 1, BluetoothConnected = true };
+                await Check.Eventually(async () =>
+                {
+                    var snap2 = await client.GetFromJsonAsync<JsonElement>("/v1/telemetry", ct);
+                    return snap2.GetProperty("bluetoothConnected").GetBoolean() && snap2.GetProperty("bluetoothConnectedCount").GetInt32() == 1;
+                }, 5000);
+            }
+            finally
+            {
+                hostStop.Cancel();
+                await running;
+            }
+        });
+
+        await test("events.top-bar-beacon-style-and-toast-mapping", async () =>
+        {
+            var router = new EventRouter { HideSensitive = true };
+            var now = DateTimeOffset.UtcNow;
+
+            var spotlight = router.Accept(new("id-spot", "CI", "Build Done", "All checks green", 2, now.AddMinutes(3), Sensitive: false, Style: "spotlight"), now);
+            Check.True(spotlight != null);
+            Check.Equal("spotlight", spotlight!.Style);
+
+            var critBeacon = router.Accept(new("id-crit2", "Security", "Kernel Alert", "Check firewall", 3, now.AddMinutes(3), Sensitive: false), now);
+            Check.Equal("beacon", critBeacon!.Style);
+
+            // Sensitive masking clears special styling and sensitive payload.
+            var masked = router.Accept(new("id-sens", "Chat", "Private Msg", "Secret body", 3, now.AddMinutes(3), Sensitive: true, Style: "beacon", IconBase64: "AQID"), now);
+            Check.Equal("standard", masked!.Style);
+            Check.Equal("Private notification", masked.Title);
+            Check.True(masked.IconBase64 == null);
+
+            // Windows toast collector mapping keeps FullscreenEligible=false (top-bar-only replacement) and promotes critical sources to beacon.
+            var cfg = new HostConfig { HideSensitive = false, CriticalNotificationSources = ["Microsoft Teams"] };
+            var toast = NotificationCollector.BuildCompanionEvent(
+                42,
+                "Microsoft.Teams",
+                "Microsoft Teams",
+                ["Incoming Incident Call", "Bridge active on desktop"],
+                now,
+                cfg,
+                iconBase64: "AQID");
+            Check.Equal(3, toast.Priority);
+            Check.True(toast.FullscreenEligible == false);
+            Check.Equal("beacon", toast.Style);
+            Check.Equal("windows.toast", toast.Category);
+            Check.Equal("Incoming Incident Call", toast.Title);
+
+            // Diagnostics endpoint honestly reports missing Windows package identity on unpackaged/Linux host.
+            await using var server = new AgentServer(0, key, Path.Combine(root, "notif-diag"));
+            server.Start();
+            int apiPort;
+            {
+                var r = new TcpListener(IPAddress.Loopback, 0); r.Start(); apiPort = ((IPEndPoint)r.LocalEndpoint).Port; r.Stop();
+            }
+            string keyPath = Path.Combine(root, "notif-diag.key");
+            await File.WriteAllTextAsync(keyPath, Convert.ToHexString(key), ct);
+            using var host = new HostRuntime(new HostConfig { KeyFile = keyPath, Transport = "localhost", DevicePort = server.Port, ApiPort = apiPort, StreamAudio = false, CollectWindowsNotifications = true });
+            using var hostStop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var running = host.RunAsync(hostStop.Token);
+            using var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{apiPort}"), Timeout = TimeSpan.FromSeconds(5) };
+            client.DefaultRequestHeaders.Authorization = new("Bearer", Convert.ToHexString(key).ToLowerInvariant());
+            try
+            {
+                await Check.Eventually(async () =>
+                {
+                    try { return (await client.GetFromJsonAsync<JsonElement>("/v1/status", ct)).GetProperty("state").GetString() == "connected"; }
+                    catch { return false; }
+                });
+                var diag = await client.GetFromJsonAsync<JsonElement>("/v1/notifications/diagnostics", ct);
+                Check.True(!diag.GetProperty("hasPackageIdentity").GetBoolean());
+                Check.True(diag.GetProperty("guidance").GetString()!.Contains("Build-Msix.ps1", StringComparison.Ordinal));
             }
             finally
             {

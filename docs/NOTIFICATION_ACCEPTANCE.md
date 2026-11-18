@@ -13,26 +13,26 @@ Implemented in [`EventRouter`](../src/Windows/Events/EventRouter.cs) and [`Compa
 | Priority | Presentation on iOS | Windows Routing Behavior | Auto-Dismiss Window |
 |---|---|---|---|
 | **0 (Low / Quiet)** | Stored in `BTHistoryPanelView` only (`_events`); no visual popup | Captured during normal or quiet hours | N/A |
-| **1 (Notice)** | Compact top-center blue toast pill (`NOTICE`) without body/icon | Rate-limited (max 10/s), deduplicated by key within window | `min(3s, remainingTTL)` |
-| **2 (High / Banner)** | Amber top banner card with optional `<=24 KiB` Base64 app icon, title, body, swipe-up / Dismiss button | Promoted automatically if `source` matches `HighNotificationSources` | `min(8s, remainingTTL)` |
-| **3 (Critical / Fullscreen)** | Red-bordered fullscreen centered modal card over translucent dark backdrop (`0.90` alpha) + single-tap `"Dismiss & Return to Media"` | Promoted automatically if `source` matches `CriticalNotificationSources`; optional `PauseMediaOnCriticalNotification` | Manual explicit dismissal (fullscreen locked) |
+| **1 (Notice)** | Compact top-center blue/teal notice bar (`NOTICE`, `480 pt` max width) | Rate-limited (max 10/s), deduplicated by key within window | `min(3.5s, remainingTTL)` |
+| **2 (High / Spotlight Banner)** | Top-bar card (`540 pt` max) with optional `<=24 KiB` Base64 icon, title, body, countdown progress bar, and `"spotlight"` accent strip | Promoted automatically if `source` matches `HighNotificationSources` | `min(7.0s, remainingTTL)` |
+| **3 (Critical / Beacon Bar)** | **Top-bar-only** highlighted crimson **Beacon** strip (`600 pt` max, `5 pt` left accent rail, `BEACON` + `CRITICAL BAR` badges, subtle Reduce-Motion-aware pulse, countdown bar, single-tap `"Dismiss"`). **No fullscreen modal backdrop** (`fullscreenActive` is permanently `NO`). | Promoted automatically if `source` matches `CriticalNotificationSources`; `NotificationCollector` maps real Windows toasts with `FullscreenEligible = false` and `Style = "beacon"` | `min(12.0s, remainingTTL)` or immediate manual Dismiss |
 
 ### Privacy, Suppression & Bounded Memory
-- **Privacy Masking (`hideSensitive: true`)**: Replaces `title` with `"Private notification"`, clears `body`, clears `iconBase64`, and clears action buttons before sending over USB Channel 4 ([`EventRouter.Evaluate`](../src/Windows/Events/EventRouter.cs)).
+- **Privacy Masking (`hideSensitive: true`)**: Replaces `title` with `"Private notification"`, clears `body`, clears `iconBase64`, clears `category`, and resets `style` to `"standard"` before sending over USB Channel 4 ([`EventRouter`](../src/Windows/Events/EventRouter.cs)).
 - **Blocked Sources (`blockedSources`)**: Case-insensitive suppression applied before history retention.
-- **Quiet Hours & Focus Suppression**: Quiet-hours/fullscreen Windows modes suppress Priority 1-2 interruptions (logged/retained at quiet Priority `0` or dropped safely) while honoring Priority 3 critical alerts unless explicitly disabled.
+- **Quiet Hours & Focus Suppression**: Quiet-hours/fullscreen Windows modes suppress Priority 1-2 interruptions (logged/retained at quiet Priority `0` or dropped safely) while honoring Priority 3 Beacon top bars unless explicitly disabled.
 - **Bounded History**: Both `EventRouter` (Windows) and `BTViewController._events` (iOS) retain at most 64 unexpired notifications, pruning expired entries automatically.
 
-## Non-Destructive External PiP Guarantee (`BTNotificationOverlayView`)
+## Non-Destructive Top-Bar Overlay Guarantee (`BTNotificationOverlayView`)
 
 Verified in [`BTViewController.m`](../src/iOS/UI/BTViewController.m) and [`BTNotificationOverlayView.m`](../src/iOS/UI/BTNotificationOverlayView.m):
-1. `BTNotificationOverlayView` is added on top of both `BTVideoSurfaceView` (PiP canvas) and `_embedHostView` (`[self.view bringSubviewToFront:_notificationOverlay]`).
-2. Priority 2 and Priority 3 alerts NEVER pause, stop, swap out, or detach `AVPlayer` / `_directPlayer.playerLayer` on iOS.
-3. Priority <=2 overrides `-pointInside:withEvent:` so touches outside the banner pass seamlessly through to `BTVideoSurfaceView` video controls beneath.
-4. Priority 3 engages `_fullscreenActive = YES`, un-hiding status bar gently for situational awareness and requiring a single tap (*Dismiss & Return to Media* or swipe-up) which restores `BTVideoSurfaceView` instantaneously at exact live timestamp.
-5. `BTHistoryPanelView` lets the user inspect any active notification at fullscreen (`Inspect Fullscreen`) at any time.
+1. `BTNotificationOverlayView` sits above both `BTVideoSurfaceView` (PiP canvas) and `_embedHostView` (`[self.view bringSubviewToFront:_notificationOverlay]`).
+2. Priority 1, 2, and 3 alerts NEVER present a fullscreen backdrop and NEVER pause, stop, swap out, or detach `AVPlayer` / `_directPlayer.playerLayer` on iOS (`fullscreenActive` always returns `NO`).
+3. `-pointInside:withEvent:` restricts hit-testing strictly to `_card` for **all** priorities (`1–3`), so video touches and playback controls outside the top card work uninterrupted.
+4. `BTNotificationOverlayView` renders a subtle attention pulse for `"beacon"` / `"spotlight"` styles only when `UIAccessibilityIsReduceMotionEnabled()` is `NO`.
+5. `BTHistoryPanelView` lets the user inspect any stored notification or tap *"Preview Top Bar"* (`onReplayBannerTapped`) to replay it through the top-bar overlay.
 
-## Windows Ingestion Boundary & Acceptance Ledger
+## Windows Toast Ingestion & MSIX Packaging Ledger
 
-- **Authenticated Loopback Event API (`POST /v1/events`) + SSE / History (`GET /v1/events`)**: **Verified** in [`HybridMediaTests`](../tests/BackThread.Tests/HybridMediaTests.cs) (`events.rich-priorities-and-privacy-masking`) and portable smoke tests.
-- **Official Windows Toast Listener (`WindowsNotificationCollector` + `packaging/msix/Package.appxmanifest`)**: **Compiled & Manifest-Staged Only**. Windows `UserNotificationListener` requires MSIX/Sparse package identity (`userNotificationListener` capability) and interactive Windows 10 consent UI (`POST /v1/notifications/request-access`); unpackaged builds report `"Unavailable"` cleanly without polling errors. Physical Windows 10 toast capture remains unexecuted on Linux.
+- **Authenticated Loopback Event API (`POST /v1/events`), `style` routing, Privacy Masking & `NotificationCollector.BuildCompanionEvent` mapping**: **Verified** in [`HybridMediaTests`](../tests/BackThread.Tests/HybridMediaTests.cs) (`events.rich-priorities-and-privacy-masking`, `events.top-bar-beacon-style-and-toast-mapping`).
+- **Official Windows Toast Listener (`NotificationCollector` + `packaging/msix/Build-Msix.ps1` + `GET /v1/notifications/diagnostics`)**: `UserNotificationListener` requires Windows package identity (`HasPackageIdentity == true`) plus interactive user consent (`POST /v1/notifications/request-access`). Unpackaged `Host.exe` / Linux runs report `"Unavailable"` with explicit actionable `guidance` rather than silently pretending toast capture works. Live Windows 10 MSIX signing (`Build-Msix.ps1`) and consent prompt testing remain pending on the physical Windows 10 host.

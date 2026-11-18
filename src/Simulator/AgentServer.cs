@@ -32,6 +32,11 @@ public sealed class AgentServer : IAsyncDisposable
     public string LastFocusPolicy { get; private set; } = "Auto";
     public bool LastMuteVideoAudio { get; private set; }
     public double LastIndependentVolume { get; private set; } = 1.0;
+    public double LastAppGainVolume { get; private set; } = 1.0;
+    public string LastAudioOutputMode { get; private set; } = "Both";
+    public int TelemetryReceivedCount { get; private set; }
+    public JsonElement? LastTelemetryReceived { get; private set; }
+    public JsonElement? LastAudioControlState { get; private set; }
     public int ReceivedMediaStateCount { get; private set; }
     public long LastBufferedBytesReceived { get; private set; }
     public string? LastBufferedSha256 { get; private set; }
@@ -192,12 +197,24 @@ public sealed class AgentServer : IAsyncDisposable
                             switch (message.Type)
                             {
                                 case "hello":
-                                    await Reply(new { agent = "BackThread.Simulator", simulated = true, capabilities = new[] { "pcm", "jobs", "files", "events", "faults", "hybrid-media", "buffered-media", "fullscreen-notifications", "sync" } });
+                                    await Reply(new { agent = "BackThread.Simulator", simulated = true, capabilities = new[] { "pcm", "jobs", "files", "events", "faults", "hybrid-media", "buffered-media", "top-bar-notifications", "telemetry", "audio-modes", "sync" } });
                                     break;
                                 case "audio.start":
                                     if (b.GetProperty("sampleRate").GetInt32() != 48000 || b.GetProperty("channels").GetInt32() != 2 || b.GetProperty("bits").GetInt32() != 16) throw new InvalidDataException("Only 48 kHz stereo PCM16 supported");
                                     Volatile.Write(ref audioOn, false); ring.Clear(); hash.GetHashAndReset(); packets = bytes = gaps = 0; lastArrival=maximumArrivalGapUs=0; previous = 0; Interlocked.Exchange(ref playbackEpoch, 0); Volatile.Write(ref audioOn, true); await Reply(new { ready = true }); break;
                                 case "audio.stop": audioOn = false; ring.Clear(); await Reply(new { stopped = true }); break;
+                                case "audio.volume":
+                                    LastAppGainVolume = b.TryGetProperty("value", out var av) && av.ValueKind == JsonValueKind.Number ? Math.Clamp(av.GetDouble(), 0.0, 1.0) : 1.0;
+                                    await Reply(new { value = LastAppGainVolume });
+                                    break;
+                                case "audio.control.state":
+                                    LastAudioControlState = b.Clone();
+                                    if (b.TryGetProperty("mode", out var om)) LastAudioOutputMode = om.GetString() ?? LastAudioOutputMode;
+                                    break;
+                                case "system.telemetry":
+                                    TelemetryReceivedCount++;
+                                    LastTelemetryReceived = b.Clone();
+                                    break;
                                 case "audio.stats": await Reply(new { packets, bytes, gaps, bufferedBytes = ring.Count, droppedBytes = ring.DroppedBytes, silenceBytes = ring.SilenceBytes, playbackTicks = framesRead, maximumArrivalGapMilliseconds=maximumArrivalGapUs/1000d,handlerMaximumMilliseconds=c.HandlerMaximumMilliseconds, sha256 = Convert.ToHexString(hash.GetCurrentHash()).ToLowerInvariant() }); break;
                                 case "job.submit": await Reply(Jobs.Submit(b.Deserialize<JobSpec>(Message.Json) ?? throw new InvalidDataException())); break;
                                 case "job.query": await Reply(Jobs.Query(b.GetProperty("jobId").GetString()!) ?? throw new FileNotFoundException("Unknown job")); break;
@@ -339,6 +356,10 @@ public sealed class AgentServer : IAsyncDisposable
                                     LastMuteVideoAudio = b.TryGetProperty("muteVideoAudio", out var mv) && mv.GetBoolean();
                                     LastIndependentVolume = b.TryGetProperty("volume", out var vol) ? vol.GetDouble() : 1.0;
                                     await Reply(new { applied = true });
+                                    break;
+                                case "media.volume.set":
+                                    LastIndependentVolume = b.TryGetProperty("value", out var mvVal) && mvVal.ValueKind == JsonValueKind.Number ? Math.Clamp(mvVal.GetDouble(), 0.0, 1.0) : 1.0;
+                                    await Reply(new { value = LastIndependentVolume });
                                     break;
                                 case "media.mode.select":
                                     await Reply(new { received = true });

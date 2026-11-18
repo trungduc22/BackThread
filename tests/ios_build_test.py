@@ -164,6 +164,22 @@ class NativeArtifactTests(unittest.TestCase):
         self.assertFalse(manifest['speakerVerified'])
         self.assertFalse(manifest['nativeRuntimeTested'])
 
+    def test_ipa_archive_and_version(self):
+        import zipfile
+        info = plistlib.loads((APP / 'Info.plist').read_bytes())
+        self.assertEqual('0.2.0', info['CFBundleShortVersionString'])
+        self.assertGreaterEqual(int(info['CFBundleVersion']), 6)
+        ipa = BUILD / 'BackThread.ipa'
+        self.assertTrue(ipa.is_file())
+        with zipfile.ZipFile(ipa, 'r') as zf:
+            names = set(zf.namelist())
+            self.assertIn('Payload/BackThread.app/BackThread', names)
+            self.assertIn('Payload/BackThread.app/Info.plist', names)
+            self.assertIn('Payload/BackThread.app/_CodeSignature/CodeResources', names)
+            self.assertEqual(zf.read('Payload/BackThread.app/BackThread'), (APP / 'BackThread').read_bytes())
+            self.assertEqual(zf.read('Payload/BackThread.app/Info.plist'), (APP / 'Info.plist').read_bytes())
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
+

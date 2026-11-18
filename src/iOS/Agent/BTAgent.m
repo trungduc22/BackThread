@@ -28,9 +28,11 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
     BTAudioReceiver *_audio;
     int _listener,_client;
     atomic_bool _stopping;
-    BOOL _audioOn,_authenticated,_started;
+    BOOL _audioOn,_nativePlaybackActive,_authenticated,_started;
+    NSString *_audioOutputMode;
     uint64_t _generation;
     NSLock *_tx;
+    NSLock *_audioControlLock;
     uint32_t _sequences[8],_previousAudio;
     uint64_t _audioPackets,_audioBytes,_audioGaps;
     dispatch_queue_t _network,_worker,_commands,_fileIO,_bufferedIO;
@@ -48,7 +50,7 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
 - (instancetype)initWithKey:(NSData *)key storage:(NSString *)storage {
     if(key.length!=32)return nil;
     if((self=[super init])) {
-        _key=[key copy];_root=[storage copy];_listener=-1;_client=-1;atomic_init(&_stopping,NO);_tx=[NSLock new];_audio=[BTAudioReceiver new];
+        _key=[key copy];_root=[storage copy];_listener=-1;_client=-1;atomic_init(&_stopping,NO);_tx=[NSLock new];_audioControlLock=[NSLock new];_audioOutputMode=@"Both";_audio=[BTAudioReceiver new];
         _network=dispatch_queue_create("app.backthread.network",DISPATCH_QUEUE_SERIAL);
         _worker=dispatch_queue_create("app.backthread.worker",dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL,QOS_CLASS_UTILITY,0));
         _commands=dispatch_queue_create("app.backthread.commands",DISPATCH_QUEUE_SERIAL);_commandSlots=dispatch_semaphore_create(32);
@@ -61,6 +63,14 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
     } return self;
 }
 - (BTAudioReceiver *)audio { return _audio; }
+- (void)setNativePlaybackActive:(BOOL)active {
+    BOOL shouldStop=NO;
+    [_audioControlLock lock];
+    _nativePlaybackActive=active;
+    if(active&&_audioOn){_audioOn=NO;shouldStop=YES;}
+    [_audioControlLock unlock];
+    if(shouldStop)[_audio stop];
+}
 - (void)networkPhase:(NSString *)phase error:(int)code {
     // Own diagnostic only: no keys, peer identity or system configuration.
     NSDictionary *record=@{@"phase":phase,@"errno":@(code),@"port":@23451,@"pid":@(getpid())};
@@ -75,7 +85,7 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
 }
 - (BOOL)send:(NSString *)type body:(NSDictionary *)body reply:(id)reply channel:(uint16_t)channel generation:(uint64_t)generation {
     NSMutableDictionary *m=[@{@"type":type,@"body":body?:@{}} mutableCopy];if([reply isKindOfClass:NSString.class])m[@"replyTo"]=reply;
-    if([type isEqual:@"media.command"]||[type isEqual:@"action.invoke"]||[type isEqual:@"job.cancel"])m[@"id"]=[[[NSUUID UUID] UUIDString] lowercaseString];
+    if([type isEqual:@"media.command"]||[type isEqual:@"action.invoke"]||[type isEqual:@"job.cancel"]||[type isEqual:@"audio.output.set"]||[type isEqual:@"audio.volume.set"]||[type isEqual:@"audio.control.get"])m[@"id"]=[[[NSUUID UUID] UUIDString] lowercaseString];
     NSData *data=[NSJSONSerialization dataWithJSONObject:m options:0 error:nil];if(!data||data.length>65536)return NO;
     [_tx lock];int fd=_client;if((generation&&generation!=_generation)||(!_authenticated&&![type hasPrefix:@"auth."])){[_tx unlock];return NO;}uint8_t header[BT_HEADER_SIZE];BTHeader h={(uint32_t)data.length,channel,++_sequences[channel],0};
     BOOL ok=fd>=0&&bt_header_encode(header,&h)==0&&exact(fd,header,sizeof(header),YES)&&exact(fd,(void *)data.bytes,data.length,YES);if(!ok&&fd>=0)shutdown(fd,SHUT_RDWR);[_tx unlock];return ok;
@@ -114,12 +124,12 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
             @try { if([self authenticate:client]) { timeout.tv_sec=12;setsockopt(client,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));[self notify:@"connection" body:@{@"state":@"Connected by USB"}];[self session:client]; } }
             @catch(NSException *exception) { [self notify:@"error" body:@{@"error":exception.reason?:@"Protocol error"}]; }
             [self->_tx lock];self->_client=-1;self->_authenticated=NO;shutdown(client,SHUT_RDWR);close(client);[self->_tx unlock];
-            self->_audioOn=NO;[self->_audio stop];[self notify:@"connection" body:@{@"state":@"Disconnected — waiting for host"}];
+            [self->_audioControlLock lock];self->_audioOn=NO;[self->_audioControlLock unlock];[self->_audio stop];[self notify:@"connection" body:@{@"state":@"Disconnected — waiting for host"}];
         }
         [self->_tx lock];if(self->_listener==fd){close(fd);self->_listener=-1;}self->_started=NO;[self->_tx unlock];
     }});
 }
-- (void)stop { _stopping=YES;[_tx lock];if(_listener>=0)shutdown(_listener,SHUT_RDWR);if(_client>=0)shutdown(_client,SHUT_RDWR);[_tx unlock];[_audio stop]; }
+- (void)stop { _stopping=YES;[_tx lock];if(_listener>=0)shutdown(_listener,SHUT_RDWR);if(_client>=0)shutdown(_client,SHUT_RDWR);[_tx unlock];[_audioControlLock lock];_audioOn=NO;[_audioControlLock unlock];[_audio stop]; }
 - (void)command:(NSString *)type body:(NSDictionary *)body {
     if([type isEqual:@"job.cancel"]){NSString *jid=body[@"jobId"];@synchronized(self){if(jid&&[@[@"queued",@"running"] containsObject:_jobs[jid][@"state"]])[_cancelled addObject:jid];}return;}
     if(dispatch_semaphore_wait(_commandSlots,DISPATCH_TIME_NOW)!=0)return;
@@ -134,6 +144,17 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
     NSString *msgType=[type copy];
     dispatch_async(_commands,^{@autoreleasepool {
         [self send:msgType body:payloadBody reply:nil channel:3 generation:generation];
+        dispatch_semaphore_signal(self->_commandSlots);
+    }});
+}
+- (void)sendControlMessage:(NSString *)type body:(NSDictionary *)body channel:(uint16_t)channel {
+    if(dispatch_semaphore_wait(_commandSlots,DISPATCH_TIME_NOW)!=0)return;
+    [_tx lock];uint64_t generation=_generation;BOOL connected=_authenticated;[_tx unlock];
+    if(!connected){dispatch_semaphore_signal(_commandSlots);return;}
+    NSDictionary *payloadBody=body?[body copy]:@{};
+    NSString *msgType=[type copy];
+    dispatch_async(_commands,^{@autoreleasepool {
+        [self send:msgType body:payloadBody reply:nil channel:channel generation:generation];
         dispatch_semaphore_signal(self->_commandSlots);
     }});
 }
@@ -158,11 +179,23 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         BTHeader h;NSData *payload;NSDictionary *m=[self read:fd header:&h payload:&payload];if(!m)break;
         if(h.channel==2) {
             if(payload.length%4)break;
-            // Audio failure is local to this channel. Keep heartbeats, jobs and files alive.
-            // Also discard already queued PCM after audio.stop or a failed audio.start.
-            if(!_audioOn)continue;
-            if(!_audio.running){_audioOn=NO;NSDictionary *stats=[_audio statistics];[_audio stop];[self send:@"audio.error" body:@{@"error":@"AudioQueue stopped; request audio.start to retry",@"lastOSStatus":stats[@"lastOSStatus"]?:@0} reply:nil channel:7];[self notify:@"error" body:@{@"error":@"Audio playback stopped; USB control remains connected"}];continue;}
-            if(_previousAudio&&h.sequence!=_previousAudio+1)_audioGaps++;_previousAudio=h.sequence;_audioPackets++;_audioBytes+=payload.length;[_audio receive:payload];continue;
+            // Serialized ownership guard: never feed live PCM when stopped, PcOnly, or native playback owns audio.
+            [_audioControlLock lock];
+            BOOL accepting=_audioOn&&!_nativePlaybackActive&&![_audioOutputMode isEqual:@"PcOnly"];
+            if(accepting) {
+                if(_previousAudio&&h.sequence!=_previousAudio+1)_audioGaps++;
+                _previousAudio=h.sequence;_audioPackets++;_audioBytes+=payload.length;
+            }
+            [_audioControlLock unlock];
+            if(!accepting)continue;
+            if(![_audio running]){
+                [_audioControlLock lock];_audioOn=NO;[_audioControlLock unlock];
+                NSDictionary *stats=[_audio statistics];[_audio stop];
+                [self send:@"audio.error" body:@{@"error":@"AudioQueue stopped; request audio.start to retry",@"lastOSStatus":stats[@"lastOSStatus"]?:@0} reply:nil channel:7];
+                [self notify:@"error" body:@{@"error":@"Audio playback stopped; USB control remains connected"}];
+                continue;
+            }
+            [_audio receive:payload];continue;
         }
         if(h.channel==6) {
             if(payload.length>=40) {
@@ -186,16 +219,40 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         }
         NSString *type=m[@"type"];NSDictionary *b=m[@"body"];id rid=m[@"id"];
         if([type isEqual:@"ping"]) { [self send:@"pong" body:@{} reply:rid channel:1]; }
-        else if([type isEqual:@"hello"]) { [self send:@"ok" body:@{@"agent":@"BackThread.Agent",@"simulated":@NO,@"capabilities":@[@"pcm",@"jobs",@"files",@"events",@"UIKit",@"direct-handoff",@"hybrid-media",@"buffered-media",@"fullscreen-notifications",@"sync"]} reply:rid channel:h.channel]; }
+        else if([type isEqual:@"hello"]) { [self send:@"ok" body:@{@"agent":@"BackThread.Agent",@"simulated":@NO,@"capabilities":@[@"pcm",@"jobs",@"files",@"events",@"UIKit",@"direct-handoff",@"hybrid-media",@"buffered-media",@"top-bar-notifications",@"telemetry",@"audio-modes",@"sync"]} reply:rid channel:h.channel]; }
         else if([type isEqual:@"audio.start"]) {
             NSError *error=nil;if([b[@"sampleRate"] intValue]!=48000||[b[@"channels"] intValue]!=2||[b[@"bits"] intValue]!=16) { [self fail:@"Only 48 kHz stereo PCM16 supported" message:m channel:h.channel];continue; }
+            [_audioControlLock lock];
+            BOOL preempted=_nativePlaybackActive||[_audioOutputMode isEqual:@"PcOnly"];
             _audioOn=NO;
-            if([_audio start:&error]) { _audioOn=YES;_audioPackets=_audioBytes=_audioGaps=0;_previousAudio=0;[self send:@"ok" body:@{@"ready":@YES} reply:rid channel:h.channel]; }
+            [_audioControlLock unlock];
+            if(preempted) { [self fail:@"PCM stream paused while independent playback or PC-Only output is active" message:m channel:h.channel];continue; }
+            if([_audio start:&error]) {
+                BOOL abortedAfterStart=NO;
+                [_audioControlLock lock];
+                if(_nativePlaybackActive||[_audioOutputMode isEqual:@"PcOnly"]) { _audioOn=NO;abortedAfterStart=YES; }
+                else { _audioOn=YES;_audioPackets=_audioBytes=_audioGaps=0;_previousAudio=0; }
+                [_audioControlLock unlock];
+                if(abortedAfterStart) { [_audio stop];[self fail:@"Independent playback or PC-Only output preempted PCM stream" message:m channel:h.channel]; }
+                else [self send:@"ok" body:@{@"ready":@YES} reply:rid channel:h.channel];
+            }
             else [self fail:error.localizedDescription message:m channel:h.channel];
         }
-        else if([type isEqual:@"audio.stop"]) { _audioOn=NO;[_audio stop];[self send:@"ok" body:@{@"stopped":@YES} reply:rid channel:h.channel]; }
-        else if([type isEqual:@"audio.stats"]) { NSMutableDictionary *s=[[_audio statistics] mutableCopy];s[@"packets"]=@(_audioPackets);s[@"bytes"]=@(_audioBytes);s[@"gaps"]=@(_audioGaps);s[@"acceptingPCM"]=@(_audioOn);[self send:@"ok" body:s reply:rid channel:h.channel]; }
-        else if([type isEqual:@"audio.volume"]) { NSError *error=nil;if(![b[@"value"] isKindOfClass:NSNumber.class]||![_audio setVolume:[b[@"value"] floatValue] error:&error])[self fail:error.localizedDescription?:@"Invalid audio volume" message:m channel:h.channel];else [self send:@"ok" body:@{} reply:rid channel:h.channel]; }
+        else if([type isEqual:@"audio.stop"]) { [_audioControlLock lock];_audioOn=NO;[_audioControlLock unlock];[_audio stop];[self send:@"ok" body:@{@"stopped":@YES} reply:rid channel:h.channel]; }
+        else if([type isEqual:@"audio.stats"]) { NSMutableDictionary *s=[[_audio statistics] mutableCopy];[_audioControlLock lock];s[@"packets"]=@(_audioPackets);s[@"bytes"]=@(_audioBytes);s[@"gaps"]=@(_audioGaps);s[@"acceptingPCM"]=@(_audioOn);s[@"nativePlaybackActive"]=@(_nativePlaybackActive);s[@"audioOutputMode"]=_audioOutputMode?:@"Both";[_audioControlLock unlock];[self send:@"ok" body:s reply:rid channel:h.channel]; }
+        else if([type isEqual:@"audio.volume"]) { NSError *error=nil;if(![b[@"value"] isKindOfClass:NSNumber.class]||![_audio setVolume:[b[@"value"] floatValue] error:&error])[self fail:error.localizedDescription?:@"Invalid audio volume" message:m channel:h.channel];else [self send:@"ok" body:@{@"value":b[@"value"]} reply:rid channel:h.channel]; }
+        else if([type isEqual:@"audio.control.state"]) {
+            NSString *mode=[b[@"mode"] isKindOfClass:NSString.class]?b[@"mode"]:@"Both";
+            BOOL stopPcm=NO;
+            [_audioControlLock lock];
+            _audioOutputMode=[mode copy];
+            if([_audioOutputMode isEqual:@"PcOnly"]&&_audioOn){_audioOn=NO;stopPcm=YES;}
+            [_audioControlLock unlock];
+            if(stopPcm)[_audio stop];
+            [self notify:type body:b];
+        }
+        else if([type isEqual:@"system.telemetry"]) { [self notify:type body:b]; }
+        else if([type isEqual:@"media.volume.set"]) { [self notify:type body:b];[self send:@"ok" body:@{@"value":b[@"value"]?:@1.0} reply:rid channel:h.channel]; }
         else if([type isEqual:@"media.buffered.start"]) {
             NSString *sid=b[@"streamId"];if([sid isKindOfClass:NSString.class])[self registerBufferedStreamId:sid];
             [self notify:type body:b];[self send:@"ok" body:@{@"accepted":@YES} reply:rid channel:h.channel];
@@ -214,7 +271,10 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         }
         else if([type isEqual:@"media.state"]||[type isEqual:@"action.registry"]) { [self notify:type body:b];[self send:@"ok" body:@{@"received":@YES} reply:rid channel:h.channel]; }
         else if([type isEqual:@"error"]) { [self notify:@"error" body:b]; }
-        else if([type isEqual:@"ok"]&&[m[@"replyTo"] isKindOfClass:NSString.class]&&[b[@"success"] isEqual:@NO]) { [self notify:@"error" body:@{@"error":@"Windows could not perform the requested action"}]; }
+        else if([type isEqual:@"ok"]&&[m[@"replyTo"] isKindOfClass:NSString.class]) {
+            if([b[@"success"] isEqual:@NO]) [self notify:@"error" body:@{@"error":@"Windows could not perform the requested action"}];
+            else if(b[@"mode"]&&b[@"pcVolumeScalar"]) [self notify:@"audio.control.state" body:b];
+        }
         else if([type isEqual:@"event.publish"]) { BOOL accepted=[self event:b];[self send:@"ok" body:@{@"accepted":@(accepted)} reply:rid channel:h.channel]; }
         else if([type isEqual:@"event.history"]) { [self send:@"ok" body:@{@"events":[_events copy]} reply:rid channel:h.channel]; }
         else if([type isEqual:@"job.submit"]) { [self submit:b message:m channel:h.channel]; }

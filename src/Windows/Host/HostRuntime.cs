@@ -18,15 +18,23 @@ public sealed class HostRuntime : IDisposable
     private readonly MediaSessions media = new();
     private readonly EventRouter events = new();
     private readonly NotificationCollector collector = new();
+    private readonly IMultimediaAudioController endpointAudio;
+    private readonly ISystemTelemetryProvider telemetryProvider;
     private readonly SemaphoreSlim actions = new(1, 1);
     private readonly SemaphoreSlim bufferedRequests = new(4, 4);
     private readonly SemaphoreSlim audioPolicySignal = new(0, 1);
+    private readonly SemaphoreSlim audioControlGate = new(1, 1);
     private readonly object stateGate = new();
     private Connection? connection;
     private RemoteWorker? worker;
     private string state = "starting", lastError = "", audioError = "";
     private LoopbackBridge? audio;
     private bool lastLivePcmDesired = true;
+    private AudioOutputMode audioOutputMode;
+    private float phoneAppGain;
+    private float phonePlayerVolume = 1f;
+    private string preferredVolumeLayer = "auto";
+    private SystemTelemetrySnapshot? latestTelemetry;
     private readonly CancellationTokenSource? disposedCts = new();
     private CancellationTokenSource? liveAudioSliceCts;
 
@@ -34,9 +42,19 @@ public sealed class HostRuntime : IDisposable
     public SpotifyProvider Spotify { get; }
     public HostConfig Config => config;
 
-    public HostRuntime(HostConfig config, ISpotifyTokenStore? spotifyTokens = null, HttpMessageHandler? httpHandler = null, IMediaUrlProber? urlProber = null)
+    public HostRuntime(
+        HostConfig config,
+        ISpotifyTokenStore? spotifyTokens = null,
+        HttpMessageHandler? httpHandler = null,
+        IMediaUrlProber? urlProber = null,
+        IMultimediaAudioController? audioController = null,
+        ISystemTelemetryProvider? telemetryProvider = null)
     {
         this.config = config;
+        this.endpointAudio = audioController ?? new WindowsEndpointAudio();
+        this.telemetryProvider = telemetryProvider ?? new SystemTelemetryProvider();
+        this.audioOutputMode = config.AudioOutputMode;
+        this.phoneAppGain = config.AudioGain;
         key = Authentication.LoadKey(config.KeyFile);
         events.HideSensitive = config.HideSensitive;
 
@@ -54,6 +72,8 @@ public sealed class HostRuntime : IDisposable
             ResumeWindowsMediaAsync = ResumeWindowsSourceAsync,
             WindowsCommandAsync = ExecuteWindowsMediaCommandAsync
         };
+        Router.SetAudioOutputMode(this.audioOutputMode);
+        lastLivePcmDesired = Router.ShouldStreamLivePcm;
         Router.StateChanged += s =>
         {
             MediaStateChanged?.Invoke(s);
@@ -68,12 +88,20 @@ public sealed class HostRuntime : IDisposable
     public event Action<string>? Log;
     public event Action<JobState>? JobProgress;
     public event Action<MediaSessionState>? MediaStateChanged;
+    public event Action<AudioControlState>? AudioControlChanged;
+
+    public SystemTelemetrySnapshot LatestTelemetry
+    {
+        get { lock (stateGate) return latestTelemetry ?? new(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), null, null, null, null, null, null, "Unavailable", null, null, "Unavailable", 0, null, false, Environment.OSVersion.Platform.ToString()); }
+    }
 
     public object Status
     {
         get
         {
             var m = Router.CurrentState;
+            var ac = CurrentAudioControlState();
+            var tel = LatestTelemetry;
             lock (stateGate)
                 return new
                 {
@@ -82,8 +110,14 @@ public sealed class HostRuntime : IDisposable
                     audioError,
                     transport = config.Transport,
                     simulated = config.Transport == "localhost",
-                    device = audio?.DeviceName,
+                    device = audio?.DeviceName ?? ac.DeviceName,
                     captureError = audio?.LastError,
+                    captureSignalStatus = ac.CaptureSignalStatus,
+                    audioOutputMode = ac.Mode.ToString(),
+                    pcVolumeScalar = ac.PcVolumeScalar,
+                    pcMuted = ac.PcMuted,
+                    phoneAppGain = ac.PhoneAppGain,
+                    phonePlayerVolume = ac.PhonePlayerVolume,
                     audioFrames = audio?.FramesSent ?? 0,
                     captureBufferedBytes = audio?.Ring.Count ?? 0,
                     captureDroppedBytes = audio?.Ring.DroppedBytes ?? 0,
@@ -102,7 +136,8 @@ public sealed class HostRuntime : IDisposable
                     handoffStage = m.Stage.ToString(),
                     shouldStreamLivePcm = m.ShouldStreamLivePcm,
                     spotifyConnected = Spotify.IsAuthenticated,
-                    notificationAccess = collector.GetAccessStatus()
+                    notificationAccess = collector.GetAccessStatus(),
+                    telemetry = tel
                 };
         }
     }
@@ -119,6 +154,53 @@ public sealed class HostRuntime : IDisposable
         try { Volatile.Read(ref liveAudioSliceCts)?.Cancel(); } catch (ObjectDisposedException) { }
         if (audioPolicySignal.CurrentCount == 0)
             try { audioPolicySignal.Release(); } catch (SemaphoreFullException) { }
+    }
+
+    public AudioControlState CurrentAudioControlState()
+    {
+        var ep = endpointAudio.GetState();
+        var m = Router.CurrentState;
+        AudioOutputMode mode;
+        float gain, playerVol;
+        string layerPref;
+        bool streamActive;
+        lock (stateGate)
+        {
+            mode = audioOutputMode;
+            gain = phoneAppGain;
+            playerVol = phonePlayerVolume;
+            layerPref = preferredVolumeLayer;
+            streamActive = connection != null && config.StreamAudio && Router.ShouldStreamLivePcm;
+        }
+        string activeLayer = ResolveActiveVolumeLayer(layerPref, mode, m.Owner);
+        string capStatus = audio != null
+            ? audio.GetCaptureSignalStatus(config.FixtureAudio, streamActive, ep.Muted)
+            : (streamActive ? (config.FixtureAudio ? "fixture" : "unknown") : "stopped");
+        string? warning = mode == AudioOutputMode.PhoneOnly && capStatus == "silent-driver-coupled"
+            ? "Windows driver silences loopback capture while PC speaker is muted; switch to Both if phone audio is silent."
+            : ep.Error;
+
+        return new AudioControlState(
+            Mode: mode,
+            PcVolumeScalar: ep.VolumeScalar,
+            PcMuted: ep.Muted,
+            PcMuteSavedByBackThread: ep.MuteSavedByBackThread,
+            PcEndpointAvailable: ep.Available,
+            ActiveVolumeLayer: activeLayer,
+            PhoneAppGain: gain,
+            PhonePlayerVolume: playerVol,
+            CaptureSignalStatus: capStatus,
+            DeviceName: ep.DeviceName,
+            Warning: warning);
+    }
+
+    private static string ResolveActiveVolumeLayer(string preferred, AudioOutputMode mode, PlaybackOwner owner)
+    {
+        if (preferred is "pc" or "app" or "player") return preferred;
+        if (owner == PlaybackOwner.iPhoneOwned && mode != AudioOutputMode.PcOnly) return "player";
+        if (mode == AudioOutputMode.PcOnly) return "pc";
+        if (mode == AudioOutputMode.PhoneOnly) return "app";
+        return "pc";
     }
 
     public async Task RunAsync(CancellationToken ct)
@@ -154,16 +236,18 @@ public sealed class HostRuntime : IDisposable
                         await Authentication.ClientAsync(stream, key, connectTimeout.Token);
                         await using var c = new Connection(stream); connection = c; worker = new(c);
                         var reader = c.RunAsync(ReceiveAsync, session.Token);
-                        Task? heartbeat = null, mediaLoop = null, audioLoop = null, notificationLoop = null;
+                        Task? heartbeat = null, mediaLoop = null, audioLoop = null, notificationLoop = null, telemetryLoop = null;
                         try
                         {
-                            var hello = await c.RequestAsync(LogicalChannel.Control, "hello", new { host = "BackThread.Host", protocol = 1, capabilities = new[] { "hybrid-media", "buffered-media", "fullscreen-notifications", "sync" } }, session.Token);
+                            var hello = await c.RequestAsync(LogicalChannel.Control, "hello", new { host = "BackThread.Host", protocol = 1, capabilities = new[] { "hybrid-media", "buffered-media", "top-bar-notifications", "telemetry", "audio-modes", "sync" } }, session.Token);
                             lock (stateGate) audioError = "";
                             SetState("connected"); Log?.Invoke("Agent capabilities: " + hello.Body.GetRawText()); attempt = 0;
                             await c.RequestAsync(LogicalChannel.Control, "action.registry", new { actions = config.Actions.Select(a => new { a.Id, a.Title }) }, session.Token);
                             await ReconcileOnConnectAsync(c, hello.Body, session.Token);
+                            await ApplyConfiguredOutputModeOnConnectAsync(c, session.Token);
                             heartbeat = HeartbeatAsync(c, session.Token);
                             mediaLoop = MediaLoopAsync(c, session.Token);
+                            telemetryLoop = TelemetryLoopAsync(c, session.Token);
                             if (config.CollectWindowsNotifications) notificationLoop = NotificationLoopAsync(session.Token);
                             audioLoop = AudioLoopAsync(c, session.Token);
                             var completed = await Task.WhenAny(reader, heartbeat, audioLoop, apiTask); await completed;
@@ -171,20 +255,49 @@ public sealed class HostRuntime : IDisposable
                         finally
                         {
                             Router.OnTransportDisconnected();
+                            SafeRestorePcMute();
                             session.Cancel(); SignalAudioPolicyChange(); worker = null; connection = null;
-                            foreach (var t in new[] { reader, heartbeat, mediaLoop, audioLoop, notificationLoop })
+                            foreach (var t in new[] { reader, heartbeat, mediaLoop, telemetryLoop, audioLoop, notificationLoop })
                                 if (t != null) try { await t; } catch (Exception) when (session.IsCancellationRequested) { }
                         }
                     }
                 }
-                catch (Exception ex) when (!ct.IsCancellationRequested) { SetState("disconnected", ex.Message); }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
-                finally { worker = null; connection = null; }
+                catch (Exception ex) when (!ct.IsCancellationRequested) { SafeRestorePcMute(); SetState("disconnected", ex.Message); }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { SafeRestorePcMute(); break; }
+                finally { worker = null; connection = null; SafeRestorePcMute(); }
                 int delay = Math.Min(5000, 250 * (1 << Math.Min(attempt++, 4))) + Random.Shared.Next(100);
                 try { await Task.Delay(delay, ct); } catch (OperationCanceledException) { break; }
             }
         }
-        finally { api.Stop(); try { await apiTask; } catch (Exception) when (ct.IsCancellationRequested) { } SetState("stopped"); }
+        finally { SafeRestorePcMute(); api.Stop(); try { await apiTask; } catch (Exception) when (ct.IsCancellationRequested) { } SetState("stopped"); }
+    }
+
+    private void SafeRestorePcMute()
+    {
+        try { endpointAudio.RestoreMuteIfSaved(); } catch { }
+    }
+
+    private async Task ApplyConfiguredOutputModeOnConnectAsync(Connection c, CancellationToken ct)
+    {
+        AudioOutputMode currentMode;
+        lock (stateGate) currentMode = audioOutputMode;
+        if (currentMode == AudioOutputMode.PhoneOnly)
+            endpointAudio.EnsureMutedForPhoneOnly();
+        else
+            endpointAudio.RestoreMuteIfSaved();
+        Router.SetAudioOutputMode(currentMode);
+        await PushAudioControlStateAsync(c, ct);
+    }
+
+    private async Task PushAudioControlStateAsync(Connection? c, CancellationToken ct)
+    {
+        var ac = CurrentAudioControlState();
+        AudioControlChanged?.Invoke(ac);
+        if (c != null)
+        {
+            try { await c.SendAsync(LogicalChannel.Control, Message.Create("audio.control.state", ac), ct); }
+            catch { }
+        }
     }
 
     private async Task ReconcileOnConnectAsync(Connection c, JsonElement helloBody, CancellationToken ct)
@@ -219,8 +332,9 @@ public sealed class HostRuntime : IDisposable
             Volatile.Write(ref liveAudioSliceCts, slice);
             try
             {
-                // Restore app gain after quiet tests; never change the phone system volume.
-                if (config.Transport == "usb") await c.RequestAsync(LogicalChannel.Control, "audio.volume", new { value = config.AudioGain }, slice.Token);
+                float currentGain;
+                lock (stateGate) currentGain = phoneAppGain;
+                if (config.Transport == "usb") await c.RequestAsync(LogicalChannel.Control, "audio.volume", new { value = currentGain }, slice.Token);
                 await audio.RunAsync(c, config.FixtureAudio, slice.Token);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested && !Router.ShouldStreamLivePcm)
@@ -243,6 +357,30 @@ public sealed class HostRuntime : IDisposable
     private static async Task HeartbeatAsync(Connection c, CancellationToken ct)
     {
         while (true) { await Task.Delay(3000, ct); await c.RequestAsync(LogicalChannel.Control, "ping", new { }, ct, TimeSpan.FromSeconds(5)); }
+    }
+
+    private async Task TelemetryLoopAsync(Connection c, CancellationToken ct)
+    {
+        string? lastCapStatus = null;
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var snap = await telemetryProvider.SampleAsync(ct);
+                lock (stateGate) latestTelemetry = snap;
+                await c.SendAsync(LogicalChannel.Diagnostics, Message.Create("system.telemetry", snap), ct);
+
+                var ac = CurrentAudioControlState();
+                if (ac.CaptureSignalStatus != lastCapStatus)
+                {
+                    lastCapStatus = ac.CaptureSignalStatus;
+                    await PushAudioControlStateAsync(c, ct);
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            catch (Exception ex) when (!ct.IsCancellationRequested) { Log?.Invoke("Telemetry sample skipped: " + ex.Message); }
+            await Task.Delay(2000, ct);
+        }
     }
 
     private async Task MediaLoopAsync(Connection c, CancellationToken ct)
@@ -383,6 +521,63 @@ public sealed class HostRuntime : IDisposable
             return;
         }
 
+        if (m.Type == "audio.output.set")
+        {
+            string? modeRaw = m.Body.TryGetProperty("mode", out var mEl) ? mEl.GetString() : null;
+            var conn = connection;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    if (!Enum.TryParse<AudioOutputMode>(modeRaw, true, out var parsed) || !Enum.IsDefined(parsed))
+                    {
+                        if (conn != null && !string.IsNullOrEmpty(m.Id))
+                            await conn.SendAsync(f.Channel, Message.Create("error", new { error = "Invalid audio output mode" }, replyTo: m.Id), ct);
+                        return;
+                    }
+                    var ac = await SetAudioOutputModeAsync(parsed, ct);
+                    if (conn != null && !string.IsNullOrEmpty(m.Id))
+                        await conn.SendAsync(f.Channel, Message.Create("ok", ac, replyTo: m.Id), ct);
+                }
+                catch { }
+            }, CancellationToken.None);
+            return;
+        }
+        if (m.Type == "audio.volume.set")
+        {
+            float val = m.Body.TryGetProperty("value", out var vEl) && vEl.ValueKind == JsonValueKind.Number ? (float)vEl.GetDouble() : float.NaN;
+            string? layer = m.Body.TryGetProperty("layer", out var lEl) ? lEl.GetString() : null;
+            var conn = connection;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    if (!float.IsFinite(val) || val is < 0f or > 1f)
+                    {
+                        if (conn != null && !string.IsNullOrEmpty(m.Id))
+                            await conn.SendAsync(f.Channel, Message.Create("error", new { error = "Volume must be between 0 and 1" }, replyTo: m.Id), ct);
+                        return;
+                    }
+                    var ac = await SetVolumeAsync(val, layer, ct);
+                    if (conn != null && !string.IsNullOrEmpty(m.Id))
+                        await conn.SendAsync(f.Channel, Message.Create("ok", ac, replyTo: m.Id), ct);
+                }
+                catch (Exception ex)
+                {
+                    if (conn != null && !string.IsNullOrEmpty(m.Id))
+                        try { await conn.SendAsync(f.Channel, Message.Create("error", new { error = ex.Message }, replyTo: m.Id), ct); } catch { }
+                }
+            }, CancellationToken.None);
+            return;
+        }
+        if (m.Type == "audio.control.get")
+        {
+            var conn = connection;
+            if (conn != null && !string.IsNullOrEmpty(m.Id))
+                await conn.SendAsync(f.Channel, Message.Create("ok", CurrentAudioControlState(), replyTo: m.Id), ct);
+            return;
+        }
+
         if (m.Type is not ("media.command" or "action.invoke")) return;
         // Dispatch without blocking the protocol reader, since actions can issue agent requests.
         if (!await actions.WaitAsync(0, ct)) { await connection!.SendAsync(f.Channel, Message.Create("error", new { error = "An action is already running" }, replyTo: m.Id), ct); return; }
@@ -517,16 +712,86 @@ public sealed class HostRuntime : IDisposable
     public Task<object> MediaCommandAsync(string command, double seconds, string? qualityCap, bool? keepScreenAwake, string? target, CancellationToken ct) =>
         Router.DispatchMediaCommandAsync(command, seconds, qualityCap, keepScreenAwake, target, connection, ct);
 
+    public async Task<AudioControlState> SetAudioOutputModeAsync(AudioOutputMode mode, CancellationToken ct)
+    {
+        if (!Enum.IsDefined(mode)) throw new InvalidDataException("Invalid audio output mode");
+        await audioControlGate.WaitAsync(ct);
+        try
+        {
+            lock (stateGate) audioOutputMode = mode;
+            if (mode == AudioOutputMode.PhoneOnly)
+                endpointAudio.EnsureMutedForPhoneOnly();
+            else
+                endpointAudio.RestoreMuteIfSaved();
+
+            Router.SetAudioOutputMode(mode);
+            await PushAudioControlStateAsync(connection, ct);
+            return CurrentAudioControlState();
+        }
+        finally
+        {
+            audioControlGate.Release();
+        }
+    }
+
+    public async Task<AudioControlState> SetVolumeAsync(float value, string? layer, CancellationToken ct)
+    {
+        if (!float.IsFinite(value) || value is < 0f or > 1f)
+            throw new InvalidDataException("Volume must be between 0 and 1");
+        float clamped = Math.Clamp(value, 0f, 1f);
+
+        await audioControlGate.WaitAsync(ct);
+        try
+        {
+            AudioOutputMode mode;
+            lock (stateGate) mode = audioOutputMode;
+            string targetLayer = layer is "pc" or "app" or "player"
+                ? layer
+                : ResolveActiveVolumeLayer("auto", mode, Router.CurrentState.Owner);
+            lock (stateGate) preferredVolumeLayer = targetLayer;
+
+            if (targetLayer == "pc")
+            {
+                endpointAudio.SetVolumeScalar(clamped);
+            }
+            else if (targetLayer == "app")
+            {
+                var c = connection;
+                if (c != null)
+                    await c.RequestAsync(LogicalChannel.Control, "audio.volume", new { value = clamped }, ct);
+                lock (stateGate) phoneAppGain = clamped;
+            }
+            else
+            {
+                var c = connection;
+                if (c != null)
+                    await c.RequestAsync(LogicalChannel.Media, "media.volume.set", new { value = clamped }, ct);
+                lock (stateGate) phonePlayerVolume = clamped;
+            }
+
+            await PushAudioControlStateAsync(connection, ct);
+            return CurrentAudioControlState();
+        }
+        finally
+        {
+            audioControlGate.Release();
+        }
+    }
+
     public Task<string> RequestNotificationAccessAsync() => collector.RequestAccessAsync();
     public string NotificationAccessStatus() => collector.GetAccessStatus();
+    public NotificationCollectorDiagnostics NotificationDiagnostics() => collector.GetDiagnostics(config.CollectWindowsNotifications);
 
     public void Dispose()
     {
+        SafeRestorePcMute();
+        endpointAudio.Dispose();
         disposedCts?.Dispose();
         Router.Dispose();
         Spotify.Dispose();
         actions.Dispose();
         bufferedRequests.Dispose();
         audioPolicySignal.Dispose();
+        audioControlGate.Dispose();
     }
 }

@@ -13,12 +13,16 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onFocusPolicySelected)(NSString *policy);
 @property(nonatomic, copy, nullable) void (^onQualityCapSelected)(NSString *qualityCap);
 @property(nonatomic, copy, nullable) void (^onKeepAwakeToggled)(BOOL keepAwake);
+@property(nonatomic, copy, nullable) void (^onAudioOutputModeSelected)(NSString *mode);
+@property(nonatomic, copy, nullable) void (^onVolumeChanged)(float value, NSString *layer);
 
 - (void)updateWithHostMediaState:(NSDictionary *)hostState
                    playerSnapshot:(NSDictionary *)playerSnapshot
                      embedActive:(BOOL)embedActive
                      focusPolicy:(NSString *)focusPolicy;
+- (void)updateWithAudioControlState:(NSDictionary *)audioControlState;
 - (void)clearArtworkCache;
 @end
 
 NS_ASSUME_NONNULL_END
+

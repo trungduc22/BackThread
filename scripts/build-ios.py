@@ -7,12 +7,13 @@ import pathlib
 import plistlib
 import shutil
 import subprocess
-from ios_build_support import debian, macho, stable_uuid, write_debian
+from ios_build_support import debian, macho, stable_uuid, write_debian, write_ipa
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 UI_SOURCES = [
     'src/iOS/UI/main.m',
     'src/iOS/UI/BTTheme.m',
+    'src/iOS/UI/BTTelemetryStripView.m',
     'src/iOS/UI/BTVideoSurfaceView.m',
     'src/iOS/UI/BTNowPlayingView.m',
     'src/iOS/UI/BTIdleHubView.m',
@@ -33,7 +34,7 @@ AGENT_SOURCES = [
     'src/Shared/Protocol/bt_wire.c',
 ]
 SOURCES = UI_SOURCES + AGENT_SOURCES
-FRAMEWORKS = ['UIKit', 'Foundation', 'AVFoundation', 'CoreMedia', 'AudioToolbox', 'MediaPlayer', 'WebKit', 'Security', 'ImageIO', 'CoreGraphics', 'QuartzCore']
+FRAMEWORKS = ['UIKit', 'Foundation', 'AVFoundation', 'CoreMedia', 'AudioToolbox', 'MediaPlayer', 'WebKit', 'Security', 'ImageIO', 'CoreGraphics', 'QuartzCore', 'SystemConfiguration']
 
 
 def run(command, log, env):
@@ -131,11 +132,14 @@ def main():
     if not image['signed']:
         raise ValueError('Missing ad-hoc code signature')
     plist = plistlib.loads((app / 'Info.plist').read_bytes())
+    epoch = int(os.environ.get('SOURCE_DATE_EPOCH', '0'))
     package = out / f'app.backthread.companion_{plist["CFBundleShortVersionString"]}_iphoneos-arm.deb'
-    debian(package, (ROOT / 'src/iOS/control').read_bytes(), app, int(os.environ.get('SOURCE_DATE_EPOCH', '0')))
+    debian(package, (ROOT / 'src/iOS/control').read_bytes(), app, epoch)
+    ipa = out / 'BackThread.ipa'
+    write_ipa(ipa, app, epoch)
     agent_package=out/f'app.backthread.agent_{plist["CFBundleShortVersionString"]}_iphoneos-arm.deb'
-    write_debian(agent_package,[('./control',(ROOT/'src/iOS/Agent/control').read_bytes(),0o644)],[('./var/mobile/BackThread/bin/BackThread.Agent',agent.read_bytes(),0o755)],int(os.environ.get('SOURCE_DATE_EPOCH','0')),data_directories=[('./var/mobile/BackThread',0o700,501,501),('./var/mobile/BackThread/bin',0o755,501,501)])
-    manifest = dict(compiler=f'Zig {version} / Clang 18.1.6', linker=linker_version, tools={name:dict(executable=path.name,sha256=hashlib.sha256(path.read_bytes()).hexdigest()) for name,path in [('compiler',zig),('linker',linker),('signer',signer)]}, sdk=plistlib.loads((sdk / 'SDKSettings.plist').read_bytes()).get('Version'), deploymentTarget='12.0', translationUnits=len(compiled)+1, warningsAsErrors=True, validationScope='build only; device results are separate reports', nativeRuntimeTested=False, installedOnDevice=False, speakerVerified=False, components=['BackThread.Agent (embedded and standalone)', 'BackThread.UI'], image=image, agentImage=macho(agent), sdkStubFormat='original multi-document TBDs', artifacts={p.name:dict(bytes=p.stat().st_size, sha256=hashlib.sha256(p.read_bytes()).hexdigest()) for p in (executable, agent, library, package, agent_package)})
+    write_debian(agent_package,[('./control',(ROOT/'src/iOS/Agent/control').read_bytes(),0o644)],[('./var/mobile/BackThread/bin/BackThread.Agent',agent.read_bytes(),0o755)],epoch,data_directories=[('./var/mobile/BackThread',0o700,501,501),('./var/mobile/BackThread/bin',0o755,501,501)])
+    manifest = dict(compiler=f'Zig {version} / Clang 18.1.6', linker=linker_version, tools={name:dict(executable=path.name,sha256=hashlib.sha256(path.read_bytes()).hexdigest()) for name,path in [('compiler',zig),('linker',linker),('signer',signer)]}, sdk=plistlib.loads((sdk / 'SDKSettings.plist').read_bytes()).get('Version'), deploymentTarget='12.0', translationUnits=len(compiled)+1, warningsAsErrors=True, validationScope='build only; device results are separate reports', nativeRuntimeTested=False, installedOnDevice=False, speakerVerified=False, components=['BackThread.Agent (embedded and standalone)', 'BackThread.UI'], image=image, agentImage=macho(agent), sdkStubFormat='original multi-document TBDs', artifacts={p.name:dict(bytes=p.stat().st_size, sha256=hashlib.sha256(p.read_bytes()).hexdigest()) for p in (executable, agent, library, package, agent_package, ipa)})
     (out / 'build-manifest.json').write_text(json.dumps(manifest, indent=2))
     print(json.dumps(manifest, indent=2))
 

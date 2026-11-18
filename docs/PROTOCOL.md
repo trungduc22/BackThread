@@ -32,12 +32,14 @@ No Channel 2–7 traffic or application actions are processed before mutual auth
 2. Host returns `auth.response {clientNonce, proof}` where `proof = HMAC-SHA256(keyBytes, "BTH1:host:<serverNonce>:<clientNonce>")`.
 3. Agent verifies in constant time and replies `auth.ok {proof, protocol:1}` with `"BTH1:agent:<serverNonce>:<clientNonce>"`.
 
-## Channel 1 & 7 — Control & Audio Diagnostics
+## Channel 1 & 7 — Control, Audio Routing & Telemetry
 
-- `hello {host, protocol}` -> `{agent, simulated, capabilities}`
+- `hello {host, protocol}` -> `{agent, simulated, capabilities}` (Build 6 advertises `"top-bar-notifications"`, `"telemetry"`, `"audio-modes"`, `"hybrid-media"`, `"buffered-media"`, `"sync"`)
 - `ping {}` -> `pong {}` (every 3s; 5s deadline; general read idle timeout 12s)
-- `audio.start {sampleRate:48000, channels:2, bits:16, packetMs:10}` / `audio.stop {}` / `audio.volume {value:0..1}`
+- `audio.start {sampleRate:48000, channels:2, bits:16, packetMs:10}` / `audio.stop {}` / `audio.volume {value:0..1}` (serialized on iOS via `_audioControlLock` without blocking transport reader)
+- `audio.output.set {mode}` (`PcOnly` | `PhoneOnly` | `Both`), `audio.volume.set {value:0..1, layer?}`, `audio.control.get {}`, and `audio.control.state {mode, pcVolumeScalar, pcMuted, pcMuteSavedByBackThread, pcEndpointAvailable, activeVolumeLayer, phoneAppGain, phonePlayerVolume, captureSignalStatus, warning?}`
 - `audio.stats {}`: Returns receiver packets/bytes/gaps/bufferedBytes/droppedBytes/silenceBytes, queue running/primed/interrupted flags, route/outputVolume, `lastOSStatus`, `queuePresent`, `acceptingPCM`, input/render peaks.
+- `system.telemetry {timestampUnixMs, cpuUsagePercent, memoryUsedMb, memoryTotalMb, memoryUsedPercent, batteryPercent, acOnline, batteryStatus, wifiConnected, wifiName, bluetoothRadioState, bluetoothConnectedCount, bluetoothConnected, available, platform}`: Pushed on Channel 7 every 2s.
 - Unsolicited `audio.error`: Non-fatal queue failure alert; preserves session for Ping, Media, Events, and Jobs.
 - `action.registry {actions:[{id, title}]}` and `action.invoke {actionId}` (allowlisted IDs only).
 
@@ -51,11 +53,12 @@ No Channel 2–7 traffic or application actions are processed before mutual auth
 - `media.handoff.cancel {sessionId, generation, reason}`: Cancels pending handoff.
 - `media.return_to_windows {resumeWindows, positionSeconds?}`: Bidirectional handoff return initiated by Windows UI or iOS user button.
 - `media.focus.set {policy, muteVideoAudio?, duckVideo?, volume?}`: Bidirectional audio focus arbitration (`Auto`, `IndependentOnly`, `LivePcmOnly`, `KeepVideoMuteAudio`, `DuckVideo`).
+- `media.volume.set {value:0..1}`: Adjusts active `AVPlayer` scalar volume during independent Mode A/B playback.
 - `media.mode.select {mode, provider?}`: Notifies mode badge transition cleanly.
 - `media.command {command, seconds?, qualityCap?, keepScreenAwake?, source?}`: Controls active owner (`play`, `pause`, `toggle`, `next`, `previous`, `seek`, `quality`, `keepAwake`).
 - `media.sync {generation, owner, mode}` -> `{sessionId, generation, mode, independentActive, isPlaying, positionSeconds, durationSeconds, bufferedSeconds, url, title}`: Reconciles Wi-Fi independent PiP state after USB reconnect.
 
 ## Channel 4, 5 & 6 — Rich Events, Worker & Files
 
-- `event.publish {id, source, title, body, priority, expiresUtc, sensitive, appName?, category?, iconBase64?, actions?}` -> `{accepted}`
+- `event.publish {id, source, title, body, priority, expiresUtc, sensitive, appName?, category?, iconBase64?, createdUtc?, fullscreenEligible?, style?}` (`style`: `"standard"` | `"spotlight"` | `"beacon"`; `fullscreenEligible` stays `false` for top-bar replacement) -> `{accepted}`
 - `file.begin {transferId, name, size, sha256}`, binary Channel 6 chunk append + Channel 5 `file.ack`, `file.commit`, `file.list`, `file.read`, `job.submit`, `job.query`, `job.cancel`, `job.progress` — unchanged bounded quota/integrity contracts.

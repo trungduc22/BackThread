@@ -1,5 +1,6 @@
 #import "BTViewController.h"
 #import "BTTheme.h"
+#import "BTTelemetryStripView.h"
 #import "BTVideoSurfaceView.h"
 #import "BTNowPlayingView.h"
 #import "BTIdleHubView.h"
@@ -35,6 +36,7 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     UIView *_statusDot;
     UILabel *_connectionLabel;
     UISegmentedControl *_modeSegment;
+    BTTelemetryStripView *_telemetryStripView;
     UIView *_workspaceContainer;
     UIView *_embedHostView;
 
@@ -47,7 +49,7 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     BTSettingsView *_settingsView;
     BTNotificationOverlayView *_notificationOverlay;
 
-    NSLayoutConstraint *_workspaceTopToBar;
+    NSLayoutConstraint *_workspaceTopToStrip;
     NSLayoutConstraint *_workspaceTopToView;
     NSArray<NSLayoutConstraint *> *_compactVideoConstraints;
     NSArray<NSLayoutConstraint *> *_fullscreenVideoConstraints;
@@ -59,8 +61,12 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     BOOL _usbConnected;
     NSString *_connectionText;
     NSString *_focusPolicy;
+    NSString *_audioOutputMode;
+    float _playerVolumeScalar;
     NSDictionary *_latestHostMediaState;
     NSDictionary *_latestPlayerSnapshot;
+    NSDictionary *_latestHostTelemetry;
+    NSDictionary *_latestAudioControlState;
     NSDictionary *_latestJob;
     NSArray<NSDictionary *> *_actions;
     NSMutableArray<NSDictionary *> *_events;
@@ -121,6 +127,15 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     _latestPlayerSnapshot = @{@"independentActive": @NO};
     _connectionText = @"Waiting for USB host";
     _focusPolicy = @"Auto";
+    _audioOutputMode = @"Both";
+    _playerVolumeScalar = 1.0f;
+    _latestAudioControlState = @{
+        @"mode": @"Both",
+        @"pcVolumeScalar": @0.8,
+        @"phoneAppGain": @1.0,
+        @"phonePlayerVolume": @1.0,
+        @"activeVolumeLayer": @"pc"
+    };
     _workspaceMode = BTWorkspaceMedia;
 
     [self setupTopBar];
@@ -179,6 +194,10 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     _topBarStack.translatesAutoresizingMaskIntoConstraints = NO;
     [_topBar addSubview:_topBarStack];
 
+    _telemetryStripView = [BTTelemetryStripView new];
+    _telemetryStripView.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:_telemetryStripView];
+
     UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
         [_topBar.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
@@ -188,7 +207,11 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
         [_topBarStack.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:10],
         [_topBarStack.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-10],
         [_topBarStack.topAnchor constraintEqualToAnchor:safe.topAnchor constant:4],
-        [_topBarStack.bottomAnchor constraintEqualToAnchor:_topBar.bottomAnchor constant:-6]
+        [_topBarStack.bottomAnchor constraintEqualToAnchor:_topBar.bottomAnchor constant:-5],
+
+        [_telemetryStripView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [_telemetryStripView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [_telemetryStripView.topAnchor constraintEqualToAnchor:_topBar.bottomAnchor]
     ]];
 }
 
@@ -197,10 +220,10 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     _workspaceContainer.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:_workspaceContainer];
 
-    _workspaceTopToBar = [_workspaceContainer.topAnchor constraintEqualToAnchor:_topBar.bottomAnchor];
+    _workspaceTopToStrip = [_workspaceContainer.topAnchor constraintEqualToAnchor:_telemetryStripView.bottomAnchor];
     _workspaceTopToView = [_workspaceContainer.topAnchor constraintEqualToAnchor:self.view.topAnchor];
     [NSLayoutConstraint activateConstraints:@[
-        _workspaceTopToBar,
+        _workspaceTopToStrip,
         [_workspaceContainer.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor],
         [_workspaceContainer.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor],
         [_workspaceContainer.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor]
@@ -228,6 +251,8 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     _nowPlayingView.onFocusPolicySelected = ^(NSString *policy) { [weakSelf applyLocalFocusPolicy:policy]; };
     _nowPlayingView.onQualityCapSelected = ^(NSString *cap) { [weakSelf applyQualityCap:cap]; };
     _nowPlayingView.onKeepAwakeToggled = ^(BOOL awake) { [weakSelf applyKeepAwake:awake]; };
+    _nowPlayingView.onAudioOutputModeSelected = ^(NSString *mode) { [weakSelf setAudioOutputMode:mode]; };
+    _nowPlayingView.onVolumeChanged = ^(float value, NSString *layer) { [weakSelf setVolumeScalar:value layer:layer]; };
 
     _quickActionsView = [BTQuickActionsView new];
     _quickActionsView.onActionInvoked = ^(NSString *actionId) {
@@ -243,12 +268,14 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     _historyPanelView.onClearTapped = ^{
         [weakSelf clearNotificationHistory];
     };
-    _historyPanelView.onReplayFullscreenTapped = ^(NSDictionary *event) {
+    _historyPanelView.onReplayBannerTapped = ^(NSDictionary *event) {
         BTViewController *strong = weakSelf;
         if (!strong) return;
         NSMutableDictionary *replay = [event mutableCopy];
-        replay[@"priority"] = @3;
-        [strong->_notificationOverlay presentNotification:replay expiresInterval:30.0];
+        if ([replay[@"priority"] integerValue] <= 0) {
+            replay[@"priority"] = @2;
+        }
+        [strong->_notificationOverlay presentNotification:replay expiresInterval:12.0];
         [strong setNeedsStatusBarAppearanceUpdate];
     };
 
@@ -281,7 +308,7 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     [NSLayoutConstraint activateConstraints:@[
         [_embedHostView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
         [_embedHostView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        [_embedHostView.topAnchor constraintEqualToAnchor:_topBar.bottomAnchor],
+        [_embedHostView.topAnchor constraintEqualToAnchor:_telemetryStripView.bottomAnchor],
         [_embedHostView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]
     ]];
 }
@@ -301,6 +328,8 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
         if (!strong) return;
         [strong switchWorkspaceMode:strong->_workspaceMode == BTWorkspaceAmbient ? BTWorkspaceVideoFocus : BTWorkspaceAmbient];
     };
+    _videoSurfaceView.onAudioOutputModeSelected = ^(NSString *mode) { [weakSelf setAudioOutputMode:mode]; };
+    _videoSurfaceView.onVolumeChanged = ^(float value, NSString *layer) { [weakSelf setVolumeScalar:value layer:layer]; };
     [self.view addSubview:_videoSurfaceView];
 
     UIView *slot = _nowPlayingView.videoSlotView;
@@ -376,7 +405,8 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
 
     BOOL fullscreen = (mode == BTWorkspaceVideoFocus || mode == BTWorkspaceAmbient);
     _topBar.hidden = fullscreen;
-    _workspaceTopToBar.active = !fullscreen;
+    _telemetryStripView.hidden = fullscreen;
+    _workspaceTopToStrip.active = !fullscreen;
     _workspaceTopToView.active = fullscreen;
 
     _idleHubView.hidden = (mode != BTWorkspaceHub);
@@ -422,6 +452,7 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     }
     if (!fullscreen) {
         [self.view bringSubviewToFront:_topBar];
+        [self.view bringSubviewToFront:_telemetryStripView];
     }
     [self.view bringSubviewToFront:_notificationOverlay];
 
@@ -492,6 +523,42 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     [self refreshMediaUI];
 }
 
+- (void)setAudioOutputMode:(NSString *)mode {
+    if (!mode.length) return;
+    _audioOutputMode = [mode copy];
+    if ([self.agent respondsToSelector:@selector(sendControlMessage:body:channel:)]) {
+        [self.agent sendControlMessage:@"audio.output.set" body:@{@"mode": _audioOutputMode} channel:1];
+    }
+    NSMutableDictionary *nextState = [_latestAudioControlState mutableCopy] ?: [NSMutableDictionary new];
+    nextState[@"mode"] = _audioOutputMode;
+    _latestAudioControlState = nextState;
+    [self propagateAudioControlState];
+}
+
+- (void)setVolumeScalar:(float)value layer:(NSString *)layer {
+    float clamped = fmaxf(0.0f, fminf(1.0f, value));
+    NSString *targetLayer = layer.length ? layer : @"pc";
+    if ([targetLayer isEqualToString:@"player"]) {
+        _playerVolumeScalar = clamped;
+        BOOL mute = [_focusPolicy isEqualToString:@"KeepVideoMuteAudio"] || [_focusPolicy isEqualToString:@"LivePcmOnly"];
+        [_directPlayer applyAudioFocusMute:mute volume:clamped];
+    }
+    if ([self.agent respondsToSelector:@selector(sendControlMessage:body:channel:)]) {
+        [self.agent sendControlMessage:@"audio.volume.set" body:@{@"value": @(clamped), @"layer": targetLayer} channel:1];
+    }
+}
+
+- (void)propagateAudioControlState {
+    if ([_latestAudioControlState[@"mode"] isKindOfClass:NSString.class]) {
+        _audioOutputMode = [_latestAudioControlState[@"mode"] copy];
+    }
+    [_nowPlayingView updateWithAudioControlState:_latestAudioControlState];
+    [_videoSurfaceView updateWithAudioControlState:_latestAudioControlState];
+    [_telemetryStripView updateWithHostTelemetry:_latestHostTelemetry
+                                    usbConnected:_usbConnected
+                                 audioOutputMode:_audioOutputMode ?: @"Both"];
+}
+
 - (void)invokeQuickAction:(NSString *)actionId {
     if (!actionId.length) return;
     [self.agent command:@"action.invoke" body:@{@"actionId": actionId}];
@@ -499,10 +566,11 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
 
 - (void)handleDirectPlayerSnapshot:(NSDictionary *)snapshot {
     _latestPlayerSnapshot = snapshot ?: @{@"independentActive": @NO};
+    BOOL active = [_latestPlayerSnapshot[@"independentActive"] boolValue];
+    [self.agent setNativePlaybackActive:(active || _embedController != nil)];
     [_videoSurfaceView updateWithSnapshot:_latestPlayerSnapshot usbConnected:_usbConnected];
 
     NSString *sid = BTSafeStr(_latestPlayerSnapshot[@"sessionId"], @"");
-    BOOL active = [_latestPlayerSnapshot[@"independentActive"] boolValue];
     BOOL hasVideo = [_latestPlayerSnapshot[@"readyForDisplay"] boolValue] || [_latestPlayerSnapshot[@"videoWidth"] intValue] > 0;
     if (active && hasVideo && sid.length && ![sid isEqualToString:_autoEnteredSessionId]) {
         _autoEnteredSessionId = [sid copy];
@@ -556,6 +624,7 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     };
 
     _embedController = embed;
+    [self.agent setNativePlaybackActive:YES];
     [self addChildViewController:embed];
     embed.view.translatesAutoresizingMaskIntoConstraints = NO;
     [_embedHostView addSubview:embed.view];
@@ -569,6 +638,7 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     _embedHostView.hidden = NO;
     [self.view bringSubviewToFront:_embedHostView];
     [self.view bringSubviewToFront:_topBar];
+    [self.view bringSubviewToFront:_telemetryStripView];
     [self.view bringSubviewToFront:_notificationOverlay];
     [self refreshMediaUI];
 }
@@ -583,6 +653,7 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     _embedSessionId = nil;
     _embedGeneration = 0;
     [[BTAudioSessionCoordinator sharedCoordinator] deactivateIndependentMedia];
+    [self.agent setNativePlaybackActive:_directPlayer.independentActive];
 }
 
 - (void)receive:(NSString *)type body:(NSDictionary *)body {
@@ -591,12 +662,13 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
 
     if ([type isEqualToString:@"connection"]) {
         NSString *state = BTSafeStr(body[@"state"], @"");
-        _usbConnected = [state isEqualToString:@"Connected"];
+        _usbConnected = [state isEqualToString:@"Connected"] || [state hasPrefix:@"Connected"];
         [_directPlayer setUsbConnected:_usbConnected];
 
         if (_usbConnected) {
             _statusDot.backgroundColor = [BTTheme accentGreen];
             _connectionText = @"USB Connected";
+            [self.agent sendControlMessage:@"audio.control.get" body:@{} channel:1];
         } else if (_directPlayer.independentActive || _embedController != nil) {
             _statusDot.backgroundColor = [BTTheme accentTeal];
             _connectionText = @"Wi-Fi Independent · USB Away";
@@ -606,6 +678,24 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
         }
         _connectionLabel.text = _connectionText;
         [self refreshAuxiliaryDiagnostics];
+    } else if ([type isEqualToString:@"system.telemetry"]) {
+        _latestHostTelemetry = body ?: @{};
+        [_telemetryStripView updateWithHostTelemetry:_latestHostTelemetry
+                                        usbConnected:_usbConnected
+                                     audioOutputMode:_audioOutputMode ?: @"Both"];
+        [_videoSurfaceView updateWithHostTelemetry:_latestHostTelemetry];
+    } else if ([type isEqualToString:@"audio.control.state"]) {
+        _latestAudioControlState = body ?: @{};
+        [self propagateAudioControlState];
+    } else if ([type isEqualToString:@"media.volume.set"]) {
+        float vol = body[@"value"] ? [body[@"value"] floatValue] : 1.0f;
+        _playerVolumeScalar = fmaxf(0.0f, fminf(1.0f, vol));
+        BOOL mute = [_focusPolicy isEqualToString:@"KeepVideoMuteAudio"] || [_focusPolicy isEqualToString:@"LivePcmOnly"];
+        [_directPlayer applyAudioFocusMute:mute volume:_playerVolumeScalar];
+        NSMutableDictionary *nextState = [_latestAudioControlState mutableCopy] ?: [NSMutableDictionary new];
+        nextState[@"phonePlayerVolume"] = @(_playerVolumeScalar);
+        _latestAudioControlState = nextState;
+        [self propagateAudioControlState];
     } else if ([type isEqualToString:@"media.state"]) {
         _latestHostMediaState = body ?: @{};
         [self refreshMediaUI];
@@ -637,7 +727,7 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
         _focusPolicy = [policy copy];
         BOOL mute = [body[@"muteVideoAudio"] boolValue];
         BOOL duck = [body[@"duckVideo"] boolValue];
-        float vol = body[@"volume"] ? [body[@"volume"] floatValue] : (duck ? 0.35f : 1.0f);
+        float vol = body[@"volume"] ? [body[@"volume"] floatValue] : (duck ? 0.35f : _playerVolumeScalar);
         [[BTAudioSessionCoordinator sharedCoordinator] updateFocusPolicy:policy muteIndependent:mute independentVolume:vol duck:duck];
         [_directPlayer applyAudioFocusMute:mute volume:vol];
         [self refreshMediaUI];
@@ -730,6 +820,9 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
 
 - (void)refreshAuxiliaryDiagnostics {
     [self pruneExpiredEvents];
+    [_telemetryStripView updateWithHostTelemetry:_latestHostTelemetry
+                                    usbConnected:_usbConnected
+                                 audioOutputMode:_audioOutputMode ?: @"Both"];
     NSDictionary *pcmStats = [_agent.audio statistics] ?: @{};
     NSDictionary *sessionStatus = [[BTAudioSessionCoordinator sharedCoordinator] statusSnapshot];
     NSDictionary *hostSession = [_latestHostMediaState[@"session"] isKindOfClass:NSDictionary.class]

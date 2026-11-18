@@ -77,6 +77,18 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
         });
 
         application.MapGet("/v1/status", () => host.Status);
+        application.MapGet("/v1/telemetry", () => host.LatestTelemetry);
+        application.MapGet("/v1/audio/state", () => host.CurrentAudioControlState());
+        application.MapPost("/v1/audio/mode", async (HttpContext c) =>
+        {
+            var b = await Body<AudioOutputModeRequest>(c);
+            return await host.SetAudioOutputModeAsync(b.Mode, c.RequestAborted);
+        });
+        application.MapPost("/v1/audio/volume", async (HttpContext c) =>
+        {
+            var b = await Body<AudioVolumeRequest>(c);
+            return await host.SetVolumeAsync(b.Value, b.Layer, c.RequestAborted);
+        });
         application.MapPost("/v1/jobs", async (HttpContext c) => (await host.Worker.SubmitAsync(await Body<JobSpec>(c), c.RequestAborted)).Body);
         application.MapGet("/v1/jobs/{id}", async (string id, HttpContext c) => (await host.Worker.QueryAsync(id, c.RequestAborted)).Body);
         application.MapDelete("/v1/jobs/{id}", async (string id, HttpContext c) => (await host.Worker.CancelAsync(id, c.RequestAborted)).Body);
@@ -85,6 +97,7 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
         application.MapPost("/v1/events", async (HttpContext c) => await host.PublishAsync(await Body<CompanionEvent>(c), c.RequestAborted));
         application.MapGet("/v1/events", () => host.History());
         application.MapGet("/v1/notifications/status", () => new { status = host.NotificationAccessStatus() });
+        application.MapGet("/v1/notifications/diagnostics", () => host.NotificationDiagnostics());
         application.MapPost("/v1/notifications/request-access", async () => new { status = await host.RequestNotificationAccessAsync() });
         application.MapPost("/v1/actions/{id}", async (string id, HttpContext c) => await host.ActionAsync(id, c.RequestAborted));
         application.MapPost("/v1/handoff", async (HttpContext c) => { var b = await Body<HandoffRequest>(c); return await host.HandoffAsync(b.Url, c.RequestAborted); });
@@ -213,6 +226,8 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
     private sealed record ReturnRequest(bool? ResumeWindows);
     private sealed record MediaCommandRequest(string Command, double? Seconds, string? QualityCap, bool? KeepScreenAwake, string? Target);
     private sealed record FocusRequest(AudioFocusPolicy Policy);
+    private sealed record AudioOutputModeRequest(AudioOutputMode Mode);
+    private sealed record AudioVolumeRequest(float Value, string? Layer = null);
     private sealed record ModeSelectRequest(PlaybackMode Mode, string? Url = null, string? FilePath = null);
     private sealed record SpotifyAuthStartRequest(string? ClientId, string? RedirectUri);
     private sealed record SpotifyPlayRequest(string? Uri, string? DeviceId);

@@ -42,6 +42,28 @@ internal sealed class TrayContext : ApplicationContext
             catch (Exception ex) { MessageBox.Show(ex.Message, "BackThread", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
         });
 
+        var outputModeMenu = new ToolStripMenuItem("Audio Output Mode");
+        foreach (var (mode, label) in new[]
+        {
+            (AudioOutputMode.PcOnly, "Only PC (Windows Speakers)"),
+            (AudioOutputMode.PhoneOnly, "Only Phone (Mute PC + iPhone)"),
+            (AudioOutputMode.Both, "Both (PC + iPhone)")
+        })
+        {
+            var capturedMode = mode;
+            outputModeMenu.DropDownItems.Add(label, null, async (_, _) =>
+            {
+                try
+                {
+                    var st = await runtime.SetAudioOutputModeAsync(capturedMode, stop.Token);
+                    if (!string.IsNullOrEmpty(st.Warning))
+                        MessageBox.Show(st.Warning, "BackThread Audio Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+                catch (Exception ex) { MessageBox.Show(ex.Message, "BackThread", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+            });
+        }
+        menu.Items.Add(outputModeMenu);
+
         var focusMenu = new ToolStripMenuItem("Audio Focus");
         foreach (AudioFocusPolicy policy in new[]
         {
@@ -71,6 +93,11 @@ internal sealed class TrayContext : ApplicationContext
         {
             string status = await runtime.RequestNotificationAccessAsync();
             MessageBox.Show($"Windows notification listener status: {status}", "BackThread Notifications");
+        });
+        notifyMenu.DropDownItems.Add("Notification Listener Diagnostics", null, (_, _) =>
+        {
+            var diag = runtime.NotificationDiagnostics();
+            MessageBox.Show(JsonSerializer.Serialize(diag, new JsonSerializerOptions { WriteIndented = true }), "BackThread Notifications");
         });
         menu.Items.Add(notifyMenu);
 

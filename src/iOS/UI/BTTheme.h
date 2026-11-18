@@ -25,6 +25,16 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSString *)formatDuration:(double)seconds;
 + (NSString *)displayModeName:(NSString *)mode;
 + (NSString *)displayOwnerName:(NSString *)owner stage:(NSString *)stage;
++ (BOOL)isReduceMotionEnabled;
++ (void)pulseView:(UIView *)view accent:(UIColor *)accent;
++ (NSDictionary *)deviceTelemetrySnapshot;
+@end
+
+@interface BTEqualizerView : UIView
+@property(nonatomic, getter=isPlaying) BOOL playing;
+@property(nonatomic, strong) UIColor *barColor;
+- (void)setPlaying:(BOOL)playing animated:(BOOL)animated;
 @end
 
 NS_ASSUME_NONNULL_END
+

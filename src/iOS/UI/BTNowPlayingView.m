@@ -2,6 +2,7 @@
 #import "BTTheme.h"
 #import <MediaPlayer/MediaPlayer.h>
 #import <ImageIO/ImageIO.h>
+#import <QuartzCore/QuartzCore.h>
 
 static NSString *BTNowStr(id val, NSString *fallback) {
     return [val isKindOfClass:NSString.class] ? val : fallback;
@@ -18,6 +19,7 @@ static double BTNowNum(id val) {
     UIView *_videoSlotView;
     UIImageView *_artworkView;
     UILabel *_modeBadge;
+    BTEqualizerView *_equalizerView;
     UILabel *_ownerLabel;
     UILabel *_reasonLabel;
     UIButton *_videoFocusButton;
@@ -31,6 +33,11 @@ static double BTNowNum(id val) {
     UIButton *_playButton;
     UIButton *_nextButton;
 
+    UISegmentedControl *_outputModeSegment;
+    UIButton *_volumeLayerButton;
+    UISlider *_volumeSlider;
+    UILabel *_audioWarningLabel;
+
     UIButton *_focusButton;
     UIButton *_qualityButton;
     UIButton *_awakeButton;
@@ -41,6 +48,10 @@ static double BTNowNum(id val) {
     NSString *_currentFocusPolicy;
     NSString *_currentQualityCap;
     BOOL _keepAwake;
+    NSDictionary *_audioControlState;
+    NSString *_selectedVolumeLayer;
+    BOOL _userSelectedVolumeLayer;
+    CFTimeInterval _lastVolumeSendTime;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -50,6 +61,14 @@ static double BTNowNum(id val) {
         _currentFocusPolicy = @"Auto";
         _currentQualityCap = @"auto";
         _keepAwake = YES;
+        _selectedVolumeLayer = @"pc";
+        _audioControlState = @{
+            @"mode": @"Both",
+            @"pcVolumeScalar": @0.8,
+            @"phoneAppGain": @1.0,
+            @"phonePlayerVolume": @1.0,
+            @"activeVolumeLayer": @"pc"
+        };
 
         _scrollView = [UIScrollView new];
         _scrollView.showsVerticalScrollIndicator = NO;
@@ -79,6 +98,15 @@ static double BTNowNum(id val) {
         [BTTheme styleChipLabel:_modeBadge accent:[BTTheme accentTeal]];
         [_modeBadge.heightAnchor constraintEqualToConstant:22].active = YES;
 
+        _equalizerView = [BTEqualizerView new];
+        _equalizerView.barColor = [BTTheme accentTeal];
+        [_equalizerView setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+
+        UIStackView *badgeEqRow = [[UIStackView alloc] initWithArrangedSubviews:@[_modeBadge, _equalizerView]];
+        badgeEqRow.axis = UILayoutConstraintAxisHorizontal;
+        badgeEqRow.alignment = UIStackViewAlignmentCenter;
+        badgeEqRow.spacing = 6;
+
         _ownerLabel = [BTTheme labelWithSize:12 weight:UIFontWeightSemibold color:[BTTheme textSecondary]];
         _ownerLabel.text = @"Windows Host Active";
 
@@ -94,25 +122,25 @@ static double BTNowNum(id val) {
 
         UIStackView *leftStack = [[UIStackView alloc] initWithArrangedSubviews:@[
             _videoSlotView,
-            _modeBadge,
+            badgeEqRow,
             _ownerLabel,
             _reasonLabel,
             _videoFocusButton,
             _returnButton
         ]];
         leftStack.axis = UILayoutConstraintAxisVertical;
-        leftStack.spacing = 6;
+        leftStack.spacing = 5;
         leftStack.translatesAutoresizingMaskIntoConstraints = NO;
         [_leftCard addSubview:leftStack];
 
         UIView *rightCard = [BTTheme cardView];
         rightCard.translatesAutoresizingMaskIntoConstraints = NO;
 
-        _titleLabel = [BTTheme labelWithSize:19 weight:UIFontWeightBold color:[BTTheme textPrimary]];
+        _titleLabel = [BTTheme labelWithSize:18 weight:UIFontWeightBold color:[BTTheme textPrimary]];
         _titleLabel.numberOfLines = 2;
         _titleLabel.text = @"Ready when you are";
 
-        _artistLabel = [BTTheme labelWithSize:14 weight:UIFontWeightMedium color:[BTTheme textSecondary]];
+        _artistLabel = [BTTheme labelWithSize:13 weight:UIFontWeightMedium color:[BTTheme textSecondary]];
         _artistLabel.text = @"Play media on Windows or hand off URL / file";
 
         _seekSlider = [UISlider new];
@@ -124,6 +152,12 @@ static double BTNowNum(id val) {
         _timelineLabel = [BTTheme labelWithSize:11 weight:UIFontWeightMedium color:[BTTheme textMuted]];
         _timelineLabel.font = [UIFont monospacedDigitSystemFontOfSize:11 weight:UIFontWeightMedium];
         _timelineLabel.text = @"0:00 / 0:00";
+        [_timelineLabel setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+
+        UIStackView *seekRow = [[UIStackView alloc] initWithArrangedSubviews:@[_seekSlider, _timelineLabel]];
+        seekRow.axis = UILayoutConstraintAxisHorizontal;
+        seekRow.alignment = UIStackViewAlignmentCenter;
+        seekRow.spacing = 8;
 
         _prevButton = [BTTheme pillButtonWithTitle:@"Prev" target:self action:@selector(prevTapped)];
         _playButton = [BTTheme primaryButtonWithTitle:@"Play" target:self action:@selector(playTapped)];
@@ -135,9 +169,44 @@ static double BTNowNum(id val) {
         transportRow.spacing = 8;
         transportRow.distribution = UIStackViewDistributionFillEqually;
 
-        MPVolumeView *volumeView = [[MPVolumeView alloc] initWithFrame:CGRectZero];
-        volumeView.showsRouteButton = YES;
-        [volumeView.heightAnchor constraintEqualToConstant:30].active = YES;
+        _outputModeSegment = [[UISegmentedControl alloc] initWithItems:@[@"Only PC", @"Only Phone", @"Both"]];
+        _outputModeSegment.selectedSegmentIndex = 2;
+        _outputModeSegment.tintColor = [BTTheme accentTeal];
+        [_outputModeSegment setTitleTextAttributes:@{NSFontAttributeName: [UIFont systemFontOfSize:11 weight:UIFontWeightSemibold]} forState:UIControlStateNormal];
+        [_outputModeSegment.heightAnchor constraintEqualToConstant:30].active = YES;
+        [_outputModeSegment addTarget:self action:@selector(outputModeChanged) forControlEvents:UIControlEventValueChanged];
+
+        _volumeLayerButton = [BTTheme pillButtonWithTitle:@"PC Vol: 80%" target:self action:@selector(cycleVolumeLayer)];
+        _volumeLayerButton.titleLabel.font = [UIFont monospacedDigitSystemFontOfSize:11 weight:UIFontWeightBold];
+        _volumeLayerButton.contentEdgeInsets = UIEdgeInsetsMake(4, 8, 4, 8);
+        [_volumeLayerButton.heightAnchor constraintEqualToConstant:34].active = YES;
+        [_volumeLayerButton.widthAnchor constraintGreaterThanOrEqualToConstant:106].active = YES;
+        [_volumeLayerButton setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+
+        _volumeSlider = [UISlider new];
+        _volumeSlider.minimumValue = 0.0f;
+        _volumeSlider.maximumValue = 1.0f;
+        _volumeSlider.value = 0.8f;
+        _volumeSlider.minimumTrackTintColor = [BTTheme accentTeal];
+        _volumeSlider.maximumTrackTintColor = [BTTheme pillColor];
+        [_volumeSlider addTarget:self action:@selector(volumeSliderLiveChanged) forControlEvents:UIControlEventValueChanged];
+        [_volumeSlider addTarget:self action:@selector(volumeSliderCommitted) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
+
+        MPVolumeView *routeButtonView = [[MPVolumeView alloc] initWithFrame:CGRectZero];
+        routeButtonView.showsVolumeSlider = NO;
+        routeButtonView.showsRouteButton = YES;
+        routeButtonView.tintColor = [BTTheme textSecondary];
+        [routeButtonView.widthAnchor constraintEqualToConstant:28].active = YES;
+        [routeButtonView.heightAnchor constraintEqualToConstant:28].active = YES;
+
+        UIStackView *volumeRow = [[UIStackView alloc] initWithArrangedSubviews:@[_volumeLayerButton, _volumeSlider, routeButtonView]];
+        volumeRow.axis = UILayoutConstraintAxisHorizontal;
+        volumeRow.alignment = UIStackViewAlignmentCenter;
+        volumeRow.spacing = 8;
+
+        _audioWarningLabel = [BTTheme labelWithSize:10 weight:UIFontWeightSemibold color:[BTTheme accentAmber]];
+        _audioWarningLabel.numberOfLines = 2;
+        _audioWarningLabel.hidden = YES;
 
         _focusButton = [BTTheme pillButtonWithTitle:@"Focus: Auto" target:self action:@selector(cycleFocusPolicy)];
         _qualityButton = [BTTheme pillButtonWithTitle:@"Cap: Auto" target:self action:@selector(cycleQualityCap)];
@@ -150,14 +219,15 @@ static double BTNowNum(id val) {
         UIStackView *rightStack = [[UIStackView alloc] initWithArrangedSubviews:@[
             _titleLabel,
             _artistLabel,
-            _seekSlider,
-            _timelineLabel,
+            seekRow,
             transportRow,
-            volumeView,
+            _outputModeSegment,
+            volumeRow,
+            _audioWarningLabel,
             optionsRow
         ]];
         rightStack.axis = UILayoutConstraintAxisVertical;
-        rightStack.spacing = 7;
+        rightStack.spacing = 6;
         rightStack.translatesAutoresizingMaskIntoConstraints = NO;
         [rightCard addSubview:rightStack];
 
@@ -168,7 +238,7 @@ static double BTNowNum(id val) {
         _columnsStack.translatesAutoresizingMaskIntoConstraints = NO;
         [_scrollView addSubview:_columnsStack];
 
-        _leftWidthConstraint = [_leftCard.widthAnchor constraintEqualToConstant:238];
+        _leftWidthConstraint = [_leftCard.widthAnchor constraintEqualToConstant:224];
         NSLayoutConstraint *aspect = [_videoSlotView.heightAnchor constraintEqualToAnchor:_videoSlotView.widthAnchor multiplier:9.0 / 16.0];
         aspect.priority = UILayoutPriorityDefaultHigh;
 
@@ -180,8 +250,8 @@ static double BTNowNum(id val) {
 
             [_columnsStack.leadingAnchor constraintEqualToAnchor:_scrollView.contentLayoutGuide.leadingAnchor constant:10],
             [_columnsStack.trailingAnchor constraintEqualToAnchor:_scrollView.contentLayoutGuide.trailingAnchor constant:-10],
-            [_columnsStack.topAnchor constraintEqualToAnchor:_scrollView.contentLayoutGuide.topAnchor constant:8],
-            [_columnsStack.bottomAnchor constraintEqualToAnchor:_scrollView.contentLayoutGuide.bottomAnchor constant:-8],
+            [_columnsStack.topAnchor constraintEqualToAnchor:_scrollView.contentLayoutGuide.topAnchor constant:6],
+            [_columnsStack.bottomAnchor constraintEqualToAnchor:_scrollView.contentLayoutGuide.bottomAnchor constant:-6],
             [_columnsStack.widthAnchor constraintEqualToAnchor:_scrollView.frameLayoutGuide.widthAnchor constant:-20],
 
             _leftWidthConstraint,
@@ -193,14 +263,16 @@ static double BTNowNum(id val) {
 
             [leftStack.leadingAnchor constraintEqualToAnchor:_leftCard.leadingAnchor constant:10],
             [leftStack.trailingAnchor constraintEqualToAnchor:_leftCard.trailingAnchor constant:-10],
-            [leftStack.topAnchor constraintEqualToAnchor:_leftCard.topAnchor constant:10],
-            [leftStack.bottomAnchor constraintEqualToAnchor:_leftCard.bottomAnchor constant:-10],
+            [leftStack.topAnchor constraintEqualToAnchor:_leftCard.topAnchor constant:8],
+            [leftStack.bottomAnchor constraintEqualToAnchor:_leftCard.bottomAnchor constant:-8],
 
             [rightStack.leadingAnchor constraintEqualToAnchor:rightCard.leadingAnchor constant:12],
             [rightStack.trailingAnchor constraintEqualToAnchor:rightCard.trailingAnchor constant:-12],
-            [rightStack.topAnchor constraintEqualToAnchor:rightCard.topAnchor constant:10],
-            [rightStack.bottomAnchor constraintEqualToAnchor:rightCard.bottomAnchor constant:-10]
+            [rightStack.topAnchor constraintEqualToAnchor:rightCard.topAnchor constant:8],
+            [rightStack.bottomAnchor constraintEqualToAnchor:rightCard.bottomAnchor constant:-8]
         ]];
+
+        [self renderAudioControlsFromAck];
     }
     return self;
 }
@@ -216,12 +288,106 @@ static double BTNowNum(id val) {
     }
 }
 
-- (void)playTapped { if (self.onPlayPauseTapped) self.onPlayPauseTapped(); }
+- (void)playTapped {
+    [BTTheme pulseView:_playButton accent:[BTTheme accentTeal]];
+    if (self.onPlayPauseTapped) self.onPlayPauseTapped();
+}
 - (void)prevTapped { if (self.onPreviousTapped) self.onPreviousTapped(); }
 - (void)nextTapped { if (self.onNextTapped) self.onNextTapped(); }
 - (void)commitSeek { if (self.onSeekCommitted) self.onSeekCommitted(_seekSlider.value); }
 - (void)returnToWindows { if (self.onReturnToWindowsTapped) self.onReturnToWindowsTapped(); }
 - (void)openVideoFocus { if (self.onOpenVideoFocusTapped) self.onOpenVideoFocusTapped(); }
+
+- (void)outputModeChanged {
+    _userSelectedVolumeLayer = NO;
+    NSString *mode = @"Both";
+    if (_outputModeSegment.selectedSegmentIndex == 0) mode = @"PcOnly";
+    else if (_outputModeSegment.selectedSegmentIndex == 1) mode = @"PhoneOnly";
+    [BTTheme pulseView:_outputModeSegment accent:[BTTheme accentTeal]];
+    if (self.onAudioOutputModeSelected) self.onAudioOutputModeSelected(mode);
+}
+
+- (void)cycleVolumeLayer {
+    _userSelectedVolumeLayer = YES;
+    if ([_selectedVolumeLayer isEqualToString:@"pc"]) _selectedVolumeLayer = @"app";
+    else if ([_selectedVolumeLayer isEqualToString:@"app"]) _selectedVolumeLayer = @"player";
+    else _selectedVolumeLayer = @"pc";
+    [self renderAudioControlsFromAck];
+}
+
+- (float)acknowledgedScalarForLayer:(NSString *)layer {
+    if ([layer isEqualToString:@"app"]) {
+        return [_audioControlState[@"phoneAppGain"] isKindOfClass:NSNumber.class]
+            ? [_audioControlState[@"phoneAppGain"] floatValue] : 1.0f;
+    }
+    if ([layer isEqualToString:@"player"]) {
+        return [_audioControlState[@"phonePlayerVolume"] isKindOfClass:NSNumber.class]
+            ? [_audioControlState[@"phonePlayerVolume"] floatValue] : 1.0f;
+    }
+    return [_audioControlState[@"pcVolumeScalar"] isKindOfClass:NSNumber.class]
+        ? [_audioControlState[@"pcVolumeScalar"] floatValue] : 1.0f;
+}
+
+- (NSString *)displayTitleForLayer:(NSString *)layer percent:(float)scalar {
+    long pct = (long)llroundf(fmaxf(0.0f, fminf(1.0f, scalar)) * 100.0f);
+    if ([layer isEqualToString:@"app"]) return [NSString stringWithFormat:@"App Gain: %ld%%", pct];
+    if ([layer isEqualToString:@"player"]) return [NSString stringWithFormat:@"AVPlayer: %ld%%", pct];
+    return [NSString stringWithFormat:@"PC Vol: %ld%%", pct];
+}
+
+- (void)volumeSliderLiveChanged {
+    [_volumeLayerButton setTitle:[self displayTitleForLayer:_selectedVolumeLayer percent:_volumeSlider.value]
+                        forState:UIControlStateNormal];
+    CFTimeInterval now = CACurrentMediaTime();
+    if (now - _lastVolumeSendTime >= 0.12) {
+        _lastVolumeSendTime = now;
+        if (self.onVolumeChanged) self.onVolumeChanged(_volumeSlider.value, _selectedVolumeLayer);
+    }
+}
+
+- (void)volumeSliderCommitted {
+    _lastVolumeSendTime = CACurrentMediaTime();
+    [_volumeLayerButton setTitle:[self displayTitleForLayer:_selectedVolumeLayer percent:_volumeSlider.value]
+                        forState:UIControlStateNormal];
+    if (self.onVolumeChanged) self.onVolumeChanged(_volumeSlider.value, _selectedVolumeLayer);
+}
+
+- (void)updateWithAudioControlState:(NSDictionary *)audioControlState {
+    if (![audioControlState isKindOfClass:NSDictionary.class]) return;
+    _audioControlState = [audioControlState copy];
+    if (!_userSelectedVolumeLayer) {
+        NSString *ackedLayer = BTNowStr(audioControlState[@"activeVolumeLayer"], @"pc");
+        if ([ackedLayer isEqualToString:@"pc"] || [ackedLayer isEqualToString:@"app"] || [ackedLayer isEqualToString:@"player"]) {
+            _selectedVolumeLayer = ackedLayer;
+        }
+    }
+    [self renderAudioControlsFromAck];
+}
+
+- (void)renderAudioControlsFromAck {
+    NSString *mode = BTNowStr(_audioControlState[@"mode"], @"Both");
+    NSInteger seg = 2;
+    if ([mode isEqualToString:@"PcOnly"]) seg = 0;
+    else if ([mode isEqualToString:@"PhoneOnly"]) seg = 1;
+    if (_outputModeSegment.selectedSegmentIndex != seg) {
+        _outputModeSegment.selectedSegmentIndex = seg;
+    }
+
+    float acked = [self acknowledgedScalarForLayer:_selectedVolumeLayer];
+    if (!_volumeSlider.tracking) {
+        _volumeSlider.value = fmaxf(0.0f, fminf(1.0f, acked));
+    }
+    [_volumeLayerButton setTitle:[self displayTitleForLayer:_selectedVolumeLayer percent:_volumeSlider.tracking ? _volumeSlider.value : acked]
+                        forState:UIControlStateNormal];
+
+    NSString *warning = BTNowStr(_audioControlState[@"warning"], @"");
+    NSString *capStatus = BTNowStr(_audioControlState[@"captureSignalStatus"], @"");
+    if (warning.length == 0 && [capStatus isEqualToString:@"silent-driver-coupled"]) {
+        warning = @"Driver silences loopback capture while PC speaker is muted; use Both if needed.";
+    }
+    _audioWarningLabel.text = warning;
+    _audioWarningLabel.hidden = (warning.length == 0);
+}
 
 - (void)cycleFocusPolicy {
     NSArray<NSString *> *policies = @[@"Auto", @"DuckVideo", @"KeepVideoMuteAudio", @"LivePcmOnly", @"IndependentOnly"];
@@ -289,6 +455,8 @@ static double BTNowNum(id val) {
         _modeBadge.text = [NSString stringWithFormat:@" %@ ", [BTTheme displayModeName:mode]];
         UIColor *accent = [mode isEqualToString:@"BufferedUsb"] ? [BTTheme accentAmber] : [BTTheme accentTeal];
         [BTTheme styleChipLabel:_modeBadge accent:accent];
+        _equalizerView.barColor = accent;
+        _equalizerView.playing = isPlaying || embedActive;
 
         _ownerLabel.text = embedActive ? @"YouTube nocookie Embed Active" : [BTTheme displayOwnerName:owner stage:stage];
         _reasonLabel.text = embedActive
@@ -343,6 +511,9 @@ static double BTNowNum(id val) {
         _artistLabel.text = source.length && artist.length ? [NSString stringWithFormat:@"%@ · %@", artist, source] : artist;
 
         BOOL playing = [BTNowStr(session[@"state"], @"") isEqualToString:@"Playing"];
+        _equalizerView.barColor = accent;
+        _equalizerView.playing = playing;
+
         [_playButton setTitle:playing ? @"Pause" : @"Play" forState:UIControlStateNormal];
         _playButton.enabled = session.count > 0;
         _nextButton.enabled = BTNowNum(session[@"canNext"]) != 0;

@@ -9,17 +9,21 @@ static NSString *BTNotifStr(id val, NSString *fallback) {
 @implementation BTNotificationOverlayView {
     UIView *_backdrop;
     UIView *_card;
+    UIView *_beaconRail;
     UIImageView *_iconView;
     UILabel *_metaLabel;
     UILabel *_priorityBadge;
+    UILabel *_styleBadge;
     UILabel *_titleLabel;
     UITextView *_bodyTextView;
     UIButton *_dismissButton;
+    UIView *_progressTrack;
+    UIView *_progressFill;
     NSLayoutConstraint *_cardTop;
-    NSLayoutConstraint *_cardBottom;
-    NSLayoutConstraint *_cardCenterY;
     NSLayoutConstraint *_cardMaxWidth;
     NSLayoutConstraint *_iconWidth;
+    NSLayoutConstraint *_beaconRailWidth;
+    NSLayoutConstraint *_progressFractionWidth;
     NSTimer *_autoDismissTimer;
     dispatch_queue_t _iconQueue;
     NSString *_activeIconKey;
@@ -33,71 +37,104 @@ static NSString *BTNotifStr(id val, NSString *fallback) {
         self.backgroundColor = [UIColor clearColor];
         _iconQueue = dispatch_queue_create("app.backthread.notif.icon", DISPATCH_QUEUE_SERIAL);
 
+        // Backdrop kept disabled: all notification priorities render strictly as a top bar.
         _backdrop = [UIView new];
-        _backdrop.backgroundColor = [UIColor colorWithRed:0.02 green:0.03 blue:0.05 alpha:0.90];
+        _backdrop.backgroundColor = [UIColor clearColor];
         _backdrop.alpha = 0.0;
+        _backdrop.hidden = YES;
+        _backdrop.userInteractionEnabled = NO;
         _backdrop.translatesAutoresizingMaskIntoConstraints = NO;
         [self addSubview:_backdrop];
 
         _card = [UIView new];
         _card.backgroundColor = [BTTheme surfaceColor];
         _card.layer.cornerRadius = 14;
-        _card.layer.borderWidth = 1.0;
+        _card.layer.borderWidth = 1.25;
         _card.layer.borderColor = [BTTheme hairlineColor].CGColor;
         _card.clipsToBounds = YES;
         _card.translatesAutoresizingMaskIntoConstraints = NO;
         [self addSubview:_card];
 
+        _beaconRail = [UIView new];
+        _beaconRail.backgroundColor = [BTTheme accentTeal];
+        _beaconRail.translatesAutoresizingMaskIntoConstraints = NO;
+        [_card addSubview:_beaconRail];
+        _beaconRailWidth = [_beaconRail.widthAnchor constraintEqualToConstant:0];
+
         _iconView = [UIImageView new];
         _iconView.contentMode = UIViewContentModeScaleAspectFit;
-        _iconView.layer.cornerRadius = 8;
+        _iconView.layer.cornerRadius = 7;
         _iconView.clipsToBounds = YES;
         _iconView.backgroundColor = [BTTheme elevatedColor];
         _iconView.translatesAutoresizingMaskIntoConstraints = NO;
-        _iconWidth = [_iconView.widthAnchor constraintEqualToConstant:40];
+        _iconWidth = [_iconView.widthAnchor constraintEqualToConstant:32];
         [_iconView.heightAnchor constraintEqualToAnchor:_iconView.widthAnchor].active = YES;
 
-        _metaLabel = [BTTheme labelWithSize:12 weight:UIFontWeightSemibold color:[BTTheme textSecondary]];
+        _metaLabel = [BTTheme labelWithSize:11 weight:UIFontWeightSemibold color:[BTTheme textSecondary]];
         _priorityBadge = [BTTheme labelWithSize:10 weight:UIFontWeightBold color:[BTTheme accentRed]];
-        [_priorityBadge.heightAnchor constraintEqualToConstant:20].active = YES;
+        [_priorityBadge.heightAnchor constraintEqualToConstant:19].active = YES;
         [_priorityBadge setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
 
-        UIStackView *metaRow = [[UIStackView alloc] initWithArrangedSubviews:@[_iconView, _metaLabel, _priorityBadge]];
+        _styleBadge = [BTTheme labelWithSize:9 weight:UIFontWeightBold color:[BTTheme accentTeal]];
+        [_styleBadge.heightAnchor constraintEqualToConstant:18].active = YES;
+        [_styleBadge setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+        _styleBadge.hidden = YES;
+
+        _dismissButton = [BTTheme pillButtonWithTitle:@"Dismiss" target:self action:@selector(dismissOverlay)];
+        _dismissButton.titleLabel.font = [UIFont systemFontOfSize:11 weight:UIFontWeightBold];
+        _dismissButton.contentEdgeInsets = UIEdgeInsetsMake(4, 10, 4, 10);
+        [_dismissButton.heightAnchor constraintEqualToConstant:30].active = YES;
+        [_dismissButton setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+
+        UIView *spacer = [UIView new];
+        [spacer setContentHuggingPriority:UILayoutPriorityDefaultLow forAxis:UILayoutConstraintAxisHorizontal];
+
+        UIStackView *metaRow = [[UIStackView alloc] initWithArrangedSubviews:@[
+            _iconView, _metaLabel, _priorityBadge, _styleBadge, spacer, _dismissButton
+        ]];
         metaRow.axis = UILayoutConstraintAxisHorizontal;
         metaRow.alignment = UIStackViewAlignmentCenter;
-        metaRow.spacing = 8;
+        metaRow.spacing = 6;
 
-        _titleLabel = [BTTheme labelWithSize:20 weight:UIFontWeightBold color:[BTTheme textPrimary]];
-        _titleLabel.numberOfLines = 2;
+        _titleLabel = [BTTheme labelWithSize:15 weight:UIFontWeightBold color:[BTTheme textPrimary]];
+        _titleLabel.numberOfLines = 1;
+        _titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
 
         _bodyTextView = [UITextView new];
         _bodyTextView.backgroundColor = [UIColor clearColor];
         _bodyTextView.textColor = [BTTheme textSecondary];
-        _bodyTextView.font = [UIFont systemFontOfSize:15 weight:UIFontWeightRegular];
+        _bodyTextView.font = [UIFont systemFontOfSize:13 weight:UIFontWeightRegular];
         _bodyTextView.editable = NO;
         _bodyTextView.selectable = NO;
         _bodyTextView.scrollEnabled = YES;
         _bodyTextView.textContainerInset = UIEdgeInsetsZero;
         _bodyTextView.textContainer.lineFragmentPadding = 0;
 
-        _dismissButton = [BTTheme primaryButtonWithTitle:@"Dismiss" target:self action:@selector(dismissOverlay)];
-        [_dismissButton.heightAnchor constraintGreaterThanOrEqualToConstant:48].active = YES;
-
-        UIStackView *cardStack = [[UIStackView alloc] initWithArrangedSubviews:@[metaRow, _titleLabel, _bodyTextView, _dismissButton]];
+        UIStackView *cardStack = [[UIStackView alloc] initWithArrangedSubviews:@[metaRow, _titleLabel, _bodyTextView]];
         cardStack.axis = UILayoutConstraintAxisVertical;
-        cardStack.spacing = 8;
+        cardStack.spacing = 4;
         cardStack.translatesAutoresizingMaskIntoConstraints = NO;
         [_card addSubview:cardStack];
 
-        _cardTop = [_card.topAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.topAnchor constant:8];
-        _cardBottom = [_card.bottomAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.bottomAnchor constant:-12];
-        _cardCenterY = [_card.centerYAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.centerYAnchor];
-        _cardMaxWidth = [_card.widthAnchor constraintLessThanOrEqualToConstant:520];
-        NSLayoutConstraint *fillWidth = [_card.widthAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.widthAnchor constant:-24];
+        _progressTrack = [UIView new];
+        _progressTrack.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.09];
+        _progressTrack.translatesAutoresizingMaskIntoConstraints = NO;
+        [_card addSubview:_progressTrack];
+
+        _progressFill = [UIView new];
+        _progressFill.backgroundColor = [BTTheme accentTeal];
+        _progressFill.translatesAutoresizingMaskIntoConstraints = NO;
+        [_progressTrack addSubview:_progressFill];
+
+        _cardTop = [_card.topAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.topAnchor constant:6];
+        _cardMaxWidth = [_card.widthAnchor constraintLessThanOrEqualToConstant:580];
+        NSLayoutConstraint *fillWidth = [_card.widthAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.widthAnchor constant:-20];
         fillWidth.priority = UILayoutPriorityDefaultHigh;
 
-        NSLayoutConstraint *bodyHeight = [_bodyTextView.heightAnchor constraintLessThanOrEqualToConstant:140];
+        NSLayoutConstraint *bodyHeight = [_bodyTextView.heightAnchor constraintLessThanOrEqualToConstant:44];
         bodyHeight.priority = UILayoutPriorityDefaultHigh;
+
+        _progressFractionWidth = [_progressFill.widthAnchor constraintEqualToAnchor:_progressTrack.widthAnchor multiplier:1.0];
 
         [NSLayoutConstraint activateConstraints:@[
             [_backdrop.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
@@ -112,10 +149,25 @@ static NSString *BTNotifStr(id val, NSString *fallback) {
             _iconWidth,
             bodyHeight,
 
-            [cardStack.leadingAnchor constraintEqualToAnchor:_card.leadingAnchor constant:16],
-            [cardStack.trailingAnchor constraintEqualToAnchor:_card.trailingAnchor constant:-16],
-            [cardStack.topAnchor constraintEqualToAnchor:_card.topAnchor constant:12],
-            [cardStack.bottomAnchor constraintEqualToAnchor:_card.bottomAnchor constant:-12]
+            [_beaconRail.leadingAnchor constraintEqualToAnchor:_card.leadingAnchor],
+            [_beaconRail.topAnchor constraintEqualToAnchor:_card.topAnchor],
+            [_beaconRail.bottomAnchor constraintEqualToAnchor:_card.bottomAnchor],
+            _beaconRailWidth,
+
+            [cardStack.leadingAnchor constraintEqualToAnchor:_beaconRail.trailingAnchor constant:12],
+            [cardStack.trailingAnchor constraintEqualToAnchor:_card.trailingAnchor constant:-12],
+            [cardStack.topAnchor constraintEqualToAnchor:_card.topAnchor constant:8],
+            [cardStack.bottomAnchor constraintEqualToAnchor:_progressTrack.topAnchor constant:-7],
+
+            [_progressTrack.leadingAnchor constraintEqualToAnchor:_beaconRail.trailingAnchor],
+            [_progressTrack.trailingAnchor constraintEqualToAnchor:_card.trailingAnchor],
+            [_progressTrack.bottomAnchor constraintEqualToAnchor:_card.bottomAnchor],
+            [_progressTrack.heightAnchor constraintEqualToConstant:3],
+
+            [_progressFill.leadingAnchor constraintEqualToAnchor:_progressTrack.leadingAnchor],
+            [_progressFill.topAnchor constraintEqualToAnchor:_progressTrack.topAnchor],
+            [_progressFill.bottomAnchor constraintEqualToAnchor:_progressTrack.bottomAnchor],
+            _progressFractionWidth
         ]];
 
         UISwipeGestureRecognizer *swipe = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(dismissOverlay)];
@@ -126,12 +178,12 @@ static NSString *BTNotifStr(id val, NSString *fallback) {
 }
 
 - (BOOL)fullscreenActive {
-    return _fullscreenActive;
+    // Fullscreen notifications are permanently disabled by requirement: always return NO.
+    return NO;
 }
 
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
     if (self.hidden) return NO;
-    if (_fullscreenActive) return [super pointInside:point withEvent:event];
     CGPoint inCard = [self convertPoint:point toView:_card];
     return [_card pointInside:inCard withEvent:event];
 }
@@ -144,7 +196,9 @@ static NSString *BTNotifStr(id val, NSString *fallback) {
     _autoDismissTimer = nil;
 
     _currentPriority = priority;
-    _fullscreenActive = (priority >= 3);
+    _fullscreenActive = NO;
+    _backdrop.alpha = 0.0;
+    _backdrop.hidden = YES;
 
     NSString *appName = BTNotifStr(event[@"appName"], @"");
     NSString *source = BTNotifStr(event[@"source"], @"Windows");
@@ -152,6 +206,8 @@ static NSString *BTNotifStr(id val, NSString *fallback) {
     NSString *title = BTNotifStr(event[@"title"], @"Notification");
     NSString *body = BTNotifStr(event[@"body"], @"");
     NSString *iconB64 = BTNotifStr(event[@"iconBase64"], @"");
+    NSString *rawStyle = BTNotifStr(event[@"style"], @"");
+    NSString *style = rawStyle.length ? rawStyle.lowercaseString : (priority >= 3 ? @"beacon" : @"standard");
 
     NSMutableArray<NSString *> *metaParts = [NSMutableArray new];
     if (appName.length) [metaParts addObject:appName];
@@ -159,79 +215,130 @@ static NSString *BTNotifStr(id val, NSString *fallback) {
     if (category.length) [metaParts addObject:category.capitalizedString];
     _metaLabel.text = metaParts.count ? [metaParts componentsJoinedByString:@" · "] : @"Windows";
 
+    BOOL hasIcon = iconB64.length > 0 && iconB64.length <= 24000;
+    UIColor *accent;
+    BOOL isBeacon = [style isEqualToString:@"beacon"] || priority >= 3;
+    BOOL isSpotlight = [style isEqualToString:@"spotlight"];
+
     if (priority == 1) {
-        _backdrop.alpha = 0.0;
-        _cardTop.active = YES;
-        _cardBottom.active = NO;
-        _cardCenterY.active = NO;
-        _cardMaxWidth.constant = 420;
-        _priorityBadge.text = @" NOTICE ";
-        [BTTheme styleChipLabel:_priorityBadge accent:[BTTheme accentBlue]];
-        _titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
-        _titleLabel.text = [NSString stringWithFormat:@"%@: %@", _metaLabel.text, title];
-        _bodyTextView.hidden = YES;
-        _dismissButton.hidden = YES;
-        _iconView.hidden = YES;
-        _iconWidth.constant = 0;
-        _card.layer.borderColor = [BTTheme accentBlue].CGColor;
-    } else if (priority == 2) {
-        _backdrop.alpha = 0.0;
-        _cardTop.active = YES;
-        _cardBottom.active = NO;
-        _cardCenterY.active = NO;
         _cardMaxWidth.constant = 480;
+        accent = isSpotlight ? [BTTheme accentTeal] : [BTTheme accentBlue];
+        _priorityBadge.text = @" NOTICE ";
+        [BTTheme styleChipLabel:_priorityBadge accent:accent];
+        _titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightSemibold];
+        _titleLabel.text = title;
+        _bodyTextView.hidden = body.length == 0;
+        _bodyTextView.font = [UIFont systemFontOfSize:12 weight:UIFontWeightRegular];
+        _bodyTextView.text = body;
+        _dismissButton.hidden = YES;
+        _iconView.hidden = !hasIcon;
+        _iconWidth.constant = hasIcon ? 24 : 0;
+        _card.backgroundColor = [BTTheme surfaceColor];
+    } else if (priority == 2) {
+        _cardMaxWidth.constant = 540;
+        accent = isSpotlight ? [BTTheme accentTeal] : [BTTheme accentAmber];
         _priorityBadge.text = @" PRIORITY ";
-        [BTTheme styleChipLabel:_priorityBadge accent:[BTTheme accentAmber]];
-        _titleLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightBold];
+        [BTTheme styleChipLabel:_priorityBadge accent:accent];
+        _titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightBold];
         _titleLabel.text = title;
         _bodyTextView.hidden = body.length == 0;
         _bodyTextView.font = [UIFont systemFontOfSize:13 weight:UIFontWeightRegular];
         _bodyTextView.text = body;
         _dismissButton.hidden = NO;
-        [_dismissButton setTitle:@"Dismiss" forState:UIControlStateNormal];
-        BOOL hasIcon = iconB64.length > 0 && iconB64.length <= 24000;
         _iconView.hidden = !hasIcon;
-        _iconWidth.constant = hasIcon ? 36 : 0;
-        _card.layer.borderColor = [BTTheme accentAmber].CGColor;
+        _iconWidth.constant = hasIcon ? 30 : 0;
+        _card.backgroundColor = isSpotlight
+            ? [UIColor colorWithRed:0.065 green:0.130 blue:0.160 alpha:0.98]
+            : [BTTheme surfaceColor];
     } else {
-        _backdrop.alpha = 1.0;
-        _cardTop.active = YES;
-        _cardBottom.active = YES;
-        _cardCenterY.active = YES;
-        _cardMaxWidth.constant = 580;
-        _priorityBadge.text = @" CRITICAL ALERT ";
-        [BTTheme styleChipLabel:_priorityBadge accent:[BTTheme accentRed]];
-        _titleLabel.font = [UIFont systemFontOfSize:22 weight:UIFontWeightBold];
+        // Priority 3 renders as a prominent Beacon Top Bar rather than taking over the screen.
+        _cardMaxWidth.constant = 600;
+        accent = [BTTheme accentRed];
+        _priorityBadge.text = @" CRITICAL BAR ";
+        [BTTheme styleChipLabel:_priorityBadge accent:accent];
+        _titleLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightBold];
         _titleLabel.text = title;
         _bodyTextView.hidden = NO;
-        _bodyTextView.font = [UIFont systemFontOfSize:16 weight:UIFontWeightRegular];
+        _bodyTextView.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
         _bodyTextView.text = body.length ? body : @"Check Windows host notification";
         _dismissButton.hidden = NO;
-        [_dismissButton setTitle:@"Dismiss & Return to Media" forState:UIControlStateNormal];
-        BOOL hasIcon = iconB64.length > 0 && iconB64.length <= 24000;
         _iconView.hidden = !hasIcon;
-        _iconWidth.constant = hasIcon ? 48 : 0;
-        _card.layer.borderColor = [BTTheme accentRed].CGColor;
+        _iconWidth.constant = hasIcon ? 34 : 0;
+        _card.backgroundColor = [UIColor colorWithRed:0.145 green:0.065 blue:0.085 alpha:0.98];
     }
 
-    if (iconB64.length > 0 && iconB64.length <= 24000) {
+    if (isBeacon) {
+        _beaconRailWidth.constant = 5.0;
+        _beaconRail.backgroundColor = accent;
+        _styleBadge.hidden = NO;
+        _styleBadge.text = @" BEACON ";
+        [BTTheme styleChipLabel:_styleBadge accent:accent];
+    } else if (isSpotlight) {
+        _beaconRailWidth.constant = 4.0;
+        _beaconRail.backgroundColor = [BTTheme accentTeal];
+        _styleBadge.hidden = NO;
+        _styleBadge.text = @" SPOTLIGHT ";
+        [BTTheme styleChipLabel:_styleBadge accent:[BTTheme accentTeal]];
+    } else {
+        _beaconRailWidth.constant = 2.0;
+        _beaconRail.backgroundColor = accent;
+        _styleBadge.hidden = YES;
+    }
+
+    _card.layer.borderColor = accent.CGColor;
+    _progressFill.backgroundColor = accent;
+
+    if (hasIcon) {
         [self loadIconBase64:iconB64];
     } else {
         _activeIconKey = nil;
         _iconView.image = nil;
     }
 
+    NSTimeInterval defaultDur = priority >= 3 ? 12.0 : (priority == 2 ? 7.0 : 3.5);
+    NSTimeInterval timeout = MIN(defaultDur, MAX(0.8, expiresInSeconds));
+
+    [_progressFill.layer removeAllAnimations];
+    _progressFractionWidth.active = NO;
+    _progressFractionWidth = [_progressFill.widthAnchor constraintEqualToAnchor:_progressTrack.widthAnchor multiplier:1.0];
+    _progressFractionWidth.active = YES;
+
     self.hidden = NO;
     [self.superview bringSubviewToFront:self];
+    [self layoutIfNeeded];
 
-    if (priority < 3) {
-        NSTimeInterval timeout = MIN(priority >= 2 ? 8.0 : 3.0, MAX(0.5, expiresInSeconds));
-        __weak typeof(self) weakSelf = self;
-        _autoDismissTimer = [NSTimer scheduledTimerWithTimeInterval:timeout repeats:NO block:^(NSTimer *timer) {
-            (void)timer;
-            [weakSelf dismissOverlay];
+    BOOL reduceMotion = [BTTheme isReduceMotionEnabled];
+    if (reduceMotion) {
+        _card.transform = CGAffineTransformIdentity;
+        _card.alpha = 1.0;
+    } else {
+        _card.transform = CGAffineTransformMakeTranslation(0, -18.0);
+        _card.alpha = 0.0;
+        [UIView animateWithDuration:0.24 delay:0 usingSpringWithDamping:0.86 initialSpringVelocity:0.4 options:UIViewAnimationOptionAllowUserInteraction animations:^{
+            self->_card.transform = CGAffineTransformIdentity;
+            self->_card.alpha = 1.0;
+        } completion:^(BOOL finished) {
+            (void)finished;
+            if (isBeacon || isSpotlight) {
+                [BTTheme pulseView:self->_card accent:accent];
+            }
         }];
     }
+
+    _progressFractionWidth.active = NO;
+    _progressFractionWidth = [_progressFill.widthAnchor constraintEqualToAnchor:_progressTrack.widthAnchor multiplier:0.001];
+    _progressFractionWidth.active = YES;
+    if (!reduceMotion) {
+        [UIView animateWithDuration:timeout delay:0 options:UIViewAnimationOptionCurveLinear | UIViewAnimationOptionAllowUserInteraction animations:^{
+            [self->_progressTrack layoutIfNeeded];
+        } completion:nil];
+    }
+
+    __weak typeof(self) weakSelf = self;
+    _autoDismissTimer = [NSTimer scheduledTimerWithTimeInterval:timeout repeats:NO block:^(NSTimer *timer) {
+        (void)timer;
+        [weakSelf dismissOverlay];
+    }];
 }
 
 - (void)loadIconBase64:(NSString *)iconB64 {
@@ -269,6 +376,7 @@ static NSString *BTNotifStr(id val, NSString *fallback) {
 - (void)dismissOverlay {
     [_autoDismissTimer invalidate];
     _autoDismissTimer = nil;
+    [_progressFill.layer removeAllAnimations];
     NSInteger dismissedPriority = _currentPriority;
     _fullscreenActive = NO;
     self.hidden = YES;
@@ -345,8 +453,8 @@ static NSString *BTNotifStr(id val, NSString *fallback) {
 
 - (void)replayTapped:(UIButton *)btn {
     NSInteger idx = btn.tag;
-    if (idx >= 0 && (NSUInteger)idx < _events.count && self.onReplayFullscreenTapped) {
-        self.onReplayFullscreenTapped(_events[(NSUInteger)idx]);
+    if (idx >= 0 && (NSUInteger)idx < _events.count && self.onReplayBannerTapped) {
+        self.onReplayBannerTapped(_events[(NSUInteger)idx]);
     }
 }
 
@@ -388,7 +496,7 @@ static NSString *BTNotifStr(id val, NSString *fallback) {
         bodyLbl.numberOfLines = 3;
         bodyLbl.text = BTNotifStr(ev[@"body"], @"");
 
-        UIButton *inspectBtn = [BTTheme pillButtonWithTitle:@"Inspect Fullscreen" target:self action:@selector(replayTapped:)];
+        UIButton *inspectBtn = [BTTheme pillButtonWithTitle:@"Preview Top Bar" target:self action:@selector(replayTapped:)];
         inspectBtn.tag = i;
 
         UIStackView *topRow = [[UIStackView alloc] initWithArrangedSubviews:@[metaLbl, inspectBtn]];
@@ -413,3 +521,4 @@ static NSString *BTNotifStr(id val, NSString *fallback) {
 }
 
 @end
+

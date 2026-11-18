@@ -13,6 +13,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCES = [
     'src/iOS/UI/main.m',
     'src/iOS/UI/BTTheme.m',
+    'src/iOS/UI/BTTelemetryStripView.m',
     'src/iOS/UI/BTVideoSurfaceView.m',
     'src/iOS/UI/BTNowPlayingView.m',
     'src/iOS/UI/BTIdleHubView.m',

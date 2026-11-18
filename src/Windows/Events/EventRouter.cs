@@ -12,7 +12,8 @@ public sealed record CompanionEvent(
     string? Category = null,
     string? IconBase64 = null,
     DateTimeOffset? CreatedUtc = null,
-    bool? FullscreenEligible = null);
+    bool? FullscreenEligible = null,
+    string? Style = null);
 
 public sealed class EventRouter
 {
@@ -36,8 +37,16 @@ public sealed class EventRouter
             || e.ExpiresUtc > time.AddDays(1)
             || e.AppName?.Length > 128
             || e.Category?.Length > 64
+            || e.Style?.Length > 32
             || e.IconBase64?.Length > 24000)
             return null;
+
+        string style = e.Style?.Trim().ToLowerInvariant() switch
+        {
+            "beacon" => "beacon",
+            "spotlight" => "spotlight",
+            _ => e.Priority >= 3 ? "beacon" : "standard"
+        };
 
         lock (gate)
         {
@@ -51,7 +60,8 @@ public sealed class EventRouter
             e = e with
             {
                 CreatedUtc = e.CreatedUtc ?? time,
-                FullscreenEligible = e.FullscreenEligible ?? (e.Priority >= 3)
+                FullscreenEligible = e.FullscreenEligible ?? (e.Priority >= 3),
+                Style = style
             };
             if (HideSensitive && e.Sensitive)
             {
@@ -60,7 +70,8 @@ public sealed class EventRouter
                     Title = "Private notification",
                     Body = "Open the source application on Windows",
                     Category = null,
-                    IconBase64 = null
+                    IconBase64 = null,
+                    Style = "standard"
                 };
             }
             history.Enqueue(e);

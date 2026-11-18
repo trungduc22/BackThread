@@ -1,5 +1,7 @@
 # Hardware test results — 2026-11-18
 
+> **Scope Note (`0.2.0` Build 6 Update):** Hardware evidence below (`6b986ce` / `6c2fb35` / `307e167`) documents the latest **physical iPhone 6 + Windows 10** runs recorded prior to offline Linux VM continuation. All `0.2.0` Build 6 software additions (top-bar-only notifications, MSIX packaging helper, live clock & telemetry strip, 3-mode audio output routing, inline volume slider, serialized `BTAgent` audio control) have passed `42/42` `.NET` simulator/integration tests, a `20.07s` 63-job zero-loss soak, C11 tests (`gcc` ASan/UBSan + `zig cc`), `23/23` Python tests, `23/23` Clang static-analyzer checks (`clean=True`), and `20`-TU ARM64 cross-builds (`BackThread.ipa` + `win-x64` release bundle). **None of the new `0.2.0` Build 6 binaries have executed on physical iPhone 6 or physical Windows 10 desktop hardware yet.** See [NEXT_STEPS.md](NEXT_STEPS.md) and [FEATURE_STATUS.md](FEATURE_STATUS.md).
+
 ## Resumed build and physical playback — 2026-11-18 evening
 
 Fetched every branch/tag from GitHub before continuing: only `master` at `307e167` existed, with the six original commits. No additional Antigravity commit was present on this remote. Continued from that full history. New implementation checkpoint: `6c2fb35`.

@@ -12,10 +12,15 @@
 | `DELETE /v1/jobs/{id}` | Request cooperative cancellation | Cancels at chunk boundary |
 | `POST /v1/archives` | `{path, name}` stream opaque local file to phone storage + SHA-256 commit | Never auto-extracts archives |
 | `GET /v1/artifacts/{name}?offset=0&count=32768` | Download verified binary byte range (`<=32 KiB`) | Host validates offset/length |
-| `POST /v1/events` | Publish rich notification `{id, source, appName, category, title, body, priority, expiresUtc, sensitive, iconBase64?, actions?}` | Evaluates `EventRouter` rules |
+| `POST /v1/events` | Publish rich notification `{id, source, appName, category, title, body, priority, expiresUtc, sensitive, style?, iconBase64?, fullscreenEligible?}` | Evaluates `EventRouter` rules |
 | `GET /v1/events` | List active unexpired host notification history | Up to 64 retained entries |
-| `GET /v1/notifications/status` | Inspect `WindowsNotificationCollector` access status | `Allowed`, `Denied`, or `Unavailable` |
+| `GET /v1/notifications/status` | Inspect `NotificationCollector` access status | `Allowed`, `Denied`, or `Unavailable` |
+| `GET /v1/notifications/diagnostics` | Structured package identity (`hasPackageIdentity`), counts & MSIX guidance | Explains why unpackaged runs block toast reads |
 | `POST /v1/notifications/request-access` | Prompt interactive Windows notification permission (requires packaged MSIX identity) | Returns updated access state |
+| `GET /v1/telemetry` | Latest `SystemTelemetrySnapshot` (CPU%, RAM, Battery/AC, Wi-Fi, strict BT `Aep.IsConnected`) | Sampled every 2s on Windows |
+| `GET /v1/audio/state` | Current `AudioControlState` (`mode`, PC scalar, mute state, `captureSignalStatus`, warning) | Live CoreAudio & loopback diagnostics |
+| `POST /v1/audio/mode` | `{mode}` (`PcOnly`, `PhoneOnly`, `Both`) -> updated `AudioControlState` | Saves/restores PC speaker mute automatically |
+| `POST /v1/audio/volume` | `{value: 0..1, layer?}` (`pc`, `app`, `player`) -> updated readback `AudioControlState` | Reflects actual endpoint scalar or acknowledged gain |
 | `POST /v1/actions/{id}` | Invoke locally allowlisted action (`media.toggle`, `microphone.toggleMute`, or local configured exe) | Unlisted ID returns `403` |
 | `GET /v1/progress` | SSE stream (`event: progress`) for worker jobs | Drop-oldest queue size 8 |
 

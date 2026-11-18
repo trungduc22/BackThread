@@ -35,6 +35,7 @@ public sealed class MediaRouter(
     private long generationCounter;
     private string? latestWindowsSource;
     private PlaybackMode? manualModeOverride;
+    private AudioOutputMode audioOutputMode = AudioOutputMode.Both;
 
     public bool DeviceHasInternet { get; set; } = deviceHasInternet;
     public bool AllowExperimentalYouTubeEmbed { get; set; } = allowExperimentalYouTubeEmbed;
@@ -43,6 +44,30 @@ public sealed class MediaRouter(
     public Func<string?, double?, Task>? ResumeWindowsMediaAsync { get; set; }
     public Func<string, string?, string?, Task>? WindowsCommandAsync { get; set; }
     public event Action<MediaSessionState>? StateChanged;
+
+    public AudioOutputMode AudioOutputMode
+    {
+        get { lock (gate) return audioOutputMode; }
+    }
+
+    public MediaSessionState SetAudioOutputMode(AudioOutputMode outputMode)
+    {
+        MediaSessionState next;
+        lock (gate)
+        {
+            audioOutputMode = outputMode;
+            var focus = ComputeFocus(state.FocusPolicy, state.Owner, state.Mode, audioOutputMode);
+            next = state with
+            {
+                ShouldStreamLivePcm = focus.StreamLivePcm,
+                IndependentVolume = focus.IndependentVolume,
+                UpdatedUtc = DateTimeOffset.UtcNow
+            };
+            state = next;
+        }
+        StateChanged?.Invoke(next);
+        return next;
+    }
 
     public MediaSessionState CurrentState
     {
@@ -204,7 +229,7 @@ public sealed class MediaRouter(
                 staleBuffered = activeBuffered; activeBuffered = null;
                 manualModeOverride = eval.SelectedMode;
                 long gen = Interlocked.Increment(ref generationCounter);
-                var policy = ComputeFocus(request.FocusPolicy == AudioFocusPolicy.Auto ? state.FocusPolicy : request.FocusPolicy, PlaybackOwner.WindowsOwned, eval.SelectedMode);
+                var policy = ComputeFocus(request.FocusPolicy == AudioFocusPolicy.Auto ? state.FocusPolicy : request.FocusPolicy, PlaybackOwner.WindowsOwned, eval.SelectedMode, audioOutputMode);
                 next = state with
                 {
                     SessionId = Guid.NewGuid().ToString("N"),
@@ -698,6 +723,7 @@ public sealed class MediaRouter(
                 owner = state.Owner.ToString(),
                 mode = state.Mode.ToString(),
                 focusPolicy = state.FocusPolicy.ToString(),
+                audioOutputMode = audioOutputMode.ToString(),
                 url = state.Url,
                 title = state.Title
             };
@@ -809,18 +835,19 @@ public sealed class MediaRouter(
 
     private readonly record struct FocusOutcome(AudioFocusPolicy EffectivePolicy, bool StreamLivePcm, float IndependentVolume, bool MuteIndependentAudio);
 
-    private static FocusOutcome ComputeFocus(AudioFocusPolicy requested, PlaybackOwner owner, PlaybackMode mode)
+    private FocusOutcome ComputeFocus(AudioFocusPolicy requested, PlaybackOwner owner, PlaybackMode mode, AudioOutputMode? outputModeOverride = null)
     {
         bool independentPlayback = owner is PlaybackOwner.iPhoneOwned && mode is PlaybackMode.DirectInternet or PlaybackMode.BufferedUsb;
+        bool allowLivePcm = (outputModeOverride ?? audioOutputMode) != AudioOutputMode.PcOnly;
         return requested switch
         {
             AudioFocusPolicy.IndependentOnly => new(requested, false, 1f, false),
-            AudioFocusPolicy.LivePcmOnly => new(requested, true, 0f, true),
-            AudioFocusPolicy.KeepVideoMuteAudio => new(requested, true, 0f, true),
-            AudioFocusPolicy.DuckVideo => new(requested, true, 0.25f, false),
-            AudioFocusPolicy.LivePcmPrioritized => new(requested, true, independentPlayback ? 0.25f : 1f, false),
-            AudioFocusPolicy.IndependentPrioritized => new(requested, !independentPlayback, 1f, false),
-            _ => new(AudioFocusPolicy.Auto, !independentPlayback, 1f, false)
+            AudioFocusPolicy.LivePcmOnly => new(requested, allowLivePcm, 0f, true),
+            AudioFocusPolicy.KeepVideoMuteAudio => new(requested, allowLivePcm, 0f, true),
+            AudioFocusPolicy.DuckVideo => new(requested, allowLivePcm, 0.25f, false),
+            AudioFocusPolicy.LivePcmPrioritized => new(requested, allowLivePcm, independentPlayback ? 0.25f : 1f, false),
+            AudioFocusPolicy.IndependentPrioritized => new(requested, allowLivePcm && !independentPlayback, 1f, false),
+            _ => new(AudioFocusPolicy.Auto, allowLivePcm && !independentPlayback, 1f, false)
         };
     }
 

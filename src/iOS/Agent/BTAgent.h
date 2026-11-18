@@ -12,8 +12,10 @@
 - (instancetype)initWithKey:(NSData *)key storage:(NSString *)storage;
 - (void)start;
 - (void)stop;
+- (void)setNativePlaybackActive:(BOOL)active;
 - (void)command:(NSString *)type body:(NSDictionary *)body;
 - (void)sendMediaMessage:(NSString *)type body:(NSDictionary *)body;
+- (void)sendControlMessage:(NSString *)type body:(NSDictionary *)body channel:(uint16_t)channel;
 - (void)registerBufferedStreamId:(NSString *)streamId;
 - (void)unregisterBufferedStreamId:(NSString *)streamId;
 @end
