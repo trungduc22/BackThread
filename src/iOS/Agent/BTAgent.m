@@ -33,10 +33,11 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
     NSLock *_tx;
     uint32_t _sequences[8],_previousAudio;
     uint64_t _audioPackets,_audioBytes,_audioGaps;
-    dispatch_queue_t _network,_worker,_commands,_fileIO;
+    dispatch_queue_t _network,_worker,_commands,_fileIO,_bufferedIO;
     dispatch_semaphore_t _commandSlots;
     dispatch_semaphore_t _fileSlots;
     NSMutableSet *_committing;
+    NSString *_activeBufferedStreamId;
     NSMutableDictionary *_jobs,*_jobSpecs;
     NSMutableSet *_cancelled;
     NSMutableArray *_events;
@@ -50,8 +51,9 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         _key=[key copy];_root=[storage copy];_listener=-1;_client=-1;atomic_init(&_stopping,NO);_tx=[NSLock new];_audio=[BTAudioReceiver new];
         _network=dispatch_queue_create("app.backthread.network",DISPATCH_QUEUE_SERIAL);
         _worker=dispatch_queue_create("app.backthread.worker",dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL,QOS_CLASS_UTILITY,0));
-        _commands=dispatch_queue_create("app.backthread.commands",DISPATCH_QUEUE_SERIAL);_commandSlots=dispatch_semaphore_create(16);
+        _commands=dispatch_queue_create("app.backthread.commands",DISPATCH_QUEUE_SERIAL);_commandSlots=dispatch_semaphore_create(32);
         _fileIO=dispatch_queue_create("app.backthread.fileio",dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL,QOS_CLASS_UTILITY,0));_fileSlots=dispatch_semaphore_create(2);_committing=[NSMutableSet new];
+        _bufferedIO=dispatch_queue_create("app.backthread.buffered.chunk",dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL,QOS_CLASS_USER_INITIATED,0));
         [[NSFileManager defaultManager] createDirectoryAtPath:_root withIntermediateDirectories:YES attributes:@{NSFileProtectionKey:NSFileProtectionCompleteUntilFirstUserAuthentication} error:nil];
         NSDictionary *saved=[NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:[_root stringByAppendingPathComponent:@".jobs.json"]]?:[NSData data] options:NSJSONReadingMutableContainers error:nil];
         _jobs=[saved isKindOfClass:NSDictionary.class]?[saved mutableCopy]:[NSMutableDictionary new];_jobSpecs=[NSMutableDictionary new];_cancelled=[NSMutableSet new];_events=[NSMutableArray new];
@@ -124,6 +126,26 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
     [_tx lock];uint64_t generation=_generation;BOOL connected=_authenticated;[_tx unlock];if(!connected){dispatch_semaphore_signal(_commandSlots);return;}
     dispatch_async(_commands,^{@autoreleasepool { [self send:type body:body reply:nil channel:3 generation:generation];dispatch_semaphore_signal(self->_commandSlots); }});
 }
+- (void)sendMediaMessage:(NSString *)type body:(NSDictionary *)body {
+    if(dispatch_semaphore_wait(_commandSlots,DISPATCH_TIME_NOW)!=0)return;
+    [_tx lock];uint64_t generation=_generation;BOOL connected=_authenticated;[_tx unlock];
+    if(!connected){dispatch_semaphore_signal(_commandSlots);return;}
+    NSDictionary *payloadBody=body?[body copy]:@{};
+    NSString *msgType=[type copy];
+    dispatch_async(_commands,^{@autoreleasepool {
+        [self send:msgType body:payloadBody reply:nil channel:3 generation:generation];
+        dispatch_semaphore_signal(self->_commandSlots);
+    }});
+}
+- (void)registerBufferedStreamId:(NSString *)streamId {
+    if(![streamId isKindOfClass:NSString.class]||!hexString(streamId,32))return;
+    @synchronized(self){_activeBufferedStreamId=[streamId.lowercaseString copy];}
+}
+- (void)unregisterBufferedStreamId:(NSString *)streamId {
+    @synchronized(self){
+        if(!streamId||[_activeBufferedStreamId isEqual:streamId.lowercaseString])_activeBufferedStreamId=nil;
+    }
+}
 - (NSString *)path:(NSString *)name {
     if(![name isKindOfClass:NSString.class]||name.length==0||name.length>120||[name hasPrefix:@"."]||[name hasSuffix:@"."]||[name rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"] invertedSet]].location!=NSNotFound)return nil;
     NSString *stem=[[name componentsSeparatedByString:@"."][0] uppercaseString];if([@[@"CON",@"PRN",@"AUX",@"NUL"] containsObject:stem]||([stem length]==4&&([stem hasPrefix:@"COM"]||[stem hasPrefix:@"LPT"])&&[stem characterAtIndex:3]>='0'&&[stem characterAtIndex:3]<='9'))return nil;
@@ -143,6 +165,17 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
             if(_previousAudio&&h.sequence!=_previousAudio+1)_audioGaps++;_previousAudio=h.sequence;_audioPackets++;_audioBytes+=payload.length;[_audio receive:payload];continue;
         }
         if(h.channel==6) {
+            if(payload.length>=40) {
+                NSString *prefix=[[NSString alloc] initWithBytes:payload.bytes length:32 encoding:NSASCIIStringEncoding];
+                NSString *activeBuf=nil;@synchronized(self){activeBuf=_activeBufferedStreamId;}
+                if(activeBuf&&prefix&&[[prefix lowercaseString] isEqual:activeBuf]) {
+                    uint64_t chunkOffset=bt_u64((const uint8_t *)payload.bytes+32);
+                    NSData *chunkBytes=[payload subdataWithRange:NSMakeRange(40,payload.length-40)];
+                    void (^chunkCb)(NSString *,uint64_t,NSData *)=self.bufferedChunkReceived;
+                    if(chunkCb){dispatch_async(_bufferedIO,^{@autoreleasepool{chunkCb(activeBuf,chunkOffset,chunkBytes);}});}
+                    continue;
+                }
+            }
             if(dispatch_semaphore_wait(_fileSlots,DISPATCH_TIME_NOW)!=0)break;
             [_tx lock];uint64_t generation=_generation;[_tx unlock];
             dispatch_async(_fileIO,^{@autoreleasepool {
@@ -153,7 +186,7 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         }
         NSString *type=m[@"type"];NSDictionary *b=m[@"body"];id rid=m[@"id"];
         if([type isEqual:@"ping"]) { [self send:@"pong" body:@{} reply:rid channel:1]; }
-        else if([type isEqual:@"hello"]) { [self send:@"ok" body:@{@"agent":@"BackThread.Agent",@"simulated":@NO,@"capabilities":@[@"pcm",@"jobs",@"files",@"events",@"UIKit",@"direct-handoff"]} reply:rid channel:h.channel]; }
+        else if([type isEqual:@"hello"]) { [self send:@"ok" body:@{@"agent":@"BackThread.Agent",@"simulated":@NO,@"capabilities":@[@"pcm",@"jobs",@"files",@"events",@"UIKit",@"direct-handoff",@"hybrid-media",@"buffered-media",@"fullscreen-notifications",@"sync"]} reply:rid channel:h.channel]; }
         else if([type isEqual:@"audio.start"]) {
             NSError *error=nil;if([b[@"sampleRate"] intValue]!=48000||[b[@"channels"] intValue]!=2||[b[@"bits"] intValue]!=16) { [self fail:@"Only 48 kHz stereo PCM16 supported" message:m channel:h.channel];continue; }
             _audioOn=NO;
@@ -163,7 +196,23 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         else if([type isEqual:@"audio.stop"]) { _audioOn=NO;[_audio stop];[self send:@"ok" body:@{@"stopped":@YES} reply:rid channel:h.channel]; }
         else if([type isEqual:@"audio.stats"]) { NSMutableDictionary *s=[[_audio statistics] mutableCopy];s[@"packets"]=@(_audioPackets);s[@"bytes"]=@(_audioBytes);s[@"gaps"]=@(_audioGaps);s[@"acceptingPCM"]=@(_audioOn);[self send:@"ok" body:s reply:rid channel:h.channel]; }
         else if([type isEqual:@"audio.volume"]) { NSError *error=nil;if(![b[@"value"] isKindOfClass:NSNumber.class]||![_audio setVolume:[b[@"value"] floatValue] error:&error])[self fail:error.localizedDescription?:@"Invalid audio volume" message:m channel:h.channel];else [self send:@"ok" body:@{} reply:rid channel:h.channel]; }
-        else if([type isEqual:@"media.state"]||[type isEqual:@"action.registry"]||[type isEqual:@"media.handoff"]) { [self notify:type body:b];[self send:@"ok" body:@{@"received":@YES} reply:rid channel:h.channel]; }
+        else if([type isEqual:@"media.buffered.start"]) {
+            NSString *sid=b[@"streamId"];if([sid isKindOfClass:NSString.class])[self registerBufferedStreamId:sid];
+            [self notify:type body:b];[self send:@"ok" body:@{@"accepted":@YES} reply:rid channel:h.channel];
+        }
+        else if([type isEqual:@"media.buffered.eof"]) {
+            [self notify:type body:b];[self send:@"ok" body:@{@"acknowledged":@YES} reply:rid channel:h.channel];
+        }
+        else if([type isEqual:@"media.sync"]) {
+            NSDictionary * (^provider)(NSDictionary *)=self.mediaSyncProvider;
+            NSDictionary *replyBody=provider?(provider(b)?:@{}):@{@"independentActive":@NO};
+            [self send:@"ok" body:replyBody reply:rid channel:h.channel];
+        }
+        else if([type isEqual:@"media.handoff"]||[type isEqual:@"media.handoff.cancel"]||[type isEqual:@"media.return_to_windows"]||[type isEqual:@"media.focus.set"]||[type isEqual:@"media.mode.select"]||[type isEqual:@"media.command"]) {
+            [self notify:type body:b];
+            [self send:@"ok" body:@{@"received":@YES,@"accepted":@YES} reply:rid channel:h.channel];
+        }
+        else if([type isEqual:@"media.state"]||[type isEqual:@"action.registry"]) { [self notify:type body:b];[self send:@"ok" body:@{@"received":@YES} reply:rid channel:h.channel]; }
         else if([type isEqual:@"error"]) { [self notify:@"error" body:b]; }
         else if([type isEqual:@"ok"]&&[m[@"replyTo"] isKindOfClass:NSString.class]&&[b[@"success"] isEqual:@NO]) { [self notify:@"error" body:@{@"error":@"Windows could not perform the requested action"}]; }
         else if([type isEqual:@"event.publish"]) { BOOL accepted=[self event:b];[self send:@"ok" body:@{@"accepted":@(accepted)} reply:rid channel:h.channel]; }
@@ -191,6 +240,9 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
 - (BOOL)event:(NSDictionary *)b {
     NSString *eid=b[@"id"],*title=b[@"title"],*text=b[@"body"],*source=b[@"source"];
     if(![eid isKindOfClass:NSString.class]||eid.length==0||eid.length>64||![title isKindOfClass:NSString.class]||title.length>256||![text isKindOfClass:NSString.class]||text.length>2048||![source isKindOfClass:NSString.class]||source.length>128)return NO;
+    id appName=b[@"appName"];if(appName&&appName!=NSNull.null&&(![appName isKindOfClass:NSString.class]||[appName length]>128))return NO;
+    id category=b[@"category"];if(category&&category!=NSNull.null&&(![category isKindOfClass:NSString.class]||[category length]>64))return NO;
+    id iconB64=b[@"iconBase64"];if(iconB64&&iconB64!=NSNull.null&&(![iconB64 isKindOfClass:NSString.class]||[iconB64 length]>24000))return NO;
     NSISO8601DateFormatter *formatter=[NSISO8601DateFormatter new];formatter.formatOptions=NSISO8601DateFormatWithInternetDateTime|NSISO8601DateFormatWithFractionalSeconds;NSDate *expiry=[formatter dateFromString:b[@"expiresUtc"]?:@""];if(!expiry){formatter.formatOptions=NSISO8601DateFormatWithInternetDateTime;expiry=[formatter dateFromString:b[@"expiresUtc"]?:@""];}
     if(!expiry||[expiry timeIntervalSinceNow]<=0||[expiry timeIntervalSinceNow]>86400||[b[@"priority"] intValue]<0||[b[@"priority"] intValue]>3)return NO;
     if(!_eventWindow||-[_eventWindow timeIntervalSinceNow]>=1){_eventWindow=[NSDate date];_eventsInWindow=0;}if(++_eventsInWindow>10)return NO;

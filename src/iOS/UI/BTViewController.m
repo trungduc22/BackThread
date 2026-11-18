@@ -1,129 +1,832 @@
 #import "BTViewController.h"
+#import "BTTheme.h"
+#import "BTVideoSurfaceView.h"
+#import "BTNowPlayingView.h"
+#import "BTIdleHubView.h"
+#import "BTQuickActionsView.h"
+#import "BTWorkerStatusView.h"
+#import "BTSettingsView.h"
+#import "BTNotificationOverlayView.h"
 #import "../Agent/BTAgent.h"
 #import "../AudioReceiver/BTAudioReceiver.h"
-#import <AVFoundation/AVFoundation.h>
-#import <MediaPlayer/MediaPlayer.h>
-#import <ImageIO/ImageIO.h>
+#import "../AudioReceiver/BTAudioSessionCoordinator.h"
+#import "../Media/BTDirectMediaPlayer.h"
+#import "../Media/BTBufferedMediaEngine.h"
+#import "../Media/BTYouTubeEmbedController.h"
 
-static NSString *BTText(id value,NSString *fallback) { return [value isKindOfClass:NSString.class]?value:fallback; }
-static double BTNumber(id value) { return [value isKindOfClass:NSNumber.class]?[value doubleValue]:0; }
+typedef NS_ENUM(NSInteger, BTWorkspaceMode) {
+    BTWorkspaceHub = 0,
+    BTWorkspaceMedia = 1,
+    BTWorkspaceVideoFocus = 2,
+    BTWorkspaceActions = 3,
+    BTWorkspaceWorker = 4,
+    BTWorkspaceHistory = 5,
+    BTWorkspaceSettings = 6,
+    BTWorkspaceAmbient = 7
+};
+
+static NSString *BTSafeStr(id val, NSString *fallback) {
+    return [val isKindOfClass:NSString.class] ? val : fallback;
+}
 
 @implementation BTViewController {
-    UILabel *_connection,*_title,*_artist,*_source,*_workerStatus,*_timeline,*_noticeTitle,*_noticeBody;
-    UIImageView *_art;
-    UISlider *_seek;
-    UIButton *_play,*_next,*_previous;
-    UIStackView *_media,*_actions,*_worker,*_history;
-    UISegmentedControl *_tabs;
-    UIView *_notice;
-    NSLayoutConstraint *_noticeCenter,*_noticeTop,*_noticeBottom;
-    NSTimer *_noticeTimer;
-    NSMutableArray *_events;
-    NSDictionary *_session;
-    NSString *_lastJob;
-    NSString *_artworkKey;
+    UIView *_topBar;
+    UIStackView *_topBarStack;
+    UIView *_statusDot;
+    UILabel *_connectionLabel;
+    UISegmentedControl *_modeSegment;
+    UIView *_workspaceContainer;
+    UIView *_embedHostView;
+
+    BTIdleHubView *_idleHubView;
+    BTNowPlayingView *_nowPlayingView;
+    BTVideoSurfaceView *_videoSurfaceView;
+    BTQuickActionsView *_quickActionsView;
+    BTWorkerStatusView *_workerStatusView;
+    BTHistoryPanelView *_historyPanelView;
+    BTSettingsView *_settingsView;
+    BTNotificationOverlayView *_notificationOverlay;
+
+    NSLayoutConstraint *_workspaceTopToBar;
+    NSLayoutConstraint *_workspaceTopToView;
+    NSArray<NSLayoutConstraint *> *_compactVideoConstraints;
+    NSArray<NSLayoutConstraint *> *_fullscreenVideoConstraints;
+
+    BTDirectMediaPlayer *_directPlayer;
+    BTYouTubeEmbedController *_embedController;
+
+    BTWorkspaceMode _workspaceMode;
+    BOOL _usbConnected;
+    NSString *_connectionText;
+    NSString *_focusPolicy;
+    NSDictionary *_latestHostMediaState;
+    NSDictionary *_latestPlayerSnapshot;
+    NSDictionary *_latestJob;
+    NSArray<NSDictionary *> *_actions;
+    NSMutableArray<NSDictionary *> *_events;
+    NSString *_embedSessionId;
+    uint64_t _embedGeneration;
     NSUInteger _memoryWarningGeneration;
-    AVPlayer *_player;
+    BOOL _autoEnteredVideoForSession;
+    NSString *_autoEnteredSessionId;
+    NSTimer *_telemetryPollTimer;
 }
-- (UILabel *)label:(CGFloat)size {
-    UILabel *l=[UILabel new];l.font=[UIFont systemFontOfSize:size];l.textColor=UIColor.whiteColor;l.numberOfLines=2;return l;
+
+- (void)dealloc {
+    [_telemetryPollTimer invalidate];
 }
-- (UIButton *)button:(NSString *)title selector:(SEL)selector {
-    UIButton *b=[UIButton buttonWithType:UIButtonTypeSystem];[b setTitle:title forState:UIControlStateNormal];b.titleLabel.font=[UIFont systemFontOfSize:18 weight:UIFontWeightSemibold];[b setTitleColor:[UIColor colorWithRed:.35 green:.82 blue:.76 alpha:1] forState:UIControlStateNormal];[b.heightAnchor constraintGreaterThanOrEqualToConstant:44].active=YES;[b addTarget:self action:selector forControlEvents:UIControlEventTouchUpInside];return b;
+
+- (void)setAgent:(BTAgent *)agent {
+    _agent = agent;
+    if (!agent) return;
+    if (self.isViewLoaded) {
+        [self bindAgent:agent];
+    }
 }
+
+- (void)bindAgent:(BTAgent *)agent {
+    if (!agent) return;
+    if (!_directPlayer) {
+        _directPlayer = [[BTDirectMediaPlayer alloc] initWithAgent:agent];
+        __weak typeof(self) weakSelf = self;
+        _directPlayer.stateUpdated = ^(NSDictionary *snapshot) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [weakSelf handleDirectPlayerSnapshot:snapshot];
+            });
+        };
+    }
+
+    BTDirectMediaPlayer *playerRef = _directPlayer;
+    agent.mediaSyncProvider = ^NSDictionary *(NSDictionary *hostSync) {
+        (void)hostSync;
+        return [playerRef syncSnapshot];
+    };
+
+    BTBufferedMediaEngine *bufferedRef = _directPlayer.bufferedEngine;
+    agent.bufferedChunkReceived = ^(NSString *streamId, uint64_t offset, NSData *bytes) {
+        [bufferedRef ingestChunkForStreamId:streamId offset:offset bytes:bytes];
+    };
+
+    if (_videoSurfaceView) {
+        [_videoSurfaceView attachPlayerLayer:_directPlayer.playerLayer];
+    }
+}
+
 - (void)viewDidLoad {
-    [super viewDidLoad];self.view.backgroundColor=[UIColor colorWithWhite:.055 alpha:1];_events=[NSMutableArray new];
-    _connection=[self label:12];_connection.text=@"BackThread · waiting for USB host";_connection.textColor=[UIColor colorWithWhite:.6 alpha:1];
-    UIButton *settings=[self button:@"Pair" selector:@selector(pair)];
-    UIStackView *top=[[UIStackView alloc] initWithArrangedSubviews:@[_connection,settings]];top.distribution=UIStackViewDistributionEqualSpacing;
-    _art=[UIImageView new];_art.backgroundColor=[UIColor colorWithWhite:.12 alpha:1];_art.contentMode=UIViewContentModeScaleAspectFit;_art.layer.cornerRadius=8;_art.clipsToBounds=YES;[_art.widthAnchor constraintEqualToConstant:110].active=YES;[_art.heightAnchor constraintEqualToConstant:110].active=YES;
-    _title=[self label:23];_title.font=[UIFont systemFontOfSize:23 weight:UIFontWeightSemibold];_title.text=@"Ready when you are";
-    _artist=[self label:16];_artist.text=@"Play media on Windows to begin";_artist.textColor=[UIColor colorWithWhite:.7 alpha:1];_source=[self label:11];
-    UIStackView *metadata=[[UIStackView alloc] initWithArrangedSubviews:@[_title,_artist,_source]];metadata.axis=UILayoutConstraintAxisVertical;metadata.spacing=6;
-    UIStackView *track=[[UIStackView alloc] initWithArrangedSubviews:@[_art,metadata]];track.spacing=20;track.alignment=UIStackViewAlignmentCenter;
-    _previous=[self button:@"Previous" selector:@selector(previous)];_play=[self button:@"Play / Pause" selector:@selector(toggle)];_next=[self button:@"Next" selector:@selector(next)];
-    _previous.enabled=_play.enabled=_next.enabled=NO;
-    UIStackView *controls=[[UIStackView alloc] initWithArrangedSubviews:@[_previous,_play,_next]];controls.distribution=UIStackViewDistributionFillEqually;
-    _seek=[UISlider new];_seek.enabled=NO;[_seek addTarget:self action:@selector(seek) forControlEvents:UIControlEventTouchUpInside|UIControlEventTouchUpOutside];_timeline=[self label:11];
-    MPVolumeView *volume=[[MPVolumeView alloc] initWithFrame:CGRectZero];volume.showsRouteButton=YES;[volume.heightAnchor constraintEqualToConstant:30].active=YES;
-    _media=[[UIStackView alloc] initWithArrangedSubviews:@[track,controls,_seek,_timeline,volume]];_media.axis=UILayoutConstraintAxisVertical;_media.spacing=4;
-    _actions=[UIStackView new];_actions.axis=UILayoutConstraintAxisVertical;_actions.spacing=4;
-    _workerStatus=[self label:18];_workerStatus.text=@"No background jobs";UIButton *cancel=[self button:@"Cancel active job" selector:@selector(cancel)];_worker=[[UIStackView alloc] initWithArrangedSubviews:@[_workerStatus,cancel]];_worker.axis=UILayoutConstraintAxisVertical;
-    _history=[UIStackView new];_history.axis=UILayoutConstraintAxisVertical;_history.spacing=8;
-    _tabs=[[UISegmentedControl alloc] initWithItems:@[@"Media",@"Actions",@"Worker",@"History"]];_tabs.selectedSegmentIndex=0;_tabs.tintColor=[UIColor colorWithRed:.35 green:.82 blue:.76 alpha:1];[_tabs addTarget:self action:@selector(tab) forControlEvents:UIControlEventValueChanged];
-    UIStackView *content=[[UIStackView alloc] initWithArrangedSubviews:@[_media,_actions,_worker,_history]];content.axis=UILayoutConstraintAxisVertical;
-    UIScrollView *scroll=[UIScrollView new];[scroll addSubview:content];content.translatesAutoresizingMaskIntoConstraints=NO;
-    UIStackView *root=[[UIStackView alloc] initWithArrangedSubviews:@[top,scroll,_tabs]];root.axis=UILayoutConstraintAxisVertical;root.spacing=8;root.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:root];
-    [NSLayoutConstraint activateConstraints:@[[root.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor constant:16],[root.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor constant:-16],[root.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8],[root.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-8],[content.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor],[content.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor],[content.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor],[content.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor],[content.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor]]];
-    _notice=[UIView new];_notice.backgroundColor=[UIColor colorWithWhite:.1 alpha:.98];_notice.layer.cornerRadius=12;_notice.hidden=YES;_notice.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:_notice];
-    _noticeTitle=[self label:24];_noticeBody=[self label:17];_noticeBody.numberOfLines=5;UIButton *dismiss=[self button:@"Dismiss" selector:@selector(dismissNotice)];UIStackView *noticeStack=[[UIStackView alloc] initWithArrangedSubviews:@[_noticeTitle,_noticeBody,dismiss]];noticeStack.axis=UILayoutConstraintAxisVertical;noticeStack.spacing=12;noticeStack.translatesAutoresizingMaskIntoConstraints=NO;[_notice addSubview:noticeStack];
-    _noticeCenter=[_notice.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor];_noticeTop=[_notice.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8];_noticeBottom=[_notice.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-8];
-    [NSLayoutConstraint activateConstraints:@[[_notice.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor constant:12],[_notice.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor constant:-12],_noticeCenter,[noticeStack.leadingAnchor constraintEqualToAnchor:_notice.leadingAnchor constant:20],[noticeStack.trailingAnchor constraintEqualToAnchor:_notice.trailingAnchor constant:-20],[noticeStack.topAnchor constraintEqualToAnchor:_notice.topAnchor constant:16],[noticeStack.bottomAnchor constraintEqualToAnchor:_notice.bottomAnchor constant:-16]]];
-    UISwipeGestureRecognizer *swipe=[[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(dismissNotice)];swipe.direction=UISwipeGestureRecognizerDirectionUp;[_notice addGestureRecognizer:swipe];[self tab];
+    [super viewDidLoad];
+    self.view.backgroundColor = [BTTheme canvasColor];
+    _events = [NSMutableArray new];
+    _actions = @[];
+    _latestHostMediaState = @{};
+    _latestPlayerSnapshot = @{@"independentActive": @NO};
+    _connectionText = @"Waiting for USB host";
+    _focusPolicy = @"Auto";
+    _workspaceMode = BTWorkspaceMedia;
+
+    [self setupTopBar];
+    [self setupWorkspaceViews];
+    [self setupVideoSurfaceAndOverlay];
+
+    if (_agent) {
+        [self bindAgent:_agent];
+    }
+
+    [self switchWorkspaceMode:BTWorkspaceMedia];
+
+    __weak typeof(self) weakSelf = self;
+    _telemetryPollTimer = [NSTimer scheduledTimerWithTimeInterval:2.0 repeats:YES block:^(NSTimer *timer) {
+        (void)timer;
+        [weakSelf refreshAuxiliaryDiagnostics];
+    }];
 }
-- (NSDate *)expiry:(NSDictionary *)event { NSISO8601DateFormatter *f=[NSISO8601DateFormatter new];f.formatOptions=NSISO8601DateFormatWithInternetDateTime|NSISO8601DateFormatWithFractionalSeconds;NSDate *date=[f dateFromString:event[@"expiresUtc"]?:@""];if(!date){f.formatOptions=NSISO8601DateFormatWithInternetDateTime;date=[f dateFromString:event[@"expiresUtc"]?:@""];}return date; }
-- (void)refreshHistory {
-    NSIndexSet *expired=[_events indexesOfObjectsPassingTest:^BOOL(NSDictionary *event,NSUInteger i,BOOL *stop){(void)i;(void)stop;NSDate *date=[self expiry:event];return !date||date.timeIntervalSinceNow<=0;}];[_events removeObjectsAtIndexes:expired];
-    for(UIView *v in [_history.arrangedSubviews copy]){[_history removeArrangedSubview:v];[v removeFromSuperview];}
-    for(NSDictionary *event in [_events reverseObjectEnumerator]){UILabel *l=[self label:14];l.text=[NSString stringWithFormat:@"%@ · %@\n%@",event[@"source"],event[@"title"],event[@"body"]];[_history addArrangedSubview:l];}
+
+- (void)setupTopBar {
+    _topBar = [UIView new];
+    _topBar.backgroundColor = [BTTheme surfaceColor];
+    _topBar.layer.borderWidth = 1.0 / UIScreen.mainScreen.scale;
+    _topBar.layer.borderColor = [BTTheme hairlineColor].CGColor;
+    _topBar.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:_topBar];
+
+    _statusDot = [UIView new];
+    _statusDot.backgroundColor = [BTTheme accentAmber];
+    _statusDot.layer.cornerRadius = 4;
+    _statusDot.translatesAutoresizingMaskIntoConstraints = NO;
+    [_statusDot.widthAnchor constraintEqualToConstant:8].active = YES;
+    [_statusDot.heightAnchor constraintEqualToConstant:8].active = YES;
+
+    _connectionLabel = [BTTheme labelWithSize:12 weight:UIFontWeightSemibold color:[BTTheme textPrimary]];
+    _connectionLabel.text = _connectionText;
+    [_connectionLabel setContentCompressionResistancePriority:UILayoutPriorityDefaultLow forAxis:UILayoutConstraintAxisHorizontal];
+
+    UIStackView *statusRow = [[UIStackView alloc] initWithArrangedSubviews:@[_statusDot, _connectionLabel]];
+    statusRow.axis = UILayoutConstraintAxisHorizontal;
+    statusRow.alignment = UIStackViewAlignmentCenter;
+    statusRow.spacing = 6;
+
+    _modeSegment = [[UISegmentedControl alloc] initWithItems:@[@"Hub", @"Media", @"PiP", @"Actions", @"Jobs", @"History", @"Setup"]];
+    _modeSegment.selectedSegmentIndex = 1;
+    _modeSegment.tintColor = [BTTheme accentTeal];
+    [_modeSegment setTitleTextAttributes:@{NSFontAttributeName: [UIFont systemFontOfSize:11 weight:UIFontWeightSemibold]} forState:UIControlStateNormal];
+    [_modeSegment addTarget:self action:@selector(segmentChanged) forControlEvents:UIControlEventValueChanged];
+    [_modeSegment setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+
+    _topBarStack = [[UIStackView alloc] initWithArrangedSubviews:@[statusRow, _modeSegment]];
+    _topBarStack.axis = UILayoutConstraintAxisHorizontal;
+    _topBarStack.alignment = UIStackViewAlignmentCenter;
+    _topBarStack.distribution = UIStackViewDistributionFill;
+    _topBarStack.spacing = 10;
+    _topBarStack.translatesAutoresizingMaskIntoConstraints = NO;
+    [_topBar addSubview:_topBarStack];
+
+    UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
+    [NSLayoutConstraint activateConstraints:@[
+        [_topBar.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [_topBar.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [_topBar.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+
+        [_topBarStack.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:10],
+        [_topBarStack.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-10],
+        [_topBarStack.topAnchor constraintEqualToAnchor:safe.topAnchor constant:4],
+        [_topBarStack.bottomAnchor constraintEqualToAnchor:_topBar.bottomAnchor constant:-6]
+    ]];
 }
-- (void)tab { _media.hidden=_tabs.selectedSegmentIndex!=0;_actions.hidden=_tabs.selectedSegmentIndex!=1;_worker.hidden=_tabs.selectedSegmentIndex!=2;_history.hidden=_tabs.selectedSegmentIndex!=3;if(!_history.hidden)[self refreshHistory]; }
-- (void)mediaCommand:(NSString *)command { NSMutableDictionary *body=[@{@"command":command} mutableCopy];if([_session[@"source"] isKindOfClass:NSString.class])body[@"source"]=_session[@"source"];[self.agent command:@"media.command" body:body]; }
-- (void)toggle { [self mediaCommand:@"toggle"]; }
-- (void)previous { [self mediaCommand:@"previous"]; }
-- (void)next { [self mediaCommand:@"next"]; }
-- (void)seek { [self.agent command:@"media.command" body:@{@"command":@"seek",@"seconds":@(_seek.value),@"source":_session[@"source"]?:@""}]; }
-- (void)cancel { if(_lastJob)[self.agent command:@"job.cancel" body:@{@"jobId":_lastJob}]; }
-- (void)action:(UIButton *)button { [self.agent command:@"action.invoke" body:@{@"actionId":button.accessibilityIdentifier?:@""}]; }
-- (void)dismissNotice { [_noticeTimer invalidate];_noticeTimer=nil;_notice.hidden=YES; }
+
+- (void)setupWorkspaceViews {
+    _workspaceContainer = [UIView new];
+    _workspaceContainer.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:_workspaceContainer];
+
+    _workspaceTopToBar = [_workspaceContainer.topAnchor constraintEqualToAnchor:_topBar.bottomAnchor];
+    _workspaceTopToView = [_workspaceContainer.topAnchor constraintEqualToAnchor:self.view.topAnchor];
+    [NSLayoutConstraint activateConstraints:@[
+        _workspaceTopToBar,
+        [_workspaceContainer.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor],
+        [_workspaceContainer.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor],
+        [_workspaceContainer.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor]
+    ]];
+
+    __weak typeof(self) weakSelf = self;
+
+    _idleHubView = [BTIdleHubView new];
+    _idleHubView.onNavigateMode = ^(NSString *modeKey) {
+        if ([modeKey isEqualToString:@"media"]) [weakSelf switchWorkspaceMode:BTWorkspaceMedia];
+        else if ([modeKey isEqualToString:@"actions"]) [weakSelf switchWorkspaceMode:BTWorkspaceActions];
+        else if ([modeKey isEqualToString:@"history"]) [weakSelf switchWorkspaceMode:BTWorkspaceHistory];
+    };
+    _idleHubView.onActionInvoked = ^(NSString *actionId) {
+        [weakSelf invokeQuickAction:actionId];
+    };
+
+    _nowPlayingView = [BTNowPlayingView new];
+    _nowPlayingView.onPlayPauseTapped = ^{ [weakSelf handlePlayPause]; };
+    _nowPlayingView.onPreviousTapped = ^{ [weakSelf sendWindowsMediaCommand:@"previous" seconds:0]; };
+    _nowPlayingView.onNextTapped = ^{ [weakSelf sendWindowsMediaCommand:@"next" seconds:0]; };
+    _nowPlayingView.onSeekCommitted = ^(double seconds) { [weakSelf handleSeek:seconds]; };
+    _nowPlayingView.onReturnToWindowsTapped = ^{ [weakSelf handleReturnToWindows]; };
+    _nowPlayingView.onOpenVideoFocusTapped = ^{ [weakSelf switchWorkspaceMode:BTWorkspaceVideoFocus]; };
+    _nowPlayingView.onFocusPolicySelected = ^(NSString *policy) { [weakSelf applyLocalFocusPolicy:policy]; };
+    _nowPlayingView.onQualityCapSelected = ^(NSString *cap) { [weakSelf applyQualityCap:cap]; };
+    _nowPlayingView.onKeepAwakeToggled = ^(BOOL awake) { [weakSelf applyKeepAwake:awake]; };
+
+    _quickActionsView = [BTQuickActionsView new];
+    _quickActionsView.onActionInvoked = ^(NSString *actionId) {
+        [weakSelf invokeQuickAction:actionId];
+    };
+
+    _workerStatusView = [BTWorkerStatusView new];
+    _workerStatusView.onCancelJobTapped = ^(NSString *jobId) {
+        [weakSelf.agent command:@"job.cancel" body:@{@"jobId": jobId}];
+    };
+
+    _historyPanelView = [BTHistoryPanelView new];
+    _historyPanelView.onClearTapped = ^{
+        [weakSelf clearNotificationHistory];
+    };
+    _historyPanelView.onReplayFullscreenTapped = ^(NSDictionary *event) {
+        BTViewController *strong = weakSelf;
+        if (!strong) return;
+        NSMutableDictionary *replay = [event mutableCopy];
+        replay[@"priority"] = @3;
+        [strong->_notificationOverlay presentNotification:replay expiresInterval:30.0];
+        [strong setNeedsStatusBarAppearanceUpdate];
+    };
+
+    _settingsView = [BTSettingsView new];
+    _settingsView.onPairTapped = ^{ [weakSelf pair]; };
+    _settingsView.onEvictCacheTapped = ^{
+        BTViewController *strong = weakSelf;
+        BTDirectMediaPlayer *p = strong ? strong->_directPlayer : nil;
+        [p handleMemoryPressure];
+    };
+    _settingsView.onClearHistoryTapped = ^{
+        [weakSelf clearNotificationHistory];
+    };
+
+    for (UIView *panel in @[_idleHubView, _nowPlayingView, _quickActionsView, _workerStatusView, _historyPanelView, _settingsView]) {
+        panel.translatesAutoresizingMaskIntoConstraints = NO;
+        [_workspaceContainer addSubview:panel];
+        [NSLayoutConstraint activateConstraints:@[
+            [panel.leadingAnchor constraintEqualToAnchor:_workspaceContainer.leadingAnchor],
+            [panel.trailingAnchor constraintEqualToAnchor:_workspaceContainer.trailingAnchor],
+            [panel.topAnchor constraintEqualToAnchor:_workspaceContainer.topAnchor],
+            [panel.bottomAnchor constraintEqualToAnchor:_workspaceContainer.bottomAnchor]
+        ]];
+    }
+
+    _embedHostView = [UIView new];
+    _embedHostView.hidden = YES;
+    _embedHostView.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:_embedHostView];
+    [NSLayoutConstraint activateConstraints:@[
+        [_embedHostView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [_embedHostView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [_embedHostView.topAnchor constraintEqualToAnchor:_topBar.bottomAnchor],
+        [_embedHostView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]
+    ]];
+}
+
+- (void)setupVideoSurfaceAndOverlay {
+    __weak typeof(self) weakSelf = self;
+
+    _videoSurfaceView = [BTVideoSurfaceView new];
+    _videoSurfaceView.translatesAutoresizingMaskIntoConstraints = NO;
+    _videoSurfaceView.onPlayPauseTapped = ^{ [weakSelf handlePlayPause]; };
+    _videoSurfaceView.onSeekCommitted = ^(double seconds) { [weakSelf handleSeek:seconds]; };
+    _videoSurfaceView.onReturnToWindowsTapped = ^{ [weakSelf handleReturnToWindows]; };
+    _videoSurfaceView.onExpandFocusTapped = ^{ [weakSelf switchWorkspaceMode:BTWorkspaceVideoFocus]; };
+    _videoSurfaceView.onCloseFocusTapped = ^{ [weakSelf switchWorkspaceMode:BTWorkspaceMedia]; };
+    _videoSurfaceView.onAmbientToggleTapped = ^{
+        BTViewController *strong = weakSelf;
+        if (!strong) return;
+        [strong switchWorkspaceMode:strong->_workspaceMode == BTWorkspaceAmbient ? BTWorkspaceVideoFocus : BTWorkspaceAmbient];
+    };
+    [self.view addSubview:_videoSurfaceView];
+
+    UIView *slot = _nowPlayingView.videoSlotView;
+    _compactVideoConstraints = @[
+        [_videoSurfaceView.leadingAnchor constraintEqualToAnchor:slot.leadingAnchor],
+        [_videoSurfaceView.trailingAnchor constraintEqualToAnchor:slot.trailingAnchor],
+        [_videoSurfaceView.topAnchor constraintEqualToAnchor:slot.topAnchor],
+        [_videoSurfaceView.bottomAnchor constraintEqualToAnchor:slot.bottomAnchor]
+    ];
+    _fullscreenVideoConstraints = @[
+        [_videoSurfaceView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [_videoSurfaceView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [_videoSurfaceView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [_videoSurfaceView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]
+    ];
+
+    _notificationOverlay = [BTNotificationOverlayView new];
+    _notificationOverlay.translatesAutoresizingMaskIntoConstraints = NO;
+    _notificationOverlay.onDismissed = ^(NSInteger priority) {
+        (void)priority;
+        BTViewController *strong = weakSelf;
+        if (!strong) return;
+        [strong setNeedsStatusBarAppearanceUpdate];
+        if (@available(iOS 11.0, *)) {
+            [strong setNeedsUpdateOfHomeIndicatorAutoHidden];
+        }
+    };
+    [self.view addSubview:_notificationOverlay];
+    [NSLayoutConstraint activateConstraints:@[
+        [_notificationOverlay.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [_notificationOverlay.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [_notificationOverlay.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [_notificationOverlay.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]
+    ]];
+}
+
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    BOOL wide = self.view.bounds.size.width >= 520.0;
+    UILayoutConstraintAxis target = wide ? UILayoutConstraintAxisHorizontal : UILayoutConstraintAxisVertical;
+    if (_topBarStack.axis != target) {
+        _topBarStack.axis = target;
+        _topBarStack.alignment = wide ? UIStackViewAlignmentCenter : UIStackViewAlignmentFill;
+        _topBarStack.spacing = wide ? 10 : 4;
+    }
+}
+
+- (BOOL)prefersStatusBarHidden {
+    if (_notificationOverlay.fullscreenActive) return NO;
+    return _workspaceMode == BTWorkspaceVideoFocus || _workspaceMode == BTWorkspaceAmbient;
+}
+
+- (BOOL)prefersHomeIndicatorAutoHidden {
+    if (_notificationOverlay.fullscreenActive) return NO;
+    return _workspaceMode == BTWorkspaceVideoFocus || _workspaceMode == BTWorkspaceAmbient;
+}
+
+- (void)segmentChanged {
+    switch (_modeSegment.selectedSegmentIndex) {
+        case 0: [self switchWorkspaceMode:BTWorkspaceHub]; break;
+        case 1: [self switchWorkspaceMode:BTWorkspaceMedia]; break;
+        case 2: [self switchWorkspaceMode:BTWorkspaceVideoFocus]; break;
+        case 3: [self switchWorkspaceMode:BTWorkspaceActions]; break;
+        case 4: [self switchWorkspaceMode:BTWorkspaceWorker]; break;
+        case 5: [self switchWorkspaceMode:BTWorkspaceHistory]; break;
+        case 6: [self switchWorkspaceMode:BTWorkspaceSettings]; break;
+        default: break;
+    }
+}
+
+- (void)switchWorkspaceMode:(BTWorkspaceMode)mode {
+    _workspaceMode = mode;
+
+    BOOL fullscreen = (mode == BTWorkspaceVideoFocus || mode == BTWorkspaceAmbient);
+    _topBar.hidden = fullscreen;
+    _workspaceTopToBar.active = !fullscreen;
+    _workspaceTopToView.active = fullscreen;
+
+    _idleHubView.hidden = (mode != BTWorkspaceHub);
+    _nowPlayingView.hidden = (mode != BTWorkspaceMedia);
+    _quickActionsView.hidden = (mode != BTWorkspaceActions);
+    _workerStatusView.hidden = (mode != BTWorkspaceWorker);
+    _historyPanelView.hidden = (mode != BTWorkspaceHistory);
+    _settingsView.hidden = (mode != BTWorkspaceSettings);
+
+    NSInteger seg = UISegmentedControlNoSegment;
+    switch (mode) {
+        case BTWorkspaceHub: seg = 0; break;
+        case BTWorkspaceMedia: seg = 1; break;
+        case BTWorkspaceVideoFocus:
+        case BTWorkspaceAmbient: seg = 2; break;
+        case BTWorkspaceActions: seg = 3; break;
+        case BTWorkspaceWorker: seg = 4; break;
+        case BTWorkspaceHistory: seg = 5; break;
+        case BTWorkspaceSettings: seg = 6; break;
+    }
+    _modeSegment.selectedSegmentIndex = seg;
+
+    BOOL independentVideo = _directPlayer.independentActive && _directPlayer.hasVideoTrack;
+    BOOL showVideoSurface = fullscreen || (mode == BTWorkspaceMedia && independentVideo && !_embedController);
+
+    [NSLayoutConstraint deactivateConstraints:_compactVideoConstraints];
+    [NSLayoutConstraint deactivateConstraints:_fullscreenVideoConstraints];
+
+    if (fullscreen) {
+        [NSLayoutConstraint activateConstraints:_fullscreenVideoConstraints];
+        _videoSurfaceView.presentationMode = (mode == BTWorkspaceAmbient) ? BTVideoPresentationAmbient : BTVideoPresentationFocus;
+        _videoSurfaceView.hidden = NO;
+    } else if (showVideoSurface) {
+        [NSLayoutConstraint activateConstraints:_compactVideoConstraints];
+        _videoSurfaceView.presentationMode = BTVideoPresentationCompact;
+        _videoSurfaceView.hidden = NO;
+    } else {
+        _videoSurfaceView.hidden = YES;
+    }
+
+    if (!_embedHostView.hidden) {
+        [self.view bringSubviewToFront:_embedHostView];
+    }
+    if (!fullscreen) {
+        [self.view bringSubviewToFront:_topBar];
+    }
+    [self.view bringSubviewToFront:_notificationOverlay];
+
+    [self setNeedsStatusBarAppearanceUpdate];
+    if (@available(iOS 11.0, *)) {
+        [self setNeedsUpdateOfHomeIndicatorAutoHidden];
+    }
+}
+
+- (void)handlePlayPause {
+    if (_directPlayer.independentActive) {
+        [_directPlayer togglePlayPause];
+    } else {
+        [self sendWindowsMediaCommand:@"toggle" seconds:0];
+    }
+}
+
+- (void)handleSeek:(double)seconds {
+    if (_directPlayer.independentActive) {
+        [_directPlayer seekToSeconds:seconds];
+    } else {
+        [self sendWindowsMediaCommand:@"seek" seconds:seconds];
+    }
+}
+
+- (void)sendWindowsMediaCommand:(NSString *)command seconds:(double)seconds {
+    NSDictionary *session = [_latestHostMediaState[@"session"] isKindOfClass:NSDictionary.class] ? _latestHostMediaState[@"session"] : @{};
+    NSMutableDictionary *body = [@{@"command": command} mutableCopy];
+    if ([command isEqualToString:@"seek"]) body[@"seconds"] = @(seconds);
+    if ([session[@"source"] isKindOfClass:NSString.class]) body[@"source"] = session[@"source"];
+    [self.agent command:@"media.command" body:body];
+}
+
+- (void)handleReturnToWindows {
+    double pos = 0;
+    if (_embedController) {
+        [self teardownYouTubeEmbed];
+    } else {
+        pos = [_directPlayer stopAndReturnToWindows];
+    }
+    [self.agent sendMediaMessage:@"media.return_to_windows" body:@{
+        @"resumeWindows": @YES,
+        @"positionSeconds": @(pos)
+    }];
+    if (_workspaceMode == BTWorkspaceVideoFocus || _workspaceMode == BTWorkspaceAmbient) {
+        [self switchWorkspaceMode:BTWorkspaceMedia];
+    }
+}
+
+- (void)applyLocalFocusPolicy:(NSString *)policy {
+    _focusPolicy = [policy copy] ?: @"Auto";
+    BOOL mute = [_focusPolicy isEqualToString:@"KeepVideoMuteAudio"] || [_focusPolicy isEqualToString:@"LivePcmOnly"];
+    BOOL duck = [_focusPolicy isEqualToString:@"DuckVideo"] || [_focusPolicy isEqualToString:@"LivePcmPrioritized"];
+    float vol = mute ? 0.0f : (duck ? 0.35f : 1.0f);
+    [[BTAudioSessionCoordinator sharedCoordinator] updateFocusPolicy:_focusPolicy muteIndependent:mute independentVolume:vol duck:duck];
+    [_directPlayer applyAudioFocusMute:mute volume:vol];
+    [self.agent sendMediaMessage:@"media.focus.set" body:@{@"policy": _focusPolicy}];
+    [self refreshMediaUI];
+}
+
+- (void)applyQualityCap:(NSString *)cap {
+    [_directPlayer applyQualityCap:cap];
+    [self refreshMediaUI];
+}
+
+- (void)applyKeepAwake:(BOOL)awake {
+    _directPlayer.keepScreenAwake = awake;
+    [self refreshMediaUI];
+}
+
+- (void)invokeQuickAction:(NSString *)actionId {
+    if (!actionId.length) return;
+    [self.agent command:@"action.invoke" body:@{@"actionId": actionId}];
+}
+
+- (void)handleDirectPlayerSnapshot:(NSDictionary *)snapshot {
+    _latestPlayerSnapshot = snapshot ?: @{@"independentActive": @NO};
+    [_videoSurfaceView updateWithSnapshot:_latestPlayerSnapshot usbConnected:_usbConnected];
+
+    NSString *sid = BTSafeStr(_latestPlayerSnapshot[@"sessionId"], @"");
+    BOOL active = [_latestPlayerSnapshot[@"independentActive"] boolValue];
+    BOOL hasVideo = [_latestPlayerSnapshot[@"readyForDisplay"] boolValue] || [_latestPlayerSnapshot[@"videoWidth"] intValue] > 0;
+    if (active && hasVideo && sid.length && ![sid isEqualToString:_autoEnteredSessionId]) {
+        _autoEnteredSessionId = [sid copy];
+        _autoEnteredVideoForSession = YES;
+        [self switchWorkspaceMode:BTWorkspaceVideoFocus];
+    } else if (_workspaceMode == BTWorkspaceMedia) {
+        [self switchWorkspaceMode:BTWorkspaceMedia];
+    }
+
+    [self refreshMediaUI];
+}
+
+- (void)presentYouTubeEmbedFromPayload:(NSDictionary *)body {
+    [self teardownYouTubeEmbed];
+    NSURL *url = [NSURL URLWithString:BTSafeStr(body[@"url"], @"")];
+    if (!url) return;
+
+    _embedSessionId = [BTSafeStr(body[@"sessionId"], @"") copy];
+    _embedGeneration = [body[@"generation"] unsignedLongLongValue];
+    NSString *title = BTSafeStr(body[@"title"], @"YouTube Embed");
+
+    [[BTAudioSessionCoordinator sharedCoordinator] activateForIndependentMedia:nil];
+
+    BTYouTubeEmbedController *embed = [[BTYouTubeEmbedController alloc] initWithEmbedURL:url
+                                                                                   title:title
+                                                                               sessionId:_embedSessionId
+                                                                              generation:_embedGeneration];
+    __weak typeof(self) weakSelf = self;
+    embed.onConfirmed = ^(NSString *sid, uint64_t gen) {
+        [weakSelf.agent sendMediaMessage:@"media.handoff.status" body:@{
+            @"sessionId": sid,
+            @"generation": @(gen),
+            @"stage": @"confirmed",
+            @"isPlaying": @YES,
+            @"readyForDisplay": @YES
+        }];
+    };
+    embed.onFallbackRequested = ^(NSString *sid, uint64_t gen, NSString *reason) {
+        BTViewController *strong = weakSelf;
+        if (!strong) return;
+        [strong teardownYouTubeEmbed];
+        [strong.agent sendMediaMessage:@"media.handoff.status" body:@{
+            @"sessionId": sid,
+            @"generation": @(gen),
+            @"stage": @"returned",
+            @"reason": reason ?: @"Embed closed",
+            @"fallbackSuggested": @YES
+        }];
+        [strong.agent sendMediaMessage:@"media.return_to_windows" body:@{@"resumeWindows": @YES}];
+        [strong refreshMediaUI];
+    };
+
+    _embedController = embed;
+    [self addChildViewController:embed];
+    embed.view.translatesAutoresizingMaskIntoConstraints = NO;
+    [_embedHostView addSubview:embed.view];
+    [NSLayoutConstraint activateConstraints:@[
+        [embed.view.leadingAnchor constraintEqualToAnchor:_embedHostView.leadingAnchor],
+        [embed.view.trailingAnchor constraintEqualToAnchor:_embedHostView.trailingAnchor],
+        [embed.view.topAnchor constraintEqualToAnchor:_embedHostView.topAnchor],
+        [embed.view.bottomAnchor constraintEqualToAnchor:_embedHostView.bottomAnchor]
+    ]];
+    [embed didMoveToParentViewController:self];
+    _embedHostView.hidden = NO;
+    [self.view bringSubviewToFront:_embedHostView];
+    [self.view bringSubviewToFront:_topBar];
+    [self.view bringSubviewToFront:_notificationOverlay];
+    [self refreshMediaUI];
+}
+
+- (void)teardownYouTubeEmbed {
+    if (!_embedController) return;
+    [_embedController willMoveToParentViewController:nil];
+    [_embedController.view removeFromSuperview];
+    [_embedController removeFromParentViewController];
+    _embedController = nil;
+    _embedHostView.hidden = YES;
+    _embedSessionId = nil;
+    _embedGeneration = 0;
+    [[BTAudioSessionCoordinator sharedCoordinator] deactivateIndependentMedia];
+}
+
 - (void)receive:(NSString *)type body:(NSDictionary *)body {
-    if(!self.isViewLoaded)[self loadViewIfNeeded];
-    if([type isEqual:@"connection"])_connection.text=[@"BackThread · " stringByAppendingString:BTText(body[@"state"],@"")];
-    else if([type isEqual:@"media.state"]) {
-        NSDictionary *s=body[@"session"];if(![s isKindOfClass:NSDictionary.class])s=@{};_session=s;
-        NSString *title=BTText(s[@"title"],@"");_title.text=title.length?title:@"Ready when you are";_artist.text=BTText(s[@"artist"],@"Play media on Windows to begin");_source.text=BTText(s[@"source"],@"");
-        [_play setTitle:[s[@"state"] isEqual:@"Playing"]?@"Pause":@"Play" forState:UIControlStateNormal];_play.enabled=s.count>0;_next.enabled=BTNumber(s[@"canNext"])!=0;_previous.enabled=BTNumber(s[@"canPrevious"])!=0;
-        if(!_seek.tracking){_seek.maximumValue=MAX(1,BTNumber(s[@"durationSeconds"]));_seek.value=BTNumber(s[@"positionSeconds"]);}_seek.enabled=BTNumber(s[@"canSeek"])!=0;
-        _timeline.text=[NSString stringWithFormat:@"%.0f / %.0f seconds",BTNumber(s[@"positionSeconds"]),BTNumber(s[@"durationSeconds"])];
-        NSString *art=s[@"artworkBase64"];
-        if([art isKindOfClass:NSString.class]&&art.length<=32000) {
-            if(![_artworkKey isEqual:art]) { _artworkKey=[art copy];NSData *data=[[NSData alloc] initWithBase64EncodedString:art options:0];CGImageSourceRef source=data?CGImageSourceCreateWithData((__bridge CFDataRef)data,NULL):NULL;_art.image=nil;
-                if(source){NSDictionary *options=@{(id)kCGImageSourceCreateThumbnailFromImageAlways:@YES,(id)kCGImageSourceThumbnailMaxPixelSize:@128,(id)kCGImageSourceCreateThumbnailWithTransform:@YES};CGImageRef image=CGImageSourceCreateThumbnailAtIndex(source,0,(__bridge CFDictionaryRef)options);if(image){_art.image=[UIImage imageWithCGImage:image];CGImageRelease(image);}CFRelease(source);}
+    if (!self.isViewLoaded) [self loadViewIfNeeded];
+    if (!_directPlayer && _agent) [self bindAgent:_agent];
+
+    if ([type isEqualToString:@"connection"]) {
+        NSString *state = BTSafeStr(body[@"state"], @"");
+        _usbConnected = [state isEqualToString:@"Connected"];
+        [_directPlayer setUsbConnected:_usbConnected];
+
+        if (_usbConnected) {
+            _statusDot.backgroundColor = [BTTheme accentGreen];
+            _connectionText = @"USB Connected";
+        } else if (_directPlayer.independentActive || _embedController != nil) {
+            _statusDot.backgroundColor = [BTTheme accentTeal];
+            _connectionText = @"Wi-Fi Independent · USB Away";
+        } else {
+            _statusDot.backgroundColor = [BTTheme accentAmber];
+            _connectionText = state.length ? state : @"Waiting for USB host";
+        }
+        _connectionLabel.text = _connectionText;
+        [self refreshAuxiliaryDiagnostics];
+    } else if ([type isEqualToString:@"media.state"]) {
+        _latestHostMediaState = body ?: @{};
+        [self refreshMediaUI];
+    } else if ([type isEqualToString:@"media.buffered.start"]) {
+        [_directPlayer prepareBufferedStream:body ?: @{}];
+    } else if ([type isEqualToString:@"media.buffered.eof"]) {
+        [_directPlayer.bufferedEngine markEndOfStreamForStreamId:BTSafeStr(body[@"streamId"], @"")];
+    } else if ([type isEqualToString:@"media.handoff"]) {
+        if ([body[@"experimentalEmbed"] boolValue]) {
+            [self presentYouTubeEmbedFromPayload:body];
+        } else {
+            [self teardownYouTubeEmbed];
+            [_directPlayer startHandoffWithPayload:body ?: @{}];
+        }
+    } else if ([type isEqualToString:@"media.handoff.cancel"]) {
+        [self teardownYouTubeEmbed];
+        [_directPlayer cancelHandoffWithReason:BTSafeStr(body[@"reason"], @"Cancelled by Windows")];
+        if (_workspaceMode == BTWorkspaceVideoFocus || _workspaceMode == BTWorkspaceAmbient) {
+            [self switchWorkspaceMode:BTWorkspaceMedia];
+        }
+    } else if ([type isEqualToString:@"media.return_to_windows"]) {
+        [self teardownYouTubeEmbed];
+        [_directPlayer stopAndReturnToWindows];
+        if (_workspaceMode == BTWorkspaceVideoFocus || _workspaceMode == BTWorkspaceAmbient) {
+            [self switchWorkspaceMode:BTWorkspaceMedia];
+        }
+    } else if ([type isEqualToString:@"media.focus.set"]) {
+        NSString *policy = BTSafeStr(body[@"policy"], @"Auto");
+        _focusPolicy = [policy copy];
+        BOOL mute = [body[@"muteVideoAudio"] boolValue];
+        BOOL duck = [body[@"duckVideo"] boolValue];
+        float vol = body[@"volume"] ? [body[@"volume"] floatValue] : (duck ? 0.35f : 1.0f);
+        [[BTAudioSessionCoordinator sharedCoordinator] updateFocusPolicy:policy muteIndependent:mute independentVolume:vol duck:duck];
+        [_directPlayer applyAudioFocusMute:mute volume:vol];
+        [self refreshMediaUI];
+    } else if ([type isEqualToString:@"media.mode.select"]) {
+        NSMutableDictionary *merged = [_latestHostMediaState mutableCopy] ?: [NSMutableDictionary new];
+        if (body[@"mode"]) merged[@"mode"] = body[@"mode"];
+        if (body[@"provider"]) merged[@"provider"] = body[@"provider"];
+        _latestHostMediaState = merged;
+        [self refreshMediaUI];
+    } else if ([type isEqualToString:@"media.command"]) {
+        [_directPlayer applyRemoteCommand:body ?: @{}];
+    } else if ([type isEqualToString:@"action.registry"]) {
+        NSArray *raw = [body[@"actions"] isKindOfClass:NSArray.class] ? body[@"actions"] : @[];
+        NSMutableArray *filtered = [NSMutableArray new];
+        for (id item in raw) {
+            if (filtered.count >= 32) break;
+            if ([item isKindOfClass:NSDictionary.class] && [item[@"id"] isKindOfClass:NSString.class] && [item[@"title"] isKindOfClass:NSString.class]) {
+                [filtered addObject:item];
             }
-        } else { _artworkKey=nil;_art.image=nil; }
+        }
+        _actions = filtered;
+        [_quickActionsView updateActions:_actions];
+        [self refreshAuxiliaryDiagnostics];
+    } else if ([type isEqualToString:@"job.progress"]) {
+        _latestJob = body ?: @{};
+        [self refreshAuxiliaryDiagnostics];
+    } else if ([type isEqualToString:@"event.publish"]) {
+        [self presentNotificationEvent:body ?: @{}];
+    } else if ([type isEqualToString:@"error"]) {
+        NSString *err = BTSafeStr(body[@"error"], @"The host rejected the request");
+        _connectionLabel.text = err;
+        [_quickActionsView showFeedbackText:err];
     }
-    else if([type isEqual:@"action.registry"]) {
-        for(UIView *v in [_actions.arrangedSubviews copy]){[_actions removeArrangedSubview:v];[v removeFromSuperview];}
-        NSArray *actions=body[@"actions"];if([actions isKindOfClass:NSArray.class])for(id a in actions){if(_actions.arrangedSubviews.count>=32)break;if(![a isKindOfClass:NSDictionary.class]||![a[@"id"] isKindOfClass:NSString.class]||![a[@"title"] isKindOfClass:NSString.class])continue;UIButton *button=[self button:a[@"title"] selector:@selector(action:)];button.accessibilityIdentifier=a[@"id"];[_actions addArrangedSubview:button];}
-    }
-    else if([type isEqual:@"job.progress"]) { _lastJob=body[@"jobId"];_workerStatus.text=[NSString stringWithFormat:@"%@ · %@ · %.0f%%\n%@",_lastJob,body[@"state"],[body[@"progress"] doubleValue]*100,body[@"error"]?:body[@"result"]?:@""]; }
-    else if([type isEqual:@"event.publish"]) {
-        [_events addObject:body];while(_events.count>64)[_events removeObjectAtIndex:0];
-        [self refreshHistory];
-        NSInteger priority=[body[@"priority"] integerValue];if(priority==0)return;
-        _noticeTitle.text=body[@"title"];_noticeBody.text=body[@"body"];_noticeBody.hidden=priority==1;_notice.hidden=NO;[_noticeTimer invalidate];
-        _noticeCenter.active=NO;_noticeTop.active=YES;_noticeBottom.active=priority>=2;_noticeTitle.font=[UIFont systemFontOfSize:priority>=2?24:16 weight:UIFontWeightSemibold];
-        NSTimeInterval visible=MIN(priority>=2?8:3,MAX(.1,[self expiry:body].timeIntervalSinceNow));_noticeTimer=[NSTimer scheduledTimerWithTimeInterval:visible target:self selector:@selector(dismissNotice) userInfo:nil repeats:NO];
-    }
-    else if([type isEqual:@"media.handoff"]) {
-        NSURL *url=[NSURL URLWithString:BTText(body[@"url"],@"")];
-        if(![url.scheme.lowercaseString isEqual:@"https"]||url.user||url.password){_connection.text=@"Handoff rejected: HTTPS media required";return;}
-        [_player pause];_player=[AVPlayer playerWithURL:url];[_player play];_connection.text=@"Direct media handed to AVPlayer; playback is unverified";
-    }
-    else if([type isEqual:@"error"])_connection.text=BTText(body[@"error"],@"The host rejected the request");
 }
+
+- (NSDate *)expiryForEvent:(NSDictionary *)event {
+    NSISO8601DateFormatter *f = [NSISO8601DateFormatter new];
+    f.formatOptions = NSISO8601DateFormatWithInternetDateTime | NSISO8601DateFormatWithFractionalSeconds;
+    NSDate *date = [f dateFromString:BTSafeStr(event[@"expiresUtc"], @"")];
+    if (!date) {
+        f.formatOptions = NSISO8601DateFormatWithInternetDateTime;
+        date = [f dateFromString:BTSafeStr(event[@"expiresUtc"], @"")];
+    }
+    return date;
+}
+
+- (void)pruneExpiredEvents {
+    NSIndexSet *expired = [_events indexesOfObjectsPassingTest:^BOOL(NSDictionary *ev, NSUInteger idx, BOOL *stop) {
+        (void)idx; (void)stop;
+        NSDate *exp = [self expiryForEvent:ev];
+        return !exp || exp.timeIntervalSinceNow <= 0;
+    }];
+    if (expired.count > 0) {
+        [_events removeObjectsAtIndexes:expired];
+    }
+}
+
+- (void)presentNotificationEvent:(NSDictionary *)event {
+    [_events addObject:event];
+    while (_events.count > 64) [_events removeObjectAtIndex:0];
+    [self pruneExpiredEvents];
+    [_historyPanelView updateWithEvents:_events];
+    [self refreshAuxiliaryDiagnostics];
+
+    NSInteger priority = [event[@"priority"] integerValue];
+    if (priority <= 0) return;
+
+    NSDate *exp = [self expiryForEvent:event];
+    NSTimeInterval remaining = exp ? exp.timeIntervalSinceNow : 8.0;
+    [_notificationOverlay presentNotification:event expiresInterval:remaining];
+    [self setNeedsStatusBarAppearanceUpdate];
+    if (@available(iOS 11.0, *)) {
+        [self setNeedsUpdateOfHomeIndicatorAutoHidden];
+    }
+}
+
+- (void)clearNotificationHistory {
+    [_events removeAllObjects];
+    [_historyPanelView updateWithEvents:@[]];
+    [self refreshAuxiliaryDiagnostics];
+}
+
+- (void)refreshMediaUI {
+    [_nowPlayingView updateWithHostMediaState:_latestHostMediaState
+                               playerSnapshot:_latestPlayerSnapshot
+                                 embedActive:(_embedController != nil)
+                                 focusPolicy:_focusPolicy];
+    [self refreshAuxiliaryDiagnostics];
+}
+
+- (void)refreshAuxiliaryDiagnostics {
+    [self pruneExpiredEvents];
+    NSDictionary *pcmStats = [_agent.audio statistics] ?: @{};
+    NSDictionary *sessionStatus = [[BTAudioSessionCoordinator sharedCoordinator] statusSnapshot];
+    NSDictionary *hostSession = [_latestHostMediaState[@"session"] isKindOfClass:NSDictionary.class]
+        ? _latestHostMediaState[@"session"]
+        : @{};
+    NSString *mediaTitle = [_latestPlayerSnapshot[@"independentActive"] boolValue]
+        ? BTSafeStr(_latestPlayerSnapshot[@"title"], @"External PiP")
+        : BTSafeStr(hostSession[@"title"], @"");
+    NSString *mediaMode = [_latestPlayerSnapshot[@"independentActive"] boolValue]
+        ? BTSafeStr(_latestPlayerSnapshot[@"mode"], @"DirectInternet")
+        : BTSafeStr(_latestHostMediaState[@"mode"], @"LivePcm");
+
+    [_idleHubView updateConnectionText:_connectionText
+                          usbConnected:_usbConnected
+                              pcmStats:pcmStats
+                           mediaTitle:mediaTitle
+                           mediaMode:mediaMode
+                              actions:_actions
+                              lastJob:_latestJob
+                         recentEvents:_events];
+
+    NSDictionary *bufInfo = @{
+        @"streamId": _directPlayer.bufferedEngine.activeStreamId ?: @"",
+        @"receivedBytes": @(_directPlayer.bufferedEngine.receivedBytes),
+        @"totalBytes": @(_directPlayer.bufferedEngine.totalBytes),
+        @"eofReached": @(_directPlayer.bufferedEngine.eofReached)
+    };
+    [_workerStatusView updateWithJob:_latestJob
+                      memoryPressure:_agent.memoryPressure
+                      bufferedStatus:bufInfo];
+
+    [_settingsView updateDiagnosticsWithConnection:_connectionText
+                                          pcmStats:pcmStats
+                                     sessionStatus:sessionStatus];
+}
+
 - (void)pair {
-    UIAlertController *alert=[UIAlertController alertControllerWithTitle:@"Provision host key" message:@"Paste the 64-character session key created by BackThread.Host. Save it, then close and reopen this app to use the key." preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *f){f.secureTextEntry=YES;f.autocorrectionType=UITextAutocorrectionTypeNo;f.autocapitalizationType=UITextAutocapitalizationTypeNone;}];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Provision host key"
+                                                                   message:@"Paste the 64-character session key created by BackThread.Host. Save it, then close and reopen this app to use the key."
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *f) {
+        f.secureTextEntry = YES;
+        f.autocorrectionType = UITextAutocorrectionTypeNo;
+        f.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    }];
     [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Save key" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a){(void)a;
-        NSString *key=alert.textFields.firstObject.text;NSCharacterSet *invalid=[[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdefABCDEF"] invertedSet];if(key.length!=64||[key rangeOfCharacterFromSet:invalid].location!=NSNotFound){self->_connection.text=@"Key must contain exactly 64 hexadecimal characters";return;}
-        NSString *dir=[NSHomeDirectory() stringByAppendingPathComponent:@"Library/BackThread"];[[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:@{NSFileProtectionKey:NSFileProtectionCompleteUntilFirstUserAuthentication} error:nil];NSString *path=[dir stringByAppendingPathComponent:@"session.key"];NSError *error=nil;
-        if(![key writeToFile:path atomically:YES encoding:NSASCIIStringEncoding error:&error]){self->_connection.text=error.localizedDescription;return;}
-        [[NSFileManager defaultManager] setAttributes:@{NSFilePosixPermissions:@0600,NSFileProtectionKey:NSFileProtectionCompleteUntilFirstUserAuthentication} ofItemAtPath:path error:nil];
-        self->_connection.text=@"Key saved. Close and reopen BackThread to start with the new key.";
-    }]];[self presentViewController:alert animated:YES completion:nil];
+    __weak typeof(self) weakSelf = self;
+    __weak UIAlertController *weakAlert = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"Save key" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        (void)a;
+        BTViewController *strong = weakSelf;
+        UIAlertController *strongAlert = weakAlert;
+        if (!strong || !strongAlert) return;
+        NSString *key = strongAlert.textFields.firstObject.text;
+        NSCharacterSet *invalid = [[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdefABCDEF"] invertedSet];
+        if (key.length != 64 || [key rangeOfCharacterFromSet:invalid].location != NSNotFound) {
+            strong->_connectionLabel.text = @"Key must contain 64 hex chars";
+            return;
+        }
+        NSString *dir = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/BackThread"];
+        [[NSFileManager defaultManager] createDirectoryAtPath:dir
+                                  withIntermediateDirectories:YES
+                                                   attributes:@{NSFileProtectionKey: NSFileProtectionCompleteUntilFirstUserAuthentication}
+                                                        error:nil];
+        NSString *path = [dir stringByAppendingPathComponent:@"session.key"];
+        NSError *error = nil;
+        if (![key writeToFile:path atomically:YES encoding:NSASCIIStringEncoding error:&error]) {
+            strong->_connectionLabel.text = error.localizedDescription ?: @"Save failed";
+            return;
+        }
+        [[NSFileManager defaultManager] setAttributes:@{
+            NSFilePosixPermissions: @0600,
+            NSFileProtectionKey: NSFileProtectionCompleteUntilFirstUserAuthentication
+        } ofItemAtPath:path error:nil];
+        strong->_connectionLabel.text = @"Key saved. Reopen BackThread.";
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
-- (void)didReceiveMemoryWarning { [super didReceiveMemoryWarning];_art.image=nil;_artworkKey=nil;[_events removeAllObjects];[self refreshHistory];self.agent.memoryPressure=YES;NSUInteger generation=++_memoryWarningGeneration;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,10*NSEC_PER_SEC),dispatch_get_main_queue(),^{if(generation==self->_memoryWarningGeneration)self.agent.memoryPressure=NO;}); }
-- (void)dealloc { [_noticeTimer invalidate];[_player pause]; }
+
+- (void)didReceiveMemoryWarning {
+    [super didReceiveMemoryWarning];
+    [_nowPlayingView clearArtworkCache];
+    [_notificationOverlay clearIconCache];
+    if (_events.count > 16) {
+        [_events removeObjectsInRange:NSMakeRange(0, _events.count - 16)];
+    }
+    [_historyPanelView updateWithEvents:_events];
+    [_directPlayer handleMemoryPressure];
+    self.agent.memoryPressure = YES;
+    NSUInteger generation = ++_memoryWarningGeneration;
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        BTViewController *strong = weakSelf;
+        if (strong && generation == strong->_memoryWarningGeneration) {
+            strong.agent.memoryPressure = NO;
+        }
+    });
+}
+
 @end

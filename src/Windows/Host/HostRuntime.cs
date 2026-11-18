@@ -357,6 +357,25 @@ public sealed class HostRuntime : IDisposable
             }, CancellationToken.None);
             return;
         }
+        if (m.Type == "media.focus.set")
+        {
+            string? pol = m.Body.TryGetProperty("policy", out var pPol) ? pPol.GetString() : null;
+            if (!string.IsNullOrWhiteSpace(pol) && Enum.TryParse<AudioFocusPolicy>(pol, true, out var parsed))
+            {
+                var conn = connection;
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var updated = await Router.SetFocusPolicyAsync(parsed, null, ct);
+                        if (conn != null && !string.IsNullOrEmpty(m.Id))
+                            await conn.SendAsync(f.Channel, Message.Create("ok", updated, replyTo: m.Id), ct);
+                    }
+                    catch { }
+                }, CancellationToken.None);
+            }
+            return;
+        }
 
         if (m.Type is not ("media.command" or "action.invoke")) return;
         // Dispatch without blocking the protocol reader, since actions can issue agent requests.

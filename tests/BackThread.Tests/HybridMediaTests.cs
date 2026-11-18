@@ -170,6 +170,90 @@ internal static class HybridMediaTests
             }
         });
 
+        await test("media.host-receives-device-focus-and-return", async () =>
+        {
+            var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+            int apiPort;
+            {
+                var r = new TcpListener(IPAddress.Loopback, 0); r.Start(); apiPort = ((IPEndPoint)r.LocalEndpoint).Port; r.Stop();
+            }
+            string keyPath = Path.Combine(root, "device-focus.key");
+            await File.WriteAllTextAsync(keyPath, Convert.ToHexString(key), ct);
+
+            var hostConnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var peerStop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            Connection? peerConn = null;
+            Task peerTask = Task.Run(async () =>
+            {
+                try
+                {
+                    using var client = await listener.AcceptTcpClientAsync(peerStop.Token);
+                    client.NoDelay = true;
+                    await Authentication.ServerAsync(client.GetStream(), key, peerStop.Token);
+                    await using var conn = new Connection(client.GetStream());
+                    peerConn = conn;
+                    await conn.RunAsync(async (frame, message, token) =>
+                    {
+                        if (message?.Id is null) return;
+                        if (message.Type == "hello")
+                        {
+                            await conn.SendAsync(frame.Channel, Message.Create("ok", new { agent = "Peer", capabilities = new[] { "hybrid-media", "sync" } }, replyTo: message.Id), token);
+                            hostConnected.TrySetResult();
+                            return;
+                        }
+                        if (message.Type == "media.sync")
+                        {
+                            await conn.SendAsync(frame.Channel, Message.Create("ok", new { sessionId = "s-dev-1", generation = 5L, mode = "DirectInternet", independentActive = true, isPlaying = true, positionSeconds = 42.0, durationSeconds = 180.0, bufferedSeconds = 12.0, url = "https://cdn.example.com/dev.mp4", title = "Device Clip" }, replyTo: message.Id), token);
+                            return;
+                        }
+                        await conn.SendAsync(frame.Channel, Message.Create("ok", new { received = true }, replyTo: message.Id), token);
+                    }, peerStop.Token);
+                }
+                catch (Exception) when (peerStop.IsCancellationRequested) { }
+            }, ct);
+
+            var cfg = new HostConfig
+            {
+                KeyFile = keyPath,
+                Transport = "localhost",
+                DevicePort = port,
+                ApiPort = apiPort,
+                DeviceHasInternet = true,
+                StreamAudio = false,
+                CollectWindowsNotifications = false
+            };
+            using var host = new HostRuntime(cfg);
+            using var hostStop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            Task hostTask = host.RunAsync(hostStop.Token);
+            try
+            {
+                await hostConnected.Task.WaitAsync(ct);
+                await Check.Eventually(() => Task.FromResult(host.Router.CurrentState.Owner == PlaybackOwner.iPhoneOwned && host.Router.CurrentState.Generation == 5L));
+
+                // Incoming device-initiated focus switch updates host state & live PCM desire without echo loop
+                var focusReply = await peerConn!.RequestAsync(LogicalChannel.Media, "media.focus.set", new { policy = "KeepVideoMuteAudio" }, ct);
+                Check.Equal("KeepVideoMuteAudio", focusReply.Body.GetProperty("focusPolicy").GetString());
+                Check.Equal(AudioFocusPolicy.KeepVideoMuteAudio, host.Router.CurrentState.FocusPolicy);
+                Check.True(host.Router.ShouldStreamLivePcm);
+
+                // Incoming device-initiated return to Windows settles ownership back cleanly
+                var retReply = await peerConn.RequestAsync(LogicalChannel.Media, "media.return_to_windows", new { resumeWindows = false }, ct);
+                Check.Equal("WindowsOwned", retReply.Body.GetProperty("owner").GetString());
+                Check.Equal(PlaybackOwner.WindowsOwned, host.Router.CurrentState.Owner);
+                Check.True(host.Router.ShouldStreamLivePcm);
+            }
+            finally
+            {
+                hostStop.Cancel();
+                peerStop.Cancel();
+                listener.Stop();
+                await hostTask;
+                await peerTask;
+            }
+        });
+
         await test("media.buffered-usb-mode-b-chunks-and-validation", async () =>
         {
             string badExt = Path.Combine(root, "movie.mkv");

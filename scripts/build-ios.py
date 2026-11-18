@@ -10,8 +10,30 @@ import subprocess
 from ios_build_support import debian, macho, stable_uuid, write_debian
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SOURCES = ['src/iOS/UI/main.m', 'src/iOS/UI/BTViewController.m', 'src/iOS/Agent/BTAgent.m', 'src/iOS/AudioReceiver/BTAudioReceiver.m', 'src/iOS/AudioReceiver/BTPcmRing.c', 'src/Shared/Protocol/bt_wire.c']
-FRAMEWORKS = ['UIKit', 'Foundation', 'AVFoundation', 'AudioToolbox', 'MediaPlayer', 'Security', 'ImageIO', 'CoreGraphics', 'QuartzCore']
+UI_SOURCES = [
+    'src/iOS/UI/main.m',
+    'src/iOS/UI/BTTheme.m',
+    'src/iOS/UI/BTVideoSurfaceView.m',
+    'src/iOS/UI/BTNowPlayingView.m',
+    'src/iOS/UI/BTIdleHubView.m',
+    'src/iOS/UI/BTQuickActionsView.m',
+    'src/iOS/UI/BTWorkerStatusView.m',
+    'src/iOS/UI/BTSettingsView.m',
+    'src/iOS/UI/BTNotificationOverlayView.m',
+    'src/iOS/UI/BTViewController.m',
+    'src/iOS/Media/BTBufferedMediaEngine.m',
+    'src/iOS/Media/BTDirectMediaPlayer.m',
+    'src/iOS/Media/BTYouTubeEmbedController.m',
+]
+AGENT_SOURCES = [
+    'src/iOS/Agent/BTAgent.m',
+    'src/iOS/AudioReceiver/BTAudioSessionCoordinator.m',
+    'src/iOS/AudioReceiver/BTAudioReceiver.m',
+    'src/iOS/AudioReceiver/BTPcmRing.c',
+    'src/Shared/Protocol/bt_wire.c',
+]
+SOURCES = UI_SOURCES + AGENT_SOURCES
+FRAMEWORKS = ['UIKit', 'Foundation', 'AVFoundation', 'CoreMedia', 'AudioToolbox', 'MediaPlayer', 'WebKit', 'Security', 'ImageIO', 'CoreGraphics', 'QuartzCore']
 
 
 def run(command, log, env):
@@ -58,23 +80,28 @@ def main():
     if not (linker_version.startswith('LLD 23.1.') and len(linker_version)>9 and linker_version[9].isdigit()):
         raise ValueError('Validated cross-build requires LLD 23.1.x; record and validate another version separately')
     base = [zig, 'cc', '-target', 'aarch64-ios.12.0', '-isysroot', sdk, '-iframework', sdk / 'System/Library/Frameworks', '-isystem', sdk / 'usr/include', '-O2', '-g0', '-fno-sanitize=all', '-Wall', '-Wextra', '-Werror', '-Werror=unguarded-availability-new', f'-ffile-prefix-map={ROOT}=.']
-    compiled = []
-    for source in SOURCES:
+    ui_compiled = []
+    agent_compiled = []
+    for source in UI_SOURCES + AGENT_SOURCES:
         print('Compiling ' + source, flush=True)
         target = objects / (pathlib.Path(source).stem + '.o')
         flags = ['-fobjc-arc', '-fblocks'] if source.endswith('.m') else []
         run(base + flags + ['-c', source, '-o', target], logs / (target.stem + '.txt'), env)
         if macho(target)['fileType'] != 1:
             raise ValueError('Compiler did not emit a relocatable ARM64 object')
-        compiled.append(target)
+        if source in UI_SOURCES:
+            ui_compiled.append(target)
+        else:
+            agent_compiled.append(target)
+    compiled = ui_compiled + agent_compiled
     library = out / 'libBackThread.Agent.a'
     # Recreate this BackThread-owned archive; ar otherwise retains stale object members.
     library.unlink(missing_ok=True)
-    run([zig, 'ar', 'rcs', library, *compiled[2:]], logs / 'archive.txt', env)
+    run([zig, 'ar', 'rcs', library, *agent_compiled], logs / 'archive.txt', env)
     print('Linking UIKit application', flush=True)
     executable = app / 'BackThread'
     # Use original multi-document SDK stubs so LLD can follow umbrella reexports.
-    command=[linker,'-flavor','darwin','-arch','arm64','-platform_version','ios','12.0','12.4','-syslibroot',sdk,'-L',sdk/'usr/lib','-F',sdk/'System/Library/Frameworks','-F',sdk/'System/Library/PrivateFrameworks','-F',sdk/'System/Library/Frameworks/AVFoundation.framework/Frameworks','-no_fixup_chains','-headerpad','0x1000',*compiled[:2],library,'-lSystem','-lobjc']
+    command=[linker,'-flavor','darwin','-arch','arm64','-platform_version','ios','12.0','12.4','-syslibroot',sdk,'-L',sdk/'usr/lib','-F',sdk/'System/Library/Frameworks','-F',sdk/'System/Library/PrivateFrameworks','-F',sdk/'System/Library/Frameworks/AVFoundation.framework/Frameworks','-no_fixup_chains','-headerpad','0x1000',*ui_compiled,library,'-lSystem','-lobjc']
     for framework in FRAMEWORKS:
         command += ['-framework', framework]
     run(command+['-o',executable],logs/'link.txt',env)

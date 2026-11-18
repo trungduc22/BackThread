@@ -1,4 +1,5 @@
 #import "BTAudioReceiver.h"
+#import "BTAudioSessionCoordinator.h"
 #import <AVFoundation/AVFoundation.h>
 #include <errno.h>
 
@@ -34,10 +35,9 @@ static void BTOutput(void *ctx,AudioQueueRef q,AudioQueueBufferRef b) {
 }
 - (BOOL)start:(NSError **)error {
     [_lifecycle lock];@try {
-    [self stop]; AVAudioSession *session=[AVAudioSession sharedInstance];
-    if(![session setCategory:AVAudioSessionCategoryPlayback error:error])return NO;
-    [session setPreferredSampleRate:48000 error:NULL];[session setPreferredIOBufferDuration:0.01 error:NULL];
-    if(![session setActive:YES error:error])return NO;_sessionActive=YES;
+    [self stop];
+    if(![[BTAudioSessionCoordinator sharedCoordinator] activateForPcmReceiver:error])return NO;
+    _sessionActive=YES;
     AudioStreamBasicDescription f={0};f.mSampleRate=48000;f.mFormatID=kAudioFormatLinearPCM;f.mFormatFlags=kLinearPCMFormatFlagIsSignedInteger|kAudioFormatFlagIsPacked;f.mBytesPerPacket=4;f.mFramesPerPacket=1;f.mBytesPerFrame=4;f.mChannelsPerFrame=2;f.mBitsPerChannel=16;
     OSStatus status=AudioQueueNewOutput(&f,BTOutput,(__bridge void *)self,NULL,NULL,0,&_queue);
     if(status!=noErr)return [self failStart:status error:error];
@@ -62,7 +62,7 @@ static void BTOutput(void *ctx,AudioQueueRef q,AudioQueueBufferRef b) {
     _requested=NO;
     pthread_mutex_lock(&_mutex);_running=NO;_primed=NO;_interrupted=NO;bt_pcm_clear(&_ring);pthread_mutex_unlock(&_mutex);
     if(_queue) { AudioQueueStop(_queue,true);AudioQueueDispose(_queue,true);_queue=NULL; }
-    if(_sessionActive){[[AVAudioSession sharedInstance] setActive:NO withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation error:NULL];_sessionActive=NO;}
+    if(_sessionActive){[[BTAudioSessionCoordinator sharedCoordinator] deactivatePcmReceiver];_sessionActive=NO;}
     [_lifecycle unlock];
 }
 - (BOOL)setVolume:(float)value error:(NSError **)error {
@@ -87,7 +87,7 @@ static void BTOutput(void *ctx,AudioQueueRef q,AudioQueueBufferRef b) {
     if(!_requested||!_queue||!self.running)return;
     if([n.userInfo[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue]==AVAudioSessionInterruptionTypeBegan) { OSStatus status=AudioQueuePause(_queue);pthread_mutex_lock(&_mutex);bt_pcm_clear(&_ring);_primed=NO;_interrupted=YES;_lastStatus=status;if(status!=noErr)_running=NO;pthread_mutex_unlock(&_mutex); }
     else if([n.userInfo[AVAudioSessionInterruptionOptionKey] unsignedIntegerValue]&AVAudioSessionInterruptionOptionShouldResume) {
-        NSError *error=nil;BOOL activated=[[AVAudioSession sharedInstance] setActive:YES error:&error];OSStatus status=activated&&_queue?AudioQueueStart(_queue,NULL):-1;
+        NSError *error=nil;BOOL activated=[[BTAudioSessionCoordinator sharedCoordinator] reactivateIfNeeded:&error];OSStatus status=activated&&_queue?AudioQueueStart(_queue,NULL):-1;
         pthread_mutex_lock(&_mutex);bt_pcm_clear(&_ring);_primed=NO;_interrupted=NO;_lastStatus=status;if(status!=noErr)_running=NO;pthread_mutex_unlock(&_mutex);
     }
     } @finally { [_lifecycle unlock]; }

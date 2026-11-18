@@ -10,9 +10,30 @@ import uuid
 from ios_build_support import write_audit_header
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SOURCES = ['src/iOS/UI/main.m', 'src/iOS/UI/BTViewController.m', 'src/iOS/Agent/BTAgent.m',
-           'src/iOS/Agent/main.m', 'src/iOS/AudioReceiver/BTAudioReceiver.m',
-           'src/iOS/AudioReceiver/BTPcmRing.c', 'src/Shared/Protocol/bt_wire.c','src/iOS/Probe/main.m','src/iOS/Probe/entry.c','src/iOS/Probe/loader.c']
+SOURCES = [
+    'src/iOS/UI/main.m',
+    'src/iOS/UI/BTTheme.m',
+    'src/iOS/UI/BTVideoSurfaceView.m',
+    'src/iOS/UI/BTNowPlayingView.m',
+    'src/iOS/UI/BTIdleHubView.m',
+    'src/iOS/UI/BTQuickActionsView.m',
+    'src/iOS/UI/BTWorkerStatusView.m',
+    'src/iOS/UI/BTSettingsView.m',
+    'src/iOS/UI/BTNotificationOverlayView.m',
+    'src/iOS/UI/BTViewController.m',
+    'src/iOS/Media/BTBufferedMediaEngine.m',
+    'src/iOS/Media/BTDirectMediaPlayer.m',
+    'src/iOS/Media/BTYouTubeEmbedController.m',
+    'src/iOS/Agent/BTAgent.m',
+    'src/iOS/Agent/main.m',
+    'src/iOS/AudioReceiver/BTAudioSessionCoordinator.m',
+    'src/iOS/AudioReceiver/BTAudioReceiver.m',
+    'src/iOS/AudioReceiver/BTPcmRing.c',
+    'src/Shared/Protocol/bt_wire.c',
+    'src/iOS/Probe/main.m',
+    'src/iOS/Probe/entry.c',
+    'src/iOS/Probe/loader.c',
+]
 
 
 def main():
