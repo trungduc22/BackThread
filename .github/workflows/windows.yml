@@ -1,0 +1,59 @@
+name: Windows regression
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Restore and compile
+        run: |
+          dotnet restore BackThread.sln
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dotnet build BackThread.sln -c Release --no-restore
+      - name: Managed and available C regression checks
+        run: ./scripts/test.ps1
+      - name: Python checks without device or SDK artifacts
+        run: |
+          foreach ($test in 'ios_analyzer_test.py','ios_device_tool_test.py','phone_control_test.py') {
+            python -m unittest discover -s tests -p $test
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+      - name: Dependency advisory scan
+        run: |
+          dotnet list BackThread.sln package --vulnerable --include-transitive --format json > artifacts/dependency-audit.json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $data = Get-Content artifacts/dependency-audit.json -Raw | ConvertFrom-Json
+          $findings = @($data.projects.frameworks | ForEach-Object { $_.topLevelPackages; $_.transitivePackages } | Where-Object vulnerabilities)
+          if ($findings.Count) { throw "Dependency vulnerabilities found. See the dependency-audit artifact." }
+      - name: Tracked secret material scan
+        run: python scripts/check-tracked-secrets.py
+      - name: Verify headless Host dependency graph
+        run: |
+          $path = 'src/Windows/Host/bin/Release/net8.0-windows10.0.19041.0/BackThread.Host.deps.json'
+          $data = Get-Content $path -Raw | ConvertFrom-Json
+          $libraries = $data.libraries.PSObject.Properties.Name
+          if (-not ($libraries -match '^BackThread.Host.Core/')) { throw 'Host Core missing' }
+          if ($libraries -match 'WindowsAppSDK|NativeShellKit.WinUI|NativeShellKit.DesignSystem|WindowsDesktop') { throw 'UI dependency in headless Host' }
+          Get-FileHash (Join-Path (Split-Path $path) 'BackThread.Host.dll') -Algorithm SHA256 | ConvertTo-Json > artifacts/host-integrity.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-regression-evidence
+          path: |
+            artifacts/test-results.json
+            artifacts/dependency-audit.json
+            artifacts/host-integrity.json
