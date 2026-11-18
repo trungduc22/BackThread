@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Diagnostics;
+using System.Threading.Channels;
 using BackThread.Audio;
 using BackThread.Events;
 using BackThread.Transport;
@@ -66,6 +67,20 @@ public sealed class AgentServer : IAsyncDisposable
                 var ring = new PcmRing(); using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
                 bool audioOn = false; long packets = 0, bytes = 0, gaps = 0; uint previous = 0; long framesRead = 0, playbackEpoch = 0;
                 var pendingTasks = new List<Task>();
+                var fileAppendQueue = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(8) { FullMode = BoundedChannelFullMode.Wait, SingleReader = true, SingleWriter = true });
+                var fileWorker = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await foreach (var chunk in fileAppendQueue.Reader.ReadAllAsync(session.Token))
+                        {
+                            var ack = await storage.AppendAsync(chunk, session.Token);
+                            await c.SendAsync(LogicalChannel.Jobs, Message.Create("file.ack", new { transferId = ack.Id, offset = ack.Offset }), session.Token);
+                        }
+                    }
+                    catch (OperationCanceledException) when (session.IsCancellationRequested) { }
+                    catch (Exception) when (!session.IsCancellationRequested) { session.Cancel(); }
+                }, CancellationToken.None);
 
                 // Simulated Mode B buffered stream state
                 string? bufStreamId = null; long bufGen = 0, bufTotal = 0, bufReceived = 0;
@@ -130,8 +145,7 @@ public sealed class AgentServer : IAsyncDisposable
                                     return;
                                 }
                             }
-                            var ack = await storage.AppendAsync(frame.Payload, ct);
-                            await c.SendAsync(LogicalChannel.Jobs, Message.Create("file.ack", new { transferId = ack.Id, offset = ack.Offset }), ct);
+                            await fileAppendQueue.Writer.WriteAsync(frame.Payload, ct);
                             return;
                         }
                         if (message is null) return;
@@ -325,7 +339,8 @@ public sealed class AgentServer : IAsyncDisposable
                 }
                 finally
                 {
-                    Jobs.Changed -= JobChanged; session.Cancel(); await playback;
+                    Jobs.Changed -= JobChanged; fileAppendQueue.Writer.TryComplete(); session.Cancel(); await playback;
+                    try { await fileWorker; } catch (OperationCanceledException) { }
                     Task[] remaining; lock (pendingTasks) remaining = pendingTasks.ToArray();
                     try { await Task.WhenAll(remaining); } catch (OperationCanceledException) { }
                 }

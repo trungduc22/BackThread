@@ -17,6 +17,7 @@
     uint64_t _callbacks;
     uint64_t _inputNonzero,_renderNonzero;
     int32_t _inputPeak,_renderPeak;
+    NSUInteger _underrunStreak;
     float _volume;
     NSRecursiveLock *_lifecycle;
 }

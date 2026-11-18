@@ -1,0 +1,26 @@
+{
+  "timestampUtc": "2026-11-18T09:40:07.3319741+00:00",
+  "simulated": true,
+  "environment": "Linux VM simulator soak (no physical iPhone 6 or Windows audio hardware)",
+  "milestone": "Phase 9 Live PCM & file-worker isolation repair",
+  "durationSeconds": 30.1457584,
+  "finalStatsTakenBeforeSourceStop": true,
+  "jobs": 98,
+  "maximumBuffer": 9600,
+  "startMemory": 57708544,
+  "endMemory": 126754816,
+  "cpuSeconds": 7.9699999,
+  "senderDropped": 0,
+  "receiver": {
+    "packets": 3014,
+    "bytes": 5786880,
+    "gaps": 0,
+    "bufferedBytes": 7680,
+    "droppedBytes": 0,
+    "silenceBytes": 0,
+    "playbackTicks": 3010,
+    "sha256": "d63471c8ac973477d6bf1bb81efe218fe82710ff1e7e3a528e40705b34071d07"
+  },
+  "lossSamples": [],
+  "passed": true
+}

@@ -7,8 +7,15 @@ static void BTOutput(void *ctx,AudioQueueRef q,AudioQueueBufferRef b) {
     BTAudioReceiver *receiver=(__bridge BTAudioReceiver *)ctx;
     pthread_mutex_lock(&receiver->_mutex);
     BOOL active=receiver->_running;
-    if(active&&!receiver->_primed&&receiver->_ring.count>=5760)receiver->_primed=YES;
-    if(active&&receiver->_primed)bt_pcm_read(&receiver->_ring,b->mAudioData,1920);
+    if(active&&!receiver->_primed&&receiver->_ring.count>=5760){receiver->_primed=YES;receiver->_underrunStreak=0;}
+    if(active&&receiver->_primed) {
+        size_t readBytes=bt_pcm_read(&receiver->_ring,b->mAudioData,1920);
+        if(readBytes==0) {
+            if(++receiver->_underrunStreak>=2){receiver->_primed=NO;receiver->_underrunStreak=0;}
+        } else {
+            receiver->_underrunStreak=0;
+        }
+    }
     else memset(b->mAudioData,0,1920);
     const int16_t *samples=b->mAudioData;
     for(unsigned i=0;i<960;i++){int32_t value=samples[i];if(value){receiver->_renderNonzero++;if(value<0)value=-value;if(value>receiver->_renderPeak)receiver->_renderPeak=value;}}
@@ -41,7 +48,7 @@ static void BTOutput(void *ctx,AudioQueueRef q,AudioQueueBufferRef b) {
     AudioStreamBasicDescription f={0};f.mSampleRate=48000;f.mFormatID=kAudioFormatLinearPCM;f.mFormatFlags=kLinearPCMFormatFlagIsSignedInteger|kAudioFormatFlagIsPacked;f.mBytesPerPacket=4;f.mFramesPerPacket=1;f.mBytesPerFrame=4;f.mChannelsPerFrame=2;f.mBitsPerChannel=16;
     OSStatus status=AudioQueueNewOutput(&f,BTOutput,(__bridge void *)self,NULL,NULL,0,&_queue);
     if(status!=noErr)return [self failStart:status error:error];
-    pthread_mutex_lock(&_mutex);memset(&_ring,0,sizeof(_ring));_primed=NO;_interrupted=NO;_running=YES;_lastStatus=noErr;_callbacks=0;_inputNonzero=_renderNonzero=0;_inputPeak=_renderPeak=0;pthread_mutex_unlock(&_mutex);
+    pthread_mutex_lock(&_mutex);memset(&_ring,0,sizeof(_ring));_primed=NO;_underrunStreak=0;_interrupted=NO;_running=YES;_lastStatus=noErr;_callbacks=0;_inputNonzero=_renderNonzero=0;_inputPeak=_renderPeak=0;pthread_mutex_unlock(&_mutex);
     for(int i=0;i<3;i++) {
         status=AudioQueueAllocateBuffer(_queue,1920,&_buffers[i]);
         if(status!=noErr)return [self failStart:status error:error];
@@ -60,7 +67,7 @@ static void BTOutput(void *ctx,AudioQueueRef q,AudioQueueBufferRef b) {
 - (void)stop {
     [_lifecycle lock];
     _requested=NO;
-    pthread_mutex_lock(&_mutex);_running=NO;_primed=NO;_interrupted=NO;bt_pcm_clear(&_ring);pthread_mutex_unlock(&_mutex);
+    pthread_mutex_lock(&_mutex);_running=NO;_primed=NO;_underrunStreak=0;_interrupted=NO;bt_pcm_clear(&_ring);pthread_mutex_unlock(&_mutex);
     if(_queue) { AudioQueueStop(_queue,true);AudioQueueDispose(_queue,true);_queue=NULL; }
     if(_sessionActive){[[BTAudioSessionCoordinator sharedCoordinator] deactivatePcmReceiver];_sessionActive=NO;}
     [_lifecycle unlock];
@@ -85,10 +92,10 @@ static void BTOutput(void *ctx,AudioQueueRef q,AudioQueueBufferRef b) {
     [_lifecycle lock];@try {
     // Delayed resume notifications must never reactivate a session after stop/disconnect.
     if(!_requested||!_queue||!self.running)return;
-    if([n.userInfo[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue]==AVAudioSessionInterruptionTypeBegan) { OSStatus status=AudioQueuePause(_queue);pthread_mutex_lock(&_mutex);bt_pcm_clear(&_ring);_primed=NO;_interrupted=YES;_lastStatus=status;if(status!=noErr)_running=NO;pthread_mutex_unlock(&_mutex); }
+    if([n.userInfo[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue]==AVAudioSessionInterruptionTypeBegan) { OSStatus status=AudioQueuePause(_queue);pthread_mutex_lock(&_mutex);bt_pcm_clear(&_ring);_primed=NO;_underrunStreak=0;_interrupted=YES;_lastStatus=status;if(status!=noErr)_running=NO;pthread_mutex_unlock(&_mutex); }
     else if([n.userInfo[AVAudioSessionInterruptionOptionKey] unsignedIntegerValue]&AVAudioSessionInterruptionOptionShouldResume) {
         NSError *error=nil;BOOL activated=[[BTAudioSessionCoordinator sharedCoordinator] reactivateIfNeeded:&error];OSStatus status=activated&&_queue?AudioQueueStart(_queue,NULL):-1;
-        pthread_mutex_lock(&_mutex);bt_pcm_clear(&_ring);_primed=NO;_interrupted=NO;_lastStatus=status;if(status!=noErr)_running=NO;pthread_mutex_unlock(&_mutex);
+        pthread_mutex_lock(&_mutex);bt_pcm_clear(&_ring);_primed=NO;_underrunStreak=0;_interrupted=NO;_lastStatus=status;if(status!=noErr)_running=NO;pthread_mutex_unlock(&_mutex);
     }
     } @finally { [_lifecycle unlock]; }
 }

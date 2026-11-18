@@ -29,7 +29,7 @@ public sealed class Connection : IAsyncDisposable
     public Connection(Stream stream)
     {
         this.stream = stream;
-        audio = Channel.CreateBounded<QueuedFrame>(new BoundedChannelOptions(6) { FullMode = BoundedChannelFullMode.DropOldest }, _ => Interlocked.Increment(ref dropped));
+        audio = Channel.CreateBounded<QueuedFrame>(new BoundedChannelOptions(8) { FullMode = BoundedChannelFullMode.DropOldest }, _ => Interlocked.Increment(ref dropped));
         if(stream is NetworkStream network)
         {
             network.WriteTimeout=3000;
@@ -44,13 +44,24 @@ public sealed class Connection : IAsyncDisposable
     public async ValueTask SendFrameAsync(LogicalChannel channel, byte[] payload, ulong timestampUs, CancellationToken ct)
     {
         if (payload.Length > Wire.Limit(channel)) throw new InvalidDataException("Frame too large");
+        ct.ThrowIfCancellationRequested();
         lifetime.Token.ThrowIfCancellationRequested();
         uint seq;
         lock (sequences) seq = ++sequences[(int)channel];
         var qf = new QueuedFrame(new Frame(channel, seq, timestampUs, payload), Stopwatch.GetTimestamp());
         var queue = channel == LogicalChannel.Audio ? audio : channel == LogicalChannel.Files ? bulk : control;
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, lifetime.Token);
-        await queue.Writer.WriteAsync(qf, linked.Token);
+        if (!queue.Writer.TryWrite(qf))
+        {
+            if (!ct.CanBeCanceled || ct == lifetime.Token)
+            {
+                await queue.Writer.WriteAsync(qf, lifetime.Token);
+            }
+            else
+            {
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, lifetime.Token);
+                await queue.Writer.WriteAsync(qf, linked.Token);
+            }
+        }
         // A coalescing wake-up avoids an unbounded semaphore count when audio is dropped.
         if (ready.CurrentCount == 0) { try { ready.Release(); } catch (SemaphoreFullException) { } }
     }
@@ -73,12 +84,19 @@ public sealed class Connection : IAsyncDisposable
     public async Task RunAsync(Func<Frame, Message?, CancellationToken, ValueTask> handler, CancellationToken ct)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, lifetime.Token);
+        using var readTimeout = CancellationTokenSource.CreateLinkedTokenSource(linked.Token);
+        CancellationTokenSource activeReadTimeout = readTimeout;
         try
         {
             while (true)
             {
-                using var readTimeout = CancellationTokenSource.CreateLinkedTokenSource(linked.Token); readTimeout.CancelAfter(TimeSpan.FromSeconds(12));
-                var frame = await Wire.ReadAsync(stream, readTimeout.Token);
+                activeReadTimeout.CancelAfter(TimeSpan.FromSeconds(12));
+                var frame = await Wire.ReadAsync(stream, activeReadTimeout.Token);
+                if (!activeReadTimeout.TryReset())
+                {
+                    activeReadTimeout.Dispose();
+                    activeReadTimeout = CancellationTokenSource.CreateLinkedTokenSource(linked.Token);
+                }
                 Interlocked.Exchange(ref lastReceive, Environment.TickCount64);
                 Message? message = frame.Channel is LogicalChannel.Audio or LogicalChannel.Files ? null : Message.Decode(frame.Payload);
                 if (message?.ReplyTo is { } id && pending.TryGetValue(id, out var p)) { p.TrySetResult(message); continue; }
@@ -86,10 +104,16 @@ public sealed class Connection : IAsyncDisposable
                 await handler(frame, message, linked.Token);
             }
         }
-        finally { foreach (var p in pending.Values) p.TrySetException(new IOException("Connection closed")); lifetime.Cancel(); }
+        finally
+        {
+            if (!ReferenceEquals(activeReadTimeout, readTimeout)) activeReadTimeout.Dispose();
+            foreach (var p in pending.Values) p.TrySetException(new IOException("Connection closed"));
+            lifetime.Cancel();
+        }
     }
     private async Task WriteLoopAsync()
     {
+        var timeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         try
         {
             while (true)
@@ -97,10 +121,15 @@ public sealed class Connection : IAsyncDisposable
                 await ready.WaitAsync(lifetime.Token);
                 while (control.Reader.TryRead(out var qf) || audio.Reader.TryRead(out qf) || bulk.Reader.TryRead(out qf))
                 {
-                    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); timeout.CancelAfter(TimeSpan.FromSeconds(3));
+                    timeout.CancelAfter(TimeSpan.FromSeconds(3));
                     long started = Stopwatch.GetTimestamp();
                     await Wire.WriteAsync(stream, qf.Frame, timeout.Token);
                     RecordWrite(qf, started);
+                    if (!timeout.TryReset())
+                    {
+                        timeout.Dispose();
+                        timeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+                    }
                 }
             }
         }
@@ -109,6 +138,10 @@ public sealed class Connection : IAsyncDisposable
         {
             lifetime.Cancel(); stream.Dispose();
             foreach (var p in pending.Values) p.TrySetException(ex);
+        }
+        finally
+        {
+            timeout.Dispose();
         }
     }
     private static void UpdateMax(ref long location, long candidate)

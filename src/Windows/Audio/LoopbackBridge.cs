@@ -8,7 +8,8 @@ namespace BackThread.Audio;
 
 public sealed class LoopbackBridge
 {
-    public PcmRing Ring { get; } = new();
+    // Windows WASAPI shared loopback delivers bursts up to ~100ms; give the capture ring 250ms headroom.
+    public PcmRing Ring { get; } = new(PcmRing.BytesPer10Ms * 25);
     public string? DeviceName { get; private set; }
     public string? LastError { get; private set; }
     public long FramesSent { get; private set; }
@@ -31,23 +32,39 @@ public sealed class LoopbackBridge
         // Audio deadlines must not wait for file/hash continuations on the general worker pool.
         Thread.CurrentThread.Name = "BackThread PCM pacing";
         Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
-        long sample = 0; var timer = Stopwatch.StartNew(); long next = 0;
+        long sample = 0;
+        long epoch = Stopwatch.GetTimestamp();
+        double nextMs = 0;
         pacingStarted?.Invoke();
         while (!ct.IsCancellationRequested)
         {
-                long delay = next - timer.ElapsedMilliseconds;
-                if (delay > 0 && ct.WaitHandle.WaitOne((int)delay)) ct.ThrowIfCancellationRequested();
-                // Skip late scheduling slots rather than building up audio latency.
-                if (timer.ElapsedMilliseconds - next > 50) { Ring.Clear(); next = timer.ElapsedMilliseconds; }
+            double elapsedMs = Stopwatch.GetElapsedTime(epoch).TotalMilliseconds;
+            double delayMs = nextMs - elapsedMs;
+            if (delayMs >= 1.0 && ct.WaitHandle.WaitOne((int)delayMs)) ct.ThrowIfCancellationRequested();
+
+            elapsedMs = Stopwatch.GetElapsedTime(epoch).TotalMilliseconds;
+            // After a severe stall (> 120ms), skip missed timeline slots without clearing fresh capture samples;
+            // the circular Ring already bounds capture age by dropping oldest data.
+            if (elapsedMs - nextMs > 120.0)
+                nextMs = elapsedMs;
+
+            int burst = 0;
+            do
+            {
                 byte[] pcm = fixture ? PcmRing.Sine(sample) : new byte[PcmRing.BytesPer10Ms];
                 if (!fixture)
                 {
-                    if (Environment.TickCount64 - Interlocked.Read(ref lastCapture) > 150) Ring.Clear();
+                    if (Ring.Count > 0 && Environment.TickCount64 - Interlocked.Read(ref lastCapture) > 150) Ring.Clear();
                     Ring.Read(pcm);
                 }
                 // Drop-oldest audio writes complete synchronously; no socket I/O occurs on this thread.
                 connection.SendFrameAsync(LogicalChannel.Audio, pcm, (ulong)(sample * 1_000_000 / 48000), ct).GetAwaiter().GetResult();
-                sample += 480; FramesSent++; next += 10;
+                sample += 480;
+                FramesSent++;
+                nextMs += 10.0;
+                burst++;
+            }
+            while (!ct.IsCancellationRequested && burst < 3 && Stopwatch.GetElapsedTime(epoch).TotalMilliseconds >= nextMs + 5.0);
         }
         ct.ThrowIfCancellationRequested();
     }
