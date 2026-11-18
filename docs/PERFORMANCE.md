@@ -1,5 +1,9 @@
 # Performance evidence — 0.1.2
 
+## UI 2.0 measured boundary
+
+New hardware protocol RSS22.01–22.07MiB; after retained pages and PCM,23.13–23.36MiB (exact bytes in hardware report). These are short snapshots, without direct video. One AVPlayer, 32 app icons with1MiB cache, bounded 64-event history/8-event display queue and256KiB TLS queues constrain growth. No UIKit FPS, battery drain, 30-minute leak or video decoder profile is claimed. Shared decision tests are not touch-performance tests. Historical strict soak thresholds remain unchanged and the last 120-second simulator gate remains failed.
+
 ## Resumed build and physical playback — 2026-11-18 evening
 
 Fetched every branch/tag from GitHub before continuing: only `master` at `307e167` existed, with the six original commits. No additional Antigravity commit was present on this remote. Continued from that full history. New implementation checkpoint: `6c2fb35`.

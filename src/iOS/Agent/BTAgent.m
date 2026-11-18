@@ -1,4 +1,7 @@
 #import "BTAgent.h"
+#import "../Transport/BTChannel.h"
+#import <arpa/inet.h>
+#import <float.h>
 #import "../AudioReceiver/BTAudioReceiver.h"
 #import "../../Shared/Protocol/bt_wire.h"
 #import <CommonCrypto/CommonHMAC.h>
@@ -12,16 +15,15 @@
 #import <sys/stat.h>
 #import <mach/mach.h>
 
-static BOOL exact(int fd,void *data,size_t n,BOOL writing) {
-    uint8_t *p=data;
-    while(n) { ssize_t r=writing?send(fd,p,n,0):recv(fd,p,n,0);if(r<0&&errno==EINTR)continue;if(r<=0)return NO;p+=r;n-=(size_t)r; }return YES;
-}
 static NSString *hex(const uint8_t *b,size_t n) { char *p=malloc(n*2+1);if(!p)return nil;for(size_t i=0;i<n;i++)snprintf(p+i*2,3,"%02x",b[i]);NSString *s=[NSString stringWithUTF8String:p];free(p);return s; }
 static BOOL hexString(NSString *s,NSUInteger length) { return [s isKindOfClass:NSString.class]&&s.length==length&&[s rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdefABCDEF"] invertedSet]].location==NSNotFound; }
 static BOOL constantEqual(NSString *a,NSString *b) { if(![a isKindOfClass:NSString.class]||a.length!=b.length)return NO;NSData *x=[a dataUsingEncoding:NSASCIIStringEncoding],*y=[b dataUsingEncoding:NSASCIIStringEncoding];if(!x||!y)return NO;uint8_t diff=0;for(NSUInteger i=0;i<x.length;i++)diff|=((const uint8_t *)x.bytes)[i]^((const uint8_t *)y.bytes)[i];return diff==0; }
 static NSString *proof(NSData *key,NSString *role,NSString *server,NSString *client) { NSData *text=[[NSString stringWithFormat:@"BTH1:%@:%@:%@",role,server,client] dataUsingEncoding:NSASCIIStringEncoding];uint8_t out[CC_SHA256_DIGEST_LENGTH];CCHmac(kCCHmacAlgSHA256,key.bytes,key.length,text.bytes,text.length,out);return hex(out,sizeof(out)); }
 static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:NSDictionary.class],array=[value isKindOfClass:NSArray.class];if((dict||array)&&depth>16)return NO;if(dict){for(id key in value)if(!jsonDepth(value[key],depth+1))return NO;}else if(array){for(id child in value)if(!jsonDepth(child,depth+1))return NO;}return YES; }
 
+@interface BTAgent ()
+@property(atomic,strong) BTChannel *activeChannel;
+@end
 @implementation BTAgent {
     NSData *_key;
     NSString *_root;
@@ -40,6 +42,10 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
     NSMutableDictionary *_jobs,*_jobSpecs;
     NSMutableSet *_cancelled;
     NSMutableArray *_events;
+    NSMutableDictionary *_pendingCommands;
+    dispatch_semaphore_t _uiSlots;
+    BOOL _nativePlaybackActive;
+    NSCondition *_owner;dispatch_queue_t _wifiQueue;NSDictionary *_wifiConfig;NSTimeInterval _wifiDeadline;BOOL _wifiStarted;
     NSUInteger _queuedJobs;
     NSDate *_eventWindow;
     NSUInteger _eventsInWindow;
@@ -54,11 +60,13 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         _fileIO=dispatch_queue_create("app.backthread.fileio",dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL,QOS_CLASS_UTILITY,0));_fileSlots=dispatch_semaphore_create(2);_committing=[NSMutableSet new];
         [[NSFileManager defaultManager] createDirectoryAtPath:_root withIntermediateDirectories:YES attributes:@{NSFileProtectionKey:NSFileProtectionCompleteUntilFirstUserAuthentication} error:nil];
         NSDictionary *saved=[NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:[_root stringByAppendingPathComponent:@".jobs.json"]]?:[NSData data] options:NSJSONReadingMutableContainers error:nil];
-        _jobs=[saved isKindOfClass:NSDictionary.class]?[saved mutableCopy]:[NSMutableDictionary new];_jobSpecs=[NSMutableDictionary new];_cancelled=[NSMutableSet new];_events=[NSMutableArray new];
+        _jobs=[saved isKindOfClass:NSDictionary.class]?[saved mutableCopy]:[NSMutableDictionary new];_jobSpecs=[NSMutableDictionary new];_cancelled=[NSMutableSet new];_events=[NSMutableArray new];_pendingCommands=[NSMutableDictionary new];_uiSlots=dispatch_semaphore_create(2);_owner=[NSCondition new];_wifiQueue=dispatch_queue_create("app.backthread.wifi",DISPATCH_QUEUE_SERIAL);
         for(NSString *jid in [_jobs.allKeys copy]) { NSDictionary *s=_jobs[jid];if([@[@"queued",@"running"] containsObject:s[@"state"]])_jobs[jid]=@{@"jobId":jid,@"state":@"interrupted",@"progress":@0,@"error":@"Agent restarted; submit a new job ID to retry"}; }
     } return self;
 }
 - (BTAudioReceiver *)audio { return _audio; }
+- (BOOL)nativePlaybackActive { @synchronized(self){return _nativePlaybackActive;} }
+- (void)setNativePlaybackActive:(BOOL)active { @synchronized(self){_nativePlaybackActive=active;}if(active)[_audio stop]; }
 - (void)networkPhase:(NSString *)phase error:(int)code {
     // Own diagnostic only: no keys, peer identity or system configuration.
     NSDictionary *record=@{@"phase":phase,@"errno":@(code),@"port":@23451,@"pid":@(getpid())};
@@ -73,26 +81,74 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
 }
 - (BOOL)send:(NSString *)type body:(NSDictionary *)body reply:(id)reply channel:(uint16_t)channel generation:(uint64_t)generation {
     NSMutableDictionary *m=[@{@"type":type,@"body":body?:@{}} mutableCopy];if([reply isKindOfClass:NSString.class])m[@"replyTo"]=reply;
-    if([type isEqual:@"media.command"]||[type isEqual:@"action.invoke"]||[type isEqual:@"job.cancel"])m[@"id"]=[[[NSUUID UUID] UUIDString] lowercaseString];
+    BOOL request=[@[@"media.command",@"action.invoke",@"job.cancel",@"apps.launch",@"apps.order",@"apps.refresh",@"apps.unpin",@"wifi.enable",@"wifi.disable",@"media.owner",@"media.playback"] containsObject:type];
+    if(request)m[@"id"]=[[[NSUUID UUID] UUIDString] lowercaseString];
     NSData *data=[NSJSONSerialization dataWithJSONObject:m options:0 error:nil];if(!data||data.length>65536)return NO;
     [_tx lock];int fd=_client;if((generation&&generation!=_generation)||(!_authenticated&&![type hasPrefix:@"auth."])){[_tx unlock];return NO;}uint8_t header[BT_HEADER_SIZE];BTHeader h={(uint32_t)data.length,channel,++_sequences[channel],0};
-    BOOL ok=fd>=0&&bt_header_encode(header,&h)==0&&exact(fd,header,sizeof(header),YES)&&exact(fd,(void *)data.bytes,data.length,YES);if(!ok&&fd>=0)shutdown(fd,SHUT_RDWR);[_tx unlock];return ok;
+    if(request){@synchronized(_pendingCommands){if(_pendingCommands.count>=32){[_tx unlock];[self notify:@"error" body:@{@"error":@"Too many pending commands"}];return NO;}_pendingCommands[m[@"id"]]=@{@"requestType":type,@"appId":body[@"appId"]?:@"",@"actionId":body[@"actionId"]?:@""};}}
+    BOOL ok=fd>=0&&bt_header_encode(header,&h)==0&&[self transfer:fd data:header count:sizeof(header) writing:YES]&&[self transfer:fd data:(void *)data.bytes count:data.length writing:YES];if(!ok&&fd>=0)shutdown(fd,SHUT_RDWR);[_tx unlock];
+    if(request){NSString *identifier=m[@"id"];if(!ok){@synchronized(_pendingCommands){[_pendingCommands removeObjectForKey:identifier];}}else{__weak typeof(self) weak=self;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,10*NSEC_PER_SEC),dispatch_get_main_queue(),^{BTAgent *owner=weak;if(!owner)return;NSDictionary *pending;@synchronized(owner->_pendingCommands){pending=owner->_pendingCommands[identifier];[owner->_pendingCommands removeObjectForKey:identifier];}if(pending){NSMutableDictionary *failed=[pending mutableCopy];failed[@"ok"]=@NO;failed[@"error"]=@"Windows did not confirm before the deadline; the result is unknown";[owner notify:@"command.result" body:failed];}});}}
+    return ok;
 }
-- (NSDictionary *)read:(int)fd header:(BTHeader *)h payload:(NSData **)payload {
-    uint8_t b[BT_HEADER_SIZE];if(!exact(fd,b,sizeof(b),NO)||bt_header_decode(b,h))return nil;
-    NSMutableData *p=[NSMutableData dataWithLength:h->length];if(!exact(fd,p.mutableBytes,h->length,NO))return nil;if(payload)*payload=p;
+- (BOOL)transfer:(int)fd data:(void *)bytes count:(size_t)count writing:(BOOL)writing { BTChannel *channel=self.activeChannel;if(!channel||channel.descriptor!=fd)return NO;return writing?[channel writeExact:bytes count:count]:[channel readExact:bytes count:count]; }
+- (NSDictionary *)readChannel:(BTChannel *)channel header:(BTHeader *)h payload:(NSData **)payload {
+    uint8_t bytes[BT_HEADER_SIZE];if(![channel readExact:bytes count:sizeof(bytes)]||bt_header_decode(bytes,h))return nil;
+    NSMutableData *data=[NSMutableData dataWithLength:h->length];if(![channel readExact:data.mutableBytes count:h->length])return nil;if(payload)*payload=data;
     if(h->channel==2||h->channel==6)return @{};
-    id m=[NSJSONSerialization JSONObjectWithData:p options:0 error:nil];
-    if(![m isKindOfClass:NSDictionary.class]||![m[@"type"] isKindOfClass:NSString.class]||[m[@"type"] length]==0||[m[@"type"] length]>80||![m[@"body"] isKindOfClass:NSDictionary.class]||!jsonDepth(m,1))return nil;
-    for(NSString *field in @[@"id",@"replyTo"])if(m[field]&&m[field]!=NSNull.null&&(![m[field] isKindOfClass:NSString.class]||[m[field] length]>64))return nil;
-    return m;
+    id message=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    if(![message isKindOfClass:NSDictionary.class]||![message[@"type"] isKindOfClass:NSString.class]||[message[@"type"] length]==0||[message[@"type"] length]>80||![message[@"body"] isKindOfClass:NSDictionary.class]||!jsonDepth(message,1))return nil;
+    for(NSString *field in @[@"id",@"replyTo"])if(message[field]&&message[field]!=NSNull.null&&(![message[field] isKindOfClass:NSString.class]||[message[field] length]>64))return nil;
+    return message;
 }
-- (BOOL)authenticate:(int)fd {
+- (NSDictionary *)read:(int)fd header:(BTHeader *)h payload:(NSData **)payload { BTChannel *channel=self.activeChannel;if(!channel||channel.descriptor!=fd)return nil;return [self readChannel:channel header:h payload:payload]; }
+- (BOOL)sendChannel:(BTChannel *)channel type:(NSString *)type body:(NSDictionary *)body sequence:(uint32_t)sequence {
+    NSData *data=[NSJSONSerialization dataWithJSONObject:@{@"type":type,@"body":body} options:0 error:nil];uint8_t header[BT_HEADER_SIZE];BTHeader h={(uint32_t)data.length,1,sequence,0};return data&&bt_header_encode(header,&h)==0&&[channel writeExact:header count:sizeof(header)]&&[channel writeExact:data.bytes count:data.length];
+}
+- (BOOL)authenticateChannel:(BTChannel *)channel {
     uint8_t random[32];if(SecRandomCopyBytes(kSecRandomDefault,sizeof(random),random)!=errSecSuccess)return NO;
-    NSString *server=hex(random,sizeof(random));[self send:@"auth.challenge" body:@{@"serverNonce":server} reply:nil channel:1];
-    BTHeader h;NSDictionary *m=[self read:fd header:&h payload:nil];if(!m)return NO;NSDictionary *b=m[@"body"];
-    if(h.channel!=1||![m[@"type"] isEqual:@"auth.response"]||!hexString(b[@"clientNonce"],64)||!constantEqual(b[@"proof"],proof(_key,@"host",server,b[@"clientNonce"])))return NO;
-    BOOL ok=[self send:@"auth.ok" body:@{@"proof":proof(_key,@"agent",server,b[@"clientNonce"]),@"protocol":@1} reply:nil channel:1];[_tx lock];_authenticated=ok;[_tx unlock];return ok;
+    NSString *server=hex(random,sizeof(random));if(![self sendChannel:channel type:@"auth.challenge" body:@{@"serverNonce":server} sequence:1])return NO;
+    channel.readTimeout=5;BTHeader h={0};NSDictionary *message=[self readChannel:channel header:&h payload:nil],*body=message[@"body"];
+    if(h.channel!=1||![message[@"type"] isEqual:@"auth.response"]||!hexString(body[@"clientNonce"],64)||!constantEqual(body[@"proof"],proof(_key,@"host",server,body[@"clientNonce"])))return NO;
+    BOOL ok=[self sendChannel:channel type:@"auth.ok" body:@{@"proof":proof(_key,@"agent",server,body[@"clientNonce"]),@"protocol":@1} sequence:2];channel.readTimeout=12;if(!channel.secure){struct timeval timeout={12,0};setsockopt(channel.descriptor,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));}return ok;
+}
+- (void)serveChannel:(BTChannel *)channel allowReplacement:(BOOL)allowReplacement {
+    [_owner lock];if(channel.secure&&BTSessionClock()>=_wifiDeadline){[_owner unlock];[channel close];return;}BTChannel *old=self.activeChannel;
+    if(old){if(!allowReplacement||old.secure==channel.secure){[_owner unlock];[channel close];return;}[old close];NSDate *end=[NSDate dateWithTimeIntervalSinceNow:3];while(self.activeChannel&&[_owner waitUntilDate:end]){}if(self.activeChannel){[_owner unlock];[channel close];return;}}
+    if(_stopping){[_owner unlock];[channel close];return;}
+    [_tx lock];_client=channel.descriptor;self.activeChannel=channel;_authenticated=YES;_generation++;memset(_sequences,0,sizeof(_sequences));_sequences[1]=2;[_tx unlock];[_owner unlock];
+    [self notify:@"connection" body:@{@"state":channel.secure?@"Connected by Wi-Fi":@"Connected by USB",@"transport":channel.secure?@"wifi":@"usb"}];
+    @try{[self session:channel.descriptor];}@catch(NSException *exception){[self notify:@"error" body:@{@"error":exception.reason?:@"Protocol error"}];}
+    [_owner lock];[_tx lock];_client=-1;_authenticated=NO;self.activeChannel=nil;[_tx unlock];[channel close];_audioOn=NO;[_audio stop];
+    @synchronized(_pendingCommands){for(NSDictionary *pending in _pendingCommands.allValues){NSMutableDictionary *failed=[pending mutableCopy];failed[@"ok"]=@NO;failed[@"error"]=@"Connection closed before Windows confirmed";[self notify:@"command.result" body:failed];}[_pendingCommands removeAllObjects];}
+    [self notify:@"connection" body:@{@"state":@"Disconnected — waiting for host"}];[_owner broadcast];[_owner unlock];
+}
+- (void)clearWifi {
+    @synchronized(self){_wifiConfig=nil;_wifiDeadline=0;}BTChannel *channel=self.activeChannel;if(channel.secure)[channel close];[self notify:@"wifi.state" body:@{@"state":@"Temporary Wi-Fi off",@"remainingSeconds":@0,@"enabled":@NO}];
+}
+- (BOOL)configureWifi:(NSDictionary *)body {
+    NSString *address=body[@"address"],*pin=body[@"certificateSha256"],*sid=body[@"sessionId"];int port=[body[@"port"] intValue],ttl=[body[@"ttlSeconds"] intValue];struct in_addr parsed;
+    if(self.activeChannel.secure||![address isKindOfClass:NSString.class]||inet_pton(AF_INET,address.UTF8String,&parsed)!=1||port<1024||port>65535||ttl<0||ttl>1800||!hexString(pin,64)||!hexString(sid,32))return NO;
+    uint32_t host=ntohl(parsed.s_addr);BOOL privateAddress=(host>>24)==10||(host>>20)==0xac1||(host>>16)==0xc0a8||(host>>16)==0xa9fe;if(!privateAddress)return NO;
+    BOOL start=NO;@synchronized(self){_wifiConfig=[body copy];_wifiDeadline=ttl?BTSessionClock()+ttl:DBL_MAX;if(!_wifiStarted){_wifiStarted=YES;start=YES;}}
+    if(start)dispatch_async(_wifiQueue,^{[self wifiLoop];});return YES;
+}
+- (void)wifiLoop {
+    while(!_stopping){@autoreleasepool {
+        NSDictionary *config;NSTimeInterval deadline;@synchronized(self){config=_wifiConfig;deadline=_wifiDeadline;}if(!config)break;
+        NSTimeInterval remaining=deadline==DBL_MAX?0:deadline-BTSessionClock();if(deadline!=DBL_MAX&&remaining<=0){[self clearWifi];[self notify:@"wifi.state" body:@{@"state":@"Session expired",@"remainingSeconds":@0,@"enabled":@NO}];break;}
+        BOOL preferUsb=[config[@"preferUsb"] boolValue];BTChannel *active=self.activeChannel;
+        [self notify:@"wifi.state" body:@{@"state":active&&!active.secure&&preferUsb?@"Authorized · USB preferred":@"Connecting via pinned TLS",@"remainingSeconds":@(MAX(0,remaining)),@"enabled":@YES}];
+        if(active&&!active.secure&&preferUsb){usleep(1000000);continue;}
+        NSError *error=nil;BTChannel *channel=[BTChannel connectTLS:config[@"address"] port:[config[@"port"] intValue] pin:config[@"certificateSha256"] deadline:deadline error:&error];
+        if(!channel){[self notify:@"wifi.state" body:@{@"state":@"Peer unreachable or TLS identity rejected",@"remainingSeconds":@(MAX(0,remaining)),@"enabled":@YES}];usleep(1000000);continue;}
+        BOOL current;@synchronized(self){current=[_wifiConfig[@"sessionId"] isEqual:config[@"sessionId"]];}
+        if(current&&[self sendChannel:channel type:@"wifi.join" body:@{@"sessionId":config[@"sessionId"]} sequence:0]&&[self authenticateChannel:channel]){
+            @synchronized(self){current=[_wifiConfig[@"sessionId"] isEqual:config[@"sessionId"]];}
+            if(current){[self notify:@"wifi.state" body:@{@"state":@"Wi-Fi TLS authenticated",@"remainingSeconds":@(MAX(0,remaining)),@"enabled":@YES}];[self serveChannel:channel allowReplacement:!preferUsb];}
+        }
+        [channel close];usleep(300000);
+    }}
+    @synchronized(self){_wifiStarted=NO;if(_wifiConfig&&!_stopping){_wifiStarted=YES;dispatch_async(_wifiQueue,^{[self wifiLoop];});}}
 }
 - (void)start {
     [_tx lock];if(_started){[_tx unlock];return;}_started=YES;_stopping=NO;[_tx unlock];
@@ -108,21 +164,19 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
             int client=accept(fd,NULL,NULL);if(client<0){int code=errno;if(code==EINTR)continue;if(!self->_stopping){[self networkPhase:@"accept-failed" error:code];[self notify:@"connection" body:@{@"state":[NSString stringWithFormat:@"USB listener stopped (%d); reopen BackThread",code]}];}break;}
             struct timeval timeout={5,0},sendTimeout={3,0};setsockopt(client,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));setsockopt(client,SOL_SOCKET,SO_SNDTIMEO,&sendTimeout,sizeof(sendTimeout));setsockopt(client,SOL_SOCKET,SO_NOSIGPIPE,&yes,sizeof(yes));
             setsockopt(client,IPPROTO_TCP,TCP_NODELAY,&yes,sizeof(yes));
-            [self->_tx lock];self->_client=client;self->_authenticated=NO;self->_generation++;memset(self->_sequences,0,sizeof(self->_sequences));[self->_tx unlock];
-            @try { if([self authenticate:client]) { timeout.tv_sec=12;setsockopt(client,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));[self notify:@"connection" body:@{@"state":@"Connected by USB"}];[self session:client]; } }
-            @catch(NSException *exception) { [self notify:@"error" body:@{@"error":exception.reason?:@"Protocol error"}]; }
-            [self->_tx lock];self->_client=-1;self->_authenticated=NO;shutdown(client,SHUT_RDWR);close(client);[self->_tx unlock];
-            self->_audioOn=NO;[self->_audio stop];[self notify:@"connection" body:@{@"state":@"Disconnected — waiting for host"}];
+            @autoreleasepool{BTChannel *channel=[[BTChannel alloc] initWithDescriptor:client];if([self authenticateChannel:channel])[self serveChannel:channel allowReplacement:YES];[channel close];}
         }
         [self->_tx lock];if(self->_listener==fd){close(fd);self->_listener=-1;}self->_started=NO;[self->_tx unlock];
     }});
 }
-- (void)stop { _stopping=YES;[_tx lock];if(_listener>=0)shutdown(_listener,SHUT_RDWR);if(_client>=0)shutdown(_client,SHUT_RDWR);[_tx unlock];[_audio stop]; }
+- (void)stop { _stopping=YES;[self clearWifi];[_tx lock];if(_listener>=0)shutdown(_listener,SHUT_RDWR);if(_client>=0)shutdown(_client,SHUT_RDWR);[_tx unlock];[_audio stop]; }
+- (void)rejectCommand:(NSString *)type body:(NSDictionary *)body reason:(NSString *)reason{[self notify:@"command.result" body:@{@"requestType":type,@"appId":body[@"appId"]?:@"",@"actionId":body[@"actionId"]?:@"",@"ok":@NO,@"error":reason}];}
 - (void)command:(NSString *)type body:(NSDictionary *)body {
+    if([type isEqual:@"wifi.disable"]&&!_authenticated){[self clearWifi];return;}
     if([type isEqual:@"job.cancel"]){NSString *jid=body[@"jobId"];@synchronized(self){if(jid&&[@[@"queued",@"running"] containsObject:_jobs[jid][@"state"]])[_cancelled addObject:jid];}return;}
-    if(dispatch_semaphore_wait(_commandSlots,DISPATCH_TIME_NOW)!=0)return;
-    [_tx lock];uint64_t generation=_generation;BOOL connected=_authenticated;[_tx unlock];if(!connected){dispatch_semaphore_signal(_commandSlots);return;}
-    dispatch_async(_commands,^{@autoreleasepool { [self send:type body:body reply:nil channel:3 generation:generation];dispatch_semaphore_signal(self->_commandSlots); }});
+    if(dispatch_semaphore_wait(_commandSlots,DISPATCH_TIME_NOW)!=0){[self rejectCommand:type body:body reason:@"Command queue is busy"];return;}
+    [_tx lock];uint64_t generation=_generation;BOOL connected=_authenticated;[_tx unlock];if(!connected){dispatch_semaphore_signal(_commandSlots);[self rejectCommand:type body:body reason:@"Companion is disconnected"];return;}
+    dispatch_async(_commands,^{@autoreleasepool { BOOL delivered=[self send:type body:body reply:nil channel:3 generation:generation];if(!delivered)[self rejectCommand:type body:body reason:@"Command was not delivered"];if([type isEqual:@"wifi.disable"])[self clearWifi];dispatch_semaphore_signal(self->_commandSlots); }});
 }
 - (NSString *)path:(NSString *)name {
     if(![name isKindOfClass:NSString.class]||name.length==0||name.length>120||[name hasPrefix:@"."]||[name hasSuffix:@"."]||[name rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"] invertedSet]].location!=NSNotFound)return nil;
@@ -138,7 +192,7 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
             if(payload.length%4)break;
             // Audio failure is local to this channel. Keep heartbeats, jobs and files alive.
             // Also discard already queued PCM after audio.stop or a failed audio.start.
-            if(!_audioOn)continue;
+            if(!_audioOn||self.nativePlaybackActive)continue;
             if(!_audio.running){_audioOn=NO;NSDictionary *stats=[_audio statistics];[_audio stop];[self send:@"audio.error" body:@{@"error":@"AudioQueue stopped; request audio.start to retry",@"lastOSStatus":stats[@"lastOSStatus"]?:@0} reply:nil channel:7];[self notify:@"error" body:@{@"error":@"Audio playback stopped; USB control remains connected"}];continue;}
             if(_previousAudio&&h.sequence!=_previousAudio+1)_audioGaps++;_previousAudio=h.sequence;_audioPackets++;_audioBytes+=payload.length;[_audio receive:payload];continue;
         }
@@ -152,9 +206,13 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
             }});continue;
         }
         NSString *type=m[@"type"];NSDictionary *b=m[@"body"];id rid=m[@"id"];
-        if([type isEqual:@"ping"]) { [self send:@"pong" body:@{} reply:rid channel:1]; }
-        else if([type isEqual:@"hello"]) { [self send:@"ok" body:@{@"agent":@"BackThread.Agent",@"simulated":@NO,@"capabilities":@[@"pcm",@"jobs",@"files",@"events",@"UIKit",@"direct-handoff"]} reply:rid channel:h.channel]; }
+        if([m[@"replyTo"] isKindOfClass:NSString.class]){NSDictionary *pending;@synchronized(_pendingCommands){pending=_pendingCommands[m[@"replyTo"]];[_pendingCommands removeObjectForKey:m[@"replyTo"]];}if(pending){NSMutableDictionary *result=[pending mutableCopy];result[@"ok"]=@(![type isEqual:@"error"]&&![b[@"success"] isEqual:@NO]&&![b[@"launched"] isEqual:@NO]);result[@"error"]=b[@"error"]?:@"";result[@"result"]=b;[self notify:@"command.result" body:result];continue;}}
+        if([type isEqual:@"wifi.enroll"]){BOOL accepted=[self configureWifi:b];[self send:accepted?@"ok":@"error" body:accepted?@{@"authorized":@YES}:@{@"error":@"Temporary Wi-Fi enrollment requires authenticated USB and valid bounded settings"} reply:rid channel:h.channel];}
+        else if([type isEqual:@"wifi.revoke"]){[self send:@"ok" body:@{@"revoked":@YES} reply:rid channel:h.channel];[self clearWifi];}
+        else if([type isEqual:@"ping"]) { [self send:@"pong" body:@{} reply:rid channel:1]; }
+        else if([type isEqual:@"hello"]) { [self send:@"ok" body:@{@"agent":@"BackThread.Agent",@"simulated":@NO,@"capabilities":@[@"pcm",@"jobs",@"files",@"events",@"UIKit",@"direct-handoff",@"apps",@"ui-inspect",@"temporary-wifi-tls"],@"playbackOwner":self.nativePlaybackActive?@"phone":@"pc"} reply:rid channel:h.channel]; }
         else if([type isEqual:@"audio.start"]) {
+            if(self.nativePlaybackActive){[self fail:@"Independent phone playback owns audio" message:m channel:h.channel];continue;}
             NSError *error=nil;if([b[@"sampleRate"] intValue]!=48000||[b[@"channels"] intValue]!=2||[b[@"bits"] intValue]!=16) { [self fail:@"Only 48 kHz stereo PCM16 supported" message:m channel:h.channel];continue; }
             _audioOn=NO;
             if([_audio start:&error]) { _audioOn=YES;_audioPackets=_audioBytes=_audioGaps=0;_previousAudio=0;[self send:@"ok" body:@{@"ready":@YES} reply:rid channel:h.channel]; }
@@ -163,7 +221,14 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         else if([type isEqual:@"audio.stop"]) { _audioOn=NO;[_audio stop];[self send:@"ok" body:@{@"stopped":@YES} reply:rid channel:h.channel]; }
         else if([type isEqual:@"audio.stats"]) { NSMutableDictionary *s=[[_audio statistics] mutableCopy];s[@"packets"]=@(_audioPackets);s[@"bytes"]=@(_audioBytes);s[@"gaps"]=@(_audioGaps);s[@"acceptingPCM"]=@(_audioOn);[self send:@"ok" body:s reply:rid channel:h.channel]; }
         else if([type isEqual:@"audio.volume"]) { NSError *error=nil;if(![b[@"value"] isKindOfClass:NSNumber.class]||![_audio setVolume:[b[@"value"] floatValue] error:&error])[self fail:error.localizedDescription?:@"Invalid audio volume" message:m channel:h.channel];else [self send:@"ok" body:@{} reply:rid channel:h.channel]; }
-        else if([type isEqual:@"media.state"]||[type isEqual:@"action.registry"]||[type isEqual:@"media.handoff"]) { [self notify:type body:b];[self send:@"ok" body:@{@"received":@YES} reply:rid channel:h.channel]; }
+        else if([type isEqual:@"media.state"]||[type isEqual:@"action.registry"]||[type isEqual:@"apps.catalog"]||[type isEqual:@"wifi.state"]) { [self notify:type body:b];if([rid isKindOfClass:NSString.class])[self send:@"ok" body:@{@"received":@YES} reply:rid channel:h.channel]; }
+        else if([type isEqual:@"ui.inspect"]||[type isEqual:@"media.handoff"]){
+            void(^handler)(NSString *,NSDictionary *,void(^)(NSDictionary *,BOOL))=self.uiRequest;
+            if(!handler||dispatch_semaphore_wait(_uiSlots,DISPATCH_TIME_NOW)!=0){[self fail:@"UI unavailable or busy" message:m channel:h.channel];continue;}
+            [_tx lock];uint64_t generation=_generation;[_tx unlock];uint16_t channel=h.channel;NSObject *ticket=[NSObject new];__block BOOL replied=NO;
+            void(^complete)(NSDictionary *,BOOL)=^(NSDictionary *result,BOOL success){@synchronized(ticket){if(replied)return;replied=YES;}dispatch_async(self->_commands,^{[self send:success?@"ok":@"error" body:result reply:rid channel:channel generation:generation];dispatch_semaphore_signal(self->_uiSlots);});};
+            dispatch_async(dispatch_get_main_queue(),^{handler(type,b,complete);});dispatch_after(dispatch_time(DISPATCH_TIME_NOW,15*NSEC_PER_SEC),_commands,^{complete(@{@"error":@"UI request deadline exceeded"},NO);});
+        }
         else if([type isEqual:@"error"]) { [self notify:@"error" body:b]; }
         else if([type isEqual:@"ok"]&&[m[@"replyTo"] isKindOfClass:NSString.class]&&[b[@"success"] isEqual:@NO]) { [self notify:@"error" body:@{@"error":@"Windows could not perform the requested action"}]; }
         else if([type isEqual:@"event.publish"]) { BOOL accepted=[self event:b];[self send:@"ok" body:@{@"accepted":@(accepted)} reply:rid channel:h.channel]; }
@@ -190,6 +255,7 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
 }
 - (BOOL)event:(NSDictionary *)b {
     NSString *eid=b[@"id"],*title=b[@"title"],*text=b[@"body"],*source=b[@"source"];
+    if((b[@"category"]&&b[@"category"]!=NSNull.null&&(![b[@"category"] isKindOfClass:NSString.class]||[b[@"category"] length]>64))||(b[@"iconBase64"]&&b[@"iconBase64"]!=NSNull.null&&(![b[@"iconBase64"] isKindOfClass:NSString.class]||[b[@"iconBase64"] length]>12000)))return NO;
     if(![eid isKindOfClass:NSString.class]||eid.length==0||eid.length>64||![title isKindOfClass:NSString.class]||title.length>256||![text isKindOfClass:NSString.class]||text.length>2048||![source isKindOfClass:NSString.class]||source.length>128)return NO;
     NSISO8601DateFormatter *formatter=[NSISO8601DateFormatter new];formatter.formatOptions=NSISO8601DateFormatWithInternetDateTime|NSISO8601DateFormatWithFractionalSeconds;NSDate *expiry=[formatter dateFromString:b[@"expiresUtc"]?:@""];if(!expiry){formatter.formatOptions=NSISO8601DateFormatWithInternetDateTime;expiry=[formatter dateFromString:b[@"expiresUtc"]?:@""];}
     if(!expiry||[expiry timeIntervalSinceNow]<=0||[expiry timeIntervalSinceNow]>86400||[b[@"priority"] intValue]<0||[b[@"priority"] intValue]>3)return NO;
@@ -252,7 +318,7 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
     @try {
         unsigned long long size=[file seekToEndOfFile];if((unsigned long long)offset>size){[self send:@"error" body:@{@"error":@"Read beyond file"} reply:m[@"id"] channel:c generation:generation];return;}
         [file seekToFileOffset:(unsigned long long)offset];NSData *chunk=[file readDataOfLength:(NSUInteger)count];NSMutableData *payload=[NSMutableData dataWithLength:40];memcpy(payload.mutableBytes,[tid dataUsingEncoding:NSASCIIStringEncoding].bytes,32);bt_put64((uint8_t *)payload.mutableBytes+32,(uint64_t)offset);[payload appendData:chunk];
-        uint8_t header[BT_HEADER_SIZE];[_tx lock];BTHeader h={(uint32_t)payload.length,6,++_sequences[6],0};bt_header_encode(header,&h);BOOL ok=_authenticated&&_generation==generation&&_client>=0&&exact(_client,header,sizeof(header),YES)&&exact(_client,payload.mutableBytes,payload.length,YES);if(!ok&&_generation==generation&&_client>=0)shutdown(_client,SHUT_RDWR);[_tx unlock];
+        uint8_t header[BT_HEADER_SIZE];[_tx lock];BTHeader h={(uint32_t)payload.length,6,++_sequences[6],0};bt_header_encode(header,&h);BOOL ok=_authenticated&&_generation==generation&&_client>=0&&[self transfer:_client data:header count:sizeof(header) writing:YES]&&[self transfer:_client data:payload.mutableBytes count:payload.length writing:YES];if(!ok&&_generation==generation&&_client>=0)shutdown(_client,SHUT_RDWR);[_tx unlock];
         if(ok)[self send:@"ok" body:@{@"length":@(chunk.length)} reply:m[@"id"] channel:c generation:generation];
     } @finally{[file closeFile];}
 }

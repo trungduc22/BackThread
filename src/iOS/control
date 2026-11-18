@@ -1,6 +1,6 @@
 Package: app.backthread.companion
 Name: BackThread
-Version: 0.1.2
+Version: 0.2.0
 Architecture: iphoneos-arm
 Description: USB PCM audio, media controls and bounded background jobs.
 Maintainer: BackThread contributors

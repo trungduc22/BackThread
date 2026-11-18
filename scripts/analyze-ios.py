@@ -12,7 +12,7 @@ from ios_build_support import write_audit_header
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCES = ['src/iOS/UI/main.m', 'src/iOS/UI/BTViewController.m', 'src/iOS/Agent/BTAgent.m',
            'src/iOS/Agent/main.m', 'src/iOS/AudioReceiver/BTAudioReceiver.m',
-           'src/iOS/AudioReceiver/BTPcmRing.c', 'src/Shared/Protocol/bt_wire.c','src/iOS/Probe/main.m','src/iOS/Probe/entry.c','src/iOS/Probe/loader.c']
+           'src/iOS/AudioReceiver/BTPcmRing.c', 'src/Shared/Protocol/bt_wire.c','src/iOS/Probe/main.m','src/iOS/Probe/entry.c','src/iOS/Probe/loader.c'] + [p.relative_to(ROOT).as_posix() for p in sorted((ROOT/'src/iOS/UI').glob('*.m')) if p.name not in ('main.m','BTViewController.m')] + [p.relative_to(ROOT).as_posix() for p in sorted((ROOT/'src/iOS/Transport').glob('*.m'))]
 
 
 def main():

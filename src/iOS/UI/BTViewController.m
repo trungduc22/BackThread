@@ -1,129 +1,63 @@
 #import "BTViewController.h"
+#import "BTTheme.h"
+#import "BTNavigation.h"
+#import "BTMediaView.h"
+#import "BTCompanionPage.h"
+#import "BTNotificationCoordinator.h"
 #import "../Agent/BTAgent.h"
 #import "../AudioReceiver/BTAudioReceiver.h"
 #import <AVFoundation/AVFoundation.h>
-#import <MediaPlayer/MediaPlayer.h>
-#import <ImageIO/ImageIO.h>
-
-static NSString *BTText(id value,NSString *fallback) { return [value isKindOfClass:NSString.class]?value:fallback; }
-static double BTNumber(id value) { return [value isKindOfClass:NSNumber.class]?[value doubleValue]:0; }
-
+#import <CommonCrypto/CommonDigest.h>
 @implementation BTViewController {
-    UILabel *_connection,*_title,*_artist,*_source,*_workerStatus,*_timeline,*_noticeTitle,*_noticeBody;
-    UIImageView *_art;
-    UISlider *_seek;
-    UIButton *_play,*_next,*_previous;
-    UIStackView *_media,*_actions,*_worker,*_history;
-    UISegmentedControl *_tabs;
-    UIView *_notice;
-    NSLayoutConstraint *_noticeCenter,*_noticeTop,*_noticeBottom;
-    NSTimer *_noticeTimer;
-    NSMutableArray *_events;
-    NSDictionary *_session;
-    NSString *_lastJob;
-    NSString *_artworkKey;
-    NSUInteger _memoryWarningGeneration;
-    AVPlayer *_player;
+    BTPageCoordinator *_pages;BTCornerDrawer *_drawer;BTMediaView *_media;
+    BTNotificationCoordinator *_notifications;NSMutableDictionary *_pageCache,*_jobs;
+    NSMutableArray *_apps;NSDictionary *_actions,*_windows,*_wifiState,*_pauseToken;
+    BOOL _connected,_captureDisconnect,_reordering,_fullscreenNotice;NSString *_transport;UILabel *_preview;NSUInteger _memoryGeneration;
+    void (^_handoffReply)(NSDictionary *,BOOL);NSUInteger _handoffGeneration;BOOL _acceptingHandoff;
 }
-- (UILabel *)label:(CGFloat)size {
-    UILabel *l=[UILabel new];l.font=[UIFont systemFontOfSize:size];l.textColor=UIColor.whiteColor;l.numberOfLines=2;return l;
+- (BOOL)prefersStatusBarHidden{return YES;}
+- (void)viewDidLoad{[super viewDidLoad];self.view.backgroundColor=BTBackground();_pageCache=[NSMutableDictionary new];_jobs=[NSMutableDictionary new];_apps=[NSMutableArray new];_transport=@"USB";
+    _media=[[BTMediaView alloc] initWithFrame:self.view.bounds];__weak typeof(self) weak=self;
+    _media.sourceWillChange=^{BTViewController *owner=weak;if(owner&&!owner->_acceptingHandoff)[owner cancelHandoff:@"Media source changed before playback was confirmed"];};
+    _media.command=^(NSString *type,NSDictionary *body){[weak dispatch:type body:body];};
+    _media.ownershipChanged=^(BOOL native){BTViewController *owner=weak;if(!owner)return;owner.agent.nativePlaybackActive=native;if(native)[owner->_pages selectPage:0 animated:YES];if(owner->_connected)[owner.agent command:@"media.owner" body:@{@"owner":native?@"phone":@"pc"}];};
+    _media.playbackChanged=^(NSDictionary *state){BTViewController *owner=weak;if(!owner)return;if(owner->_connected)[owner.agent command:@"media.playback" body:state];if(owner->_handoffReply&&[@[@"playing",@"failed"] containsObject:state[@"state"]]){void(^reply)(NSDictionary *,BOOL)=owner->_handoffReply;owner->_handoffReply=nil;reply(state,[state[@"state"] isEqual:@"playing"]);}};
+    _pages=[BTPageCoordinator new];_pages.pageFactory=^UIViewController *(NSInteger index){BTViewController *owner=weak;if(!owner)return [UIViewController new];if(index==0){UIViewController *vc=[UIViewController new];vc.view=owner->_media;return vc;}BTCompanionPage *page=[BTCompanionPage new];page.kind=index;page.interactionChanged=^(BOOL busy){BTViewController *current=weak;if(!current)return;current->_reordering=busy;current->_pages.gesturesBlocked=busy||current->_fullscreenNotice;};page.command=^(NSString *type,NSDictionary *body){[weak dispatch:type body:body];};owner->_pageCache[@(index)]=page;[page loadViewIfNeeded];page.transport=owner->_transport;[page setConnected:owner->_connected];if(index==1)[page receive:@"apps.catalog" body:@{@"reset":@YES,@"apps":owner->_apps}];if(index==2)[page receive:@"action.registry" body:owner->_actions?:@{}];if(index==3)for(NSDictionary *job in owner->_jobs.allValues)[page receive:@"job.progress" body:job];if(index==4)[page receive:@"history" body:@{@"events":owner->_notifications.history?:@[]}];if(index==5)[page receive:@"wifi.state" body:owner->_wifiState?:@{}];return page;};
+    [self addChildViewController:_pages];_pages.view.frame=self.view.bounds;_pages.view.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;[self.view addSubview:_pages.view];[_pages didMoveToParentViewController:self];[_pages selectPage:0 animated:NO];
+    _drawer=[[BTCornerDrawer alloc] initWithFrame:self.view.bounds];_drawer.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;_drawer.selected=^(NSInteger page){BTViewController *owner=weak;if(!owner)return;[owner->_pages selectPage:page animated:YES];};[self.view addSubview:_drawer];
+    _notifications=[[BTNotificationCoordinator alloc] initWithHost:self.view];_notifications.historyChanged=^(NSArray *events){BTViewController *owner=weak;if(!owner)return;[owner->_pageCache[@4] receive:@"history" body:@{@"events":events}];};_notifications.presentationChanged=^(BOOL fullscreen,BOOL visible){BTViewController *owner=weak;if(!owner)return;if(visible)[owner->_drawer setOpen:NO animated:YES];owner->_fullscreenNotice=fullscreen&&visible;owner->_pages.gesturesBlocked=owner->_fullscreenNotice||owner->_reordering;if(fullscreen&&visible&&[NSUserDefaults.standardUserDefaults boolForKey:@"pauseForFullscreen"]&&!owner->_pauseToken)owner->_pauseToken=[owner->_media pauseForNotification];if(!visible&&owner->_pauseToken){[owner->_media restoreAfterNotification:owner->_pauseToken];owner->_pauseToken=nil;}};
+    _preview=BTLabel(10,UIFontWeightSemibold);_preview.text=@"DESIGN PREVIEW · FIXTURE DATA";_preview.textColor=BTAccent();_preview.frame=CGRectMake(28,6,360,18);_preview.hidden=YES;_preview.userInteractionEnabled=NO;[self.view addSubview:_preview];
+    _media.fillVideo=[NSUserDefaults.standardUserDefaults boolForKey:@"fillVideo"];
 }
-- (UIButton *)button:(NSString *)title selector:(SEL)selector {
-    UIButton *b=[UIButton buttonWithType:UIButtonTypeSystem];[b setTitle:title forState:UIControlStateNormal];b.titleLabel.font=[UIFont systemFontOfSize:18 weight:UIFontWeightSemibold];[b setTitleColor:[UIColor colorWithRed:.35 green:.82 blue:.76 alpha:1] forState:UIControlStateNormal];[b.heightAnchor constraintGreaterThanOrEqualToConstant:44].active=YES;[b addTarget:self action:selector forControlEvents:UIControlEventTouchUpInside];return b;
+- (void)cancelHandoff:(NSString *)reason{_handoffGeneration++;if(_handoffReply){void(^reply)(NSDictionary *,BOOL)=_handoffReply;_handoffReply=nil;reply(@{@"error":reason},NO);}}
+- (void)setAgent:(BTAgent *)agent{_agent=agent;__weak typeof(self) weak=self;agent.uiRequest=^(NSString *type,NSDictionary *body,void(^reply)(NSDictionary *,BOOL)){BTViewController *owner=weak;if(!owner){reply(@{@"error":@"UI is unavailable"},NO);return;}[owner loadViewIfNeeded];if([type isEqual:@"ui.inspect"]){reply([owner inspect:body],YES);return;}if([type isEqual:@"media.handoff"]){[owner cancelHandoff:@"Replaced by another media request"];owner->_handoffReply=[reply copy];NSUInteger generation=++owner->_handoffGeneration;owner->_acceptingHandoff=YES;BOOL opened=[owner->_media openURL:BTString(body[@"url"],@"")];owner->_acceptingHandoff=NO;if(!opened){[owner cancelHandoff:@"A supported HTTPS media URL and an available audio session are required"];return;}dispatch_after(dispatch_time(DISPATCH_TIME_NOW,12*NSEC_PER_SEC),dispatch_get_main_queue(),^{BTViewController *current=weak;if(current&&current->_handoffReply&&generation==current->_handoffGeneration){void(^completion)(NSDictionary *,BOOL)=current->_handoffReply;current->_handoffReply=nil;completion(@{@"error":@"Native media has not reached playing before the deadline"},NO);}});}};}
+- (void)dispatch:(NSString *)type body:(NSDictionary *)body{if([type isEqual:@"media.open"]){[_media promptForURL];return;}if([type isEqual:@"media.pc"]){[_media returnToPC];[_pages selectPage:0 animated:YES];return;}if([type isEqual:@"pair"]){[self pair];return;}if([type isEqual:@"settings.changed"]){_media.fillVideo=[NSUserDefaults.standardUserDefaults boolForKey:@"fillVideo"];return;}[self.agent command:type body:body];}
+- (void)receive:(NSString *)type body:(NSDictionary *)body{if(!NSThread.isMainThread){__weak typeof(self) weak=self;dispatch_async(dispatch_get_main_queue(),^{[weak receive:type body:body];});return;}[self loadViewIfNeeded];
+    if([type isEqual:@"connection"]){NSString *state=BTString(body[@"state"],@"");_connected=[state hasPrefix:@"Connected"];_transport=[state containsString:@"Wi-Fi"]?@"Wi-Fi":@"USB";[_media setConnected:_connected transport:_transport];for(BTCompanionPage *page in _pageCache.allValues){page.transport=_transport;[page setConnected:_connected];}if(!_connected){[_drawer setOpen:NO animated:NO];if(_captureDisconnect){_captureDisconnect=NO;[self inspect:@{@"capture":@YES}];NSString *root=[NSHomeDirectory() stringByAppendingPathComponent:@"Documents/BackThread"];[[NSFileManager defaultManager] removeItemAtPath:[root stringByAppendingPathComponent:@"ui-disconnected.png"] error:nil];[[NSFileManager defaultManager] copyItemAtPath:[root stringByAppendingPathComponent:@"ui-snapshot.png"] toPath:[root stringByAppendingPathComponent:@"ui-disconnected.png"] error:nil];}}}
+    else if([type isEqual:@"media.state"]){_windows=[body[@"session"] isKindOfClass:NSDictionary.class]?body[@"session"]:@{};if(_preview.hidden)[_media updateWindows:_windows];}
+    else if([type isEqual:@"apps.catalog"]){if([body[@"reset"] boolValue])[_apps removeAllObjects];for(NSDictionary *app in body[@"apps"])if(_apps.count<32&&[app isKindOfClass:NSDictionary.class])[_apps addObject:app];[_pageCache[@1] receive:type body:body];}
+    else if([type isEqual:@"action.registry"]){_actions=body;[_pageCache[@2] receive:type body:body];}
+    else if([type isEqual:@"job.progress"]){NSString *jid=BTString(body[@"jobId"],@"");if(jid.length){if(_jobs.count>=32&&!_jobs[jid])[_jobs removeObjectForKey:_jobs.allKeys.firstObject];_jobs[jid]=body;}[_pageCache[@3] receive:type body:body];}
+    else if([type isEqual:@"event.publish"])[_notifications accept:body];
+    else if([type isEqual:@"wifi.state"]){_wifiState=body;[_pageCache[@5] receive:type body:body];}
+    else if([type isEqual:@"command.result"]){[_pageCache[@1] receive:type body:body];[_pageCache[@2] receive:type body:body];BOOL ok=[body[@"ok"] boolValue];NSString *kind=BTString(body[@"requestType"],@"");if([kind isEqual:@"wifi.enable"]&&!ok)[_pageCache[@5] receive:@"wifi.state" body:@{@"state":BTString(body[@"error"],@"Not authorized"),@"enabled":@NO}];if(!ok||[kind isEqual:@"apps.launch"])[self feedback:ok?@"Started on Windows":@"Could not complete the request" detail:BTString(body[@"error"],@"")];}
+    else if([type isEqual:@"error"])[self feedback:@"Companion message" detail:BTString(body[@"error"],@"Request failed")];
 }
-- (void)viewDidLoad {
-    [super viewDidLoad];self.view.backgroundColor=[UIColor colorWithWhite:.055 alpha:1];_events=[NSMutableArray new];
-    _connection=[self label:12];_connection.text=@"BackThread · waiting for USB host";_connection.textColor=[UIColor colorWithWhite:.6 alpha:1];
-    UIButton *settings=[self button:@"Pair" selector:@selector(pair)];
-    UIStackView *top=[[UIStackView alloc] initWithArrangedSubviews:@[_connection,settings]];top.distribution=UIStackViewDistributionEqualSpacing;
-    _art=[UIImageView new];_art.backgroundColor=[UIColor colorWithWhite:.12 alpha:1];_art.contentMode=UIViewContentModeScaleAspectFit;_art.layer.cornerRadius=8;_art.clipsToBounds=YES;[_art.widthAnchor constraintEqualToConstant:110].active=YES;[_art.heightAnchor constraintEqualToConstant:110].active=YES;
-    _title=[self label:23];_title.font=[UIFont systemFontOfSize:23 weight:UIFontWeightSemibold];_title.text=@"Ready when you are";
-    _artist=[self label:16];_artist.text=@"Play media on Windows to begin";_artist.textColor=[UIColor colorWithWhite:.7 alpha:1];_source=[self label:11];
-    UIStackView *metadata=[[UIStackView alloc] initWithArrangedSubviews:@[_title,_artist,_source]];metadata.axis=UILayoutConstraintAxisVertical;metadata.spacing=6;
-    UIStackView *track=[[UIStackView alloc] initWithArrangedSubviews:@[_art,metadata]];track.spacing=20;track.alignment=UIStackViewAlignmentCenter;
-    _previous=[self button:@"Previous" selector:@selector(previous)];_play=[self button:@"Play / Pause" selector:@selector(toggle)];_next=[self button:@"Next" selector:@selector(next)];
-    _previous.enabled=_play.enabled=_next.enabled=NO;
-    UIStackView *controls=[[UIStackView alloc] initWithArrangedSubviews:@[_previous,_play,_next]];controls.distribution=UIStackViewDistributionFillEqually;
-    _seek=[UISlider new];_seek.enabled=NO;[_seek addTarget:self action:@selector(seek) forControlEvents:UIControlEventTouchUpInside|UIControlEventTouchUpOutside];_timeline=[self label:11];
-    MPVolumeView *volume=[[MPVolumeView alloc] initWithFrame:CGRectZero];volume.showsRouteButton=YES;[volume.heightAnchor constraintEqualToConstant:30].active=YES;
-    _media=[[UIStackView alloc] initWithArrangedSubviews:@[track,controls,_seek,_timeline,volume]];_media.axis=UILayoutConstraintAxisVertical;_media.spacing=4;
-    _actions=[UIStackView new];_actions.axis=UILayoutConstraintAxisVertical;_actions.spacing=4;
-    _workerStatus=[self label:18];_workerStatus.text=@"No background jobs";UIButton *cancel=[self button:@"Cancel active job" selector:@selector(cancel)];_worker=[[UIStackView alloc] initWithArrangedSubviews:@[_workerStatus,cancel]];_worker.axis=UILayoutConstraintAxisVertical;
-    _history=[UIStackView new];_history.axis=UILayoutConstraintAxisVertical;_history.spacing=8;
-    _tabs=[[UISegmentedControl alloc] initWithItems:@[@"Media",@"Actions",@"Worker",@"History"]];_tabs.selectedSegmentIndex=0;_tabs.tintColor=[UIColor colorWithRed:.35 green:.82 blue:.76 alpha:1];[_tabs addTarget:self action:@selector(tab) forControlEvents:UIControlEventValueChanged];
-    UIStackView *content=[[UIStackView alloc] initWithArrangedSubviews:@[_media,_actions,_worker,_history]];content.axis=UILayoutConstraintAxisVertical;
-    UIScrollView *scroll=[UIScrollView new];[scroll addSubview:content];content.translatesAutoresizingMaskIntoConstraints=NO;
-    UIStackView *root=[[UIStackView alloc] initWithArrangedSubviews:@[top,scroll,_tabs]];root.axis=UILayoutConstraintAxisVertical;root.spacing=8;root.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:root];
-    [NSLayoutConstraint activateConstraints:@[[root.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor constant:16],[root.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor constant:-16],[root.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8],[root.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-8],[content.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor],[content.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor],[content.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor],[content.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor],[content.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor]]];
-    _notice=[UIView new];_notice.backgroundColor=[UIColor colorWithWhite:.1 alpha:.98];_notice.layer.cornerRadius=12;_notice.hidden=YES;_notice.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:_notice];
-    _noticeTitle=[self label:24];_noticeBody=[self label:17];_noticeBody.numberOfLines=5;UIButton *dismiss=[self button:@"Dismiss" selector:@selector(dismissNotice)];UIStackView *noticeStack=[[UIStackView alloc] initWithArrangedSubviews:@[_noticeTitle,_noticeBody,dismiss]];noticeStack.axis=UILayoutConstraintAxisVertical;noticeStack.spacing=12;noticeStack.translatesAutoresizingMaskIntoConstraints=NO;[_notice addSubview:noticeStack];
-    _noticeCenter=[_notice.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor];_noticeTop=[_notice.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8];_noticeBottom=[_notice.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-8];
-    [NSLayoutConstraint activateConstraints:@[[_notice.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor constant:12],[_notice.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor constant:-12],_noticeCenter,[noticeStack.leadingAnchor constraintEqualToAnchor:_notice.leadingAnchor constant:20],[noticeStack.trailingAnchor constraintEqualToAnchor:_notice.trailingAnchor constant:-20],[noticeStack.topAnchor constraintEqualToAnchor:_notice.topAnchor constant:16],[noticeStack.bottomAnchor constraintEqualToAnchor:_notice.bottomAnchor constant:-16]]];
-    UISwipeGestureRecognizer *swipe=[[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(dismissNotice)];swipe.direction=UISwipeGestureRecognizerDirectionUp;[_notice addGestureRecognizer:swipe];[self tab];
+- (void)feedback:(NSString *)title detail:(NSString *)detail{NSISO8601DateFormatter *format=[NSISO8601DateFormatter new];[_notifications accept:@{@"id":NSUUID.UUID.UUIDString,@"source":@"BackThread",@"title":title,@"body":detail,@"priority":@1,@"expiresUtc":[format stringFromDate:[NSDate dateWithTimeIntervalSinceNow:5]]}];}
+- (NSDictionary *)inspect:(NSDictionary *)request{
+    if(UIApplication.sharedApplication.applicationState!=UIApplicationStateActive)return @{@"error":@"Native snapshots require foreground BackThread"};
+    if([request[@"armDisconnectCapture"] boolValue])_captureDisconnect=YES;
+    NSNumber *page=request[@"page"];if([page isKindOfClass:NSNumber.class])[_pages selectPage:page.integerValue animated:[request[@"animated"] boolValue]];
+    if(request[@"drawer"])[_drawer setOpen:[request[@"drawer"] boolValue] animated:[request[@"animated"] boolValue]];
+    NSString *preview=BTString(request[@"preview"],@"");if(preview.length){_preview.hidden=[preview isEqual:@"off"];if(!_preview.hidden)[_media showPreview:preview];else [_media updateWindows:_windows?:@{}];}
+    if([request[@"controls"] boolValue])[_media showControls];
+    if([request[@"dismissNotification"] boolValue])[_notifications dismiss];
+    if([request[@"notification"] isKindOfClass:NSDictionary.class])[_notifications accept:request[@"notification"]];
+    if([request[@"videoURL"] isKindOfClass:NSString.class])[_media openURL:request[@"videoURL"]];
+    [self.view layoutIfNeeded];NSMutableDictionary *state=[@{@"width":@(self.view.bounds.size.width),@"height":@(self.view.bounds.size.height),@"page":@(_pages.selectedPage),@"drawerOpen":@(_drawer.open),@"media":[_media snapshot],@"notification":[_notifications snapshot],@"connected":@(_connected)} mutableCopy];
+    if([request[@"capture"] boolValue]){UIGraphicsBeginImageContextWithOptions(self.view.bounds.size,YES,1);BOOL rendered=[self.view drawViewHierarchyInRect:self.view.bounds afterScreenUpdates:YES];UIImage *image=UIGraphicsGetImageFromCurrentImageContext();UIGraphicsEndImageContext();NSData *png=UIImagePNGRepresentation(image);if(rendered&&png.length&&png.length<=2*1024*1024){NSString *path=[NSHomeDirectory() stringByAppendingPathComponent:@"Documents/BackThread/ui-snapshot.png"];NSError *error=nil;if([png writeToFile:path options:NSDataWritingAtomic error:&error]){uint8_t hash[CC_SHA256_DIGEST_LENGTH];CC_SHA256(png.bytes,(CC_LONG)png.length,hash);NSMutableString *digest=[NSMutableString new];for(unsigned i=0;i<sizeof(hash);i++)[digest appendFormat:@"%02x",hash[i]];state[@"snapshot"]=@{@"name":@"ui-snapshot.png",@"bytes":@(png.length),@"sha256":digest,@"scope":@"Own foreground native view; fixture label indicates injected design data"};}else state[@"error"]=error.localizedDescription?:@"Snapshot write failed";}else state[@"error"]=@"Snapshot rendering failed";}
+    return state;
 }
-- (NSDate *)expiry:(NSDictionary *)event { NSISO8601DateFormatter *f=[NSISO8601DateFormatter new];f.formatOptions=NSISO8601DateFormatWithInternetDateTime|NSISO8601DateFormatWithFractionalSeconds;NSDate *date=[f dateFromString:event[@"expiresUtc"]?:@""];if(!date){f.formatOptions=NSISO8601DateFormatWithInternetDateTime;date=[f dateFromString:event[@"expiresUtc"]?:@""];}return date; }
-- (void)refreshHistory {
-    NSIndexSet *expired=[_events indexesOfObjectsPassingTest:^BOOL(NSDictionary *event,NSUInteger i,BOOL *stop){(void)i;(void)stop;NSDate *date=[self expiry:event];return !date||date.timeIntervalSinceNow<=0;}];[_events removeObjectsAtIndexes:expired];
-    for(UIView *v in [_history.arrangedSubviews copy]){[_history removeArrangedSubview:v];[v removeFromSuperview];}
-    for(NSDictionary *event in [_events reverseObjectEnumerator]){UILabel *l=[self label:14];l.text=[NSString stringWithFormat:@"%@ · %@\n%@",event[@"source"],event[@"title"],event[@"body"]];[_history addArrangedSubview:l];}
-}
-- (void)tab { _media.hidden=_tabs.selectedSegmentIndex!=0;_actions.hidden=_tabs.selectedSegmentIndex!=1;_worker.hidden=_tabs.selectedSegmentIndex!=2;_history.hidden=_tabs.selectedSegmentIndex!=3;if(!_history.hidden)[self refreshHistory]; }
-- (void)mediaCommand:(NSString *)command { NSMutableDictionary *body=[@{@"command":command} mutableCopy];if([_session[@"source"] isKindOfClass:NSString.class])body[@"source"]=_session[@"source"];[self.agent command:@"media.command" body:body]; }
-- (void)toggle { [self mediaCommand:@"toggle"]; }
-- (void)previous { [self mediaCommand:@"previous"]; }
-- (void)next { [self mediaCommand:@"next"]; }
-- (void)seek { [self.agent command:@"media.command" body:@{@"command":@"seek",@"seconds":@(_seek.value),@"source":_session[@"source"]?:@""}]; }
-- (void)cancel { if(_lastJob)[self.agent command:@"job.cancel" body:@{@"jobId":_lastJob}]; }
-- (void)action:(UIButton *)button { [self.agent command:@"action.invoke" body:@{@"actionId":button.accessibilityIdentifier?:@""}]; }
-- (void)dismissNotice { [_noticeTimer invalidate];_noticeTimer=nil;_notice.hidden=YES; }
-- (void)receive:(NSString *)type body:(NSDictionary *)body {
-    if(!self.isViewLoaded)[self loadViewIfNeeded];
-    if([type isEqual:@"connection"])_connection.text=[@"BackThread · " stringByAppendingString:BTText(body[@"state"],@"")];
-    else if([type isEqual:@"media.state"]) {
-        NSDictionary *s=body[@"session"];if(![s isKindOfClass:NSDictionary.class])s=@{};_session=s;
-        NSString *title=BTText(s[@"title"],@"");_title.text=title.length?title:@"Ready when you are";_artist.text=BTText(s[@"artist"],@"Play media on Windows to begin");_source.text=BTText(s[@"source"],@"");
-        [_play setTitle:[s[@"state"] isEqual:@"Playing"]?@"Pause":@"Play" forState:UIControlStateNormal];_play.enabled=s.count>0;_next.enabled=BTNumber(s[@"canNext"])!=0;_previous.enabled=BTNumber(s[@"canPrevious"])!=0;
-        if(!_seek.tracking){_seek.maximumValue=MAX(1,BTNumber(s[@"durationSeconds"]));_seek.value=BTNumber(s[@"positionSeconds"]);}_seek.enabled=BTNumber(s[@"canSeek"])!=0;
-        _timeline.text=[NSString stringWithFormat:@"%.0f / %.0f seconds",BTNumber(s[@"positionSeconds"]),BTNumber(s[@"durationSeconds"])];
-        NSString *art=s[@"artworkBase64"];
-        if([art isKindOfClass:NSString.class]&&art.length<=32000) {
-            if(![_artworkKey isEqual:art]) { _artworkKey=[art copy];NSData *data=[[NSData alloc] initWithBase64EncodedString:art options:0];CGImageSourceRef source=data?CGImageSourceCreateWithData((__bridge CFDataRef)data,NULL):NULL;_art.image=nil;
-                if(source){NSDictionary *options=@{(id)kCGImageSourceCreateThumbnailFromImageAlways:@YES,(id)kCGImageSourceThumbnailMaxPixelSize:@128,(id)kCGImageSourceCreateThumbnailWithTransform:@YES};CGImageRef image=CGImageSourceCreateThumbnailAtIndex(source,0,(__bridge CFDictionaryRef)options);if(image){_art.image=[UIImage imageWithCGImage:image];CGImageRelease(image);}CFRelease(source);}
-            }
-        } else { _artworkKey=nil;_art.image=nil; }
-    }
-    else if([type isEqual:@"action.registry"]) {
-        for(UIView *v in [_actions.arrangedSubviews copy]){[_actions removeArrangedSubview:v];[v removeFromSuperview];}
-        NSArray *actions=body[@"actions"];if([actions isKindOfClass:NSArray.class])for(id a in actions){if(_actions.arrangedSubviews.count>=32)break;if(![a isKindOfClass:NSDictionary.class]||![a[@"id"] isKindOfClass:NSString.class]||![a[@"title"] isKindOfClass:NSString.class])continue;UIButton *button=[self button:a[@"title"] selector:@selector(action:)];button.accessibilityIdentifier=a[@"id"];[_actions addArrangedSubview:button];}
-    }
-    else if([type isEqual:@"job.progress"]) { _lastJob=body[@"jobId"];_workerStatus.text=[NSString stringWithFormat:@"%@ · %@ · %.0f%%\n%@",_lastJob,body[@"state"],[body[@"progress"] doubleValue]*100,body[@"error"]?:body[@"result"]?:@""]; }
-    else if([type isEqual:@"event.publish"]) {
-        [_events addObject:body];while(_events.count>64)[_events removeObjectAtIndex:0];
-        [self refreshHistory];
-        NSInteger priority=[body[@"priority"] integerValue];if(priority==0)return;
-        _noticeTitle.text=body[@"title"];_noticeBody.text=body[@"body"];_noticeBody.hidden=priority==1;_notice.hidden=NO;[_noticeTimer invalidate];
-        _noticeCenter.active=NO;_noticeTop.active=YES;_noticeBottom.active=priority>=2;_noticeTitle.font=[UIFont systemFontOfSize:priority>=2?24:16 weight:UIFontWeightSemibold];
-        NSTimeInterval visible=MIN(priority>=2?8:3,MAX(.1,[self expiry:body].timeIntervalSinceNow));_noticeTimer=[NSTimer scheduledTimerWithTimeInterval:visible target:self selector:@selector(dismissNotice) userInfo:nil repeats:NO];
-    }
-    else if([type isEqual:@"media.handoff"]) {
-        NSURL *url=[NSURL URLWithString:BTText(body[@"url"],@"")];
-        if(![url.scheme.lowercaseString isEqual:@"https"]||url.user||url.password){_connection.text=@"Handoff rejected: HTTPS media required";return;}
-        [_player pause];_player=[AVPlayer playerWithURL:url];[_player play];_connection.text=@"Direct media handed to AVPlayer; playback is unverified";
-    }
-    else if([type isEqual:@"error"])_connection.text=BTText(body[@"error"],@"The host rejected the request");
-}
-- (void)pair {
-    UIAlertController *alert=[UIAlertController alertControllerWithTitle:@"Provision host key" message:@"Paste the 64-character session key created by BackThread.Host. Save it, then close and reopen this app to use the key." preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *f){f.secureTextEntry=YES;f.autocorrectionType=UITextAutocorrectionTypeNo;f.autocapitalizationType=UITextAutocapitalizationTypeNone;}];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Save key" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a){(void)a;
-        NSString *key=alert.textFields.firstObject.text;NSCharacterSet *invalid=[[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdefABCDEF"] invertedSet];if(key.length!=64||[key rangeOfCharacterFromSet:invalid].location!=NSNotFound){self->_connection.text=@"Key must contain exactly 64 hexadecimal characters";return;}
-        NSString *dir=[NSHomeDirectory() stringByAppendingPathComponent:@"Library/BackThread"];[[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:@{NSFileProtectionKey:NSFileProtectionCompleteUntilFirstUserAuthentication} error:nil];NSString *path=[dir stringByAppendingPathComponent:@"session.key"];NSError *error=nil;
-        if(![key writeToFile:path atomically:YES encoding:NSASCIIStringEncoding error:&error]){self->_connection.text=error.localizedDescription;return;}
-        [[NSFileManager defaultManager] setAttributes:@{NSFilePosixPermissions:@0600,NSFileProtectionKey:NSFileProtectionCompleteUntilFirstUserAuthentication} ofItemAtPath:path error:nil];
-        self->_connection.text=@"Key saved. Close and reopen BackThread to start with the new key.";
-    }]];[self presentViewController:alert animated:YES completion:nil];
-}
-- (void)didReceiveMemoryWarning { [super didReceiveMemoryWarning];_art.image=nil;_artworkKey=nil;[_events removeAllObjects];[self refreshHistory];self.agent.memoryPressure=YES;NSUInteger generation=++_memoryWarningGeneration;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,10*NSEC_PER_SEC),dispatch_get_main_queue(),^{if(generation==self->_memoryWarningGeneration)self.agent.memoryPressure=NO;}); }
-- (void)dealloc { [_noticeTimer invalidate];[_player pause]; }
+- (void)pair{UIAlertController *alert=[UIAlertController alertControllerWithTitle:@"Provision host key" message:@"Save the existing 64-character host key, then reopen BackThread. The key stays inside this app." preferredStyle:UIAlertControllerStyleAlert];[alert addTextFieldWithConfigurationHandler:^(UITextField *field){field.secureTextEntry=YES;field.autocorrectionType=UITextAutocorrectionTypeNo;field.autocapitalizationType=UITextAutocapitalizationTypeNone;}];[alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];[alert addAction:[UIAlertAction actionWithTitle:@"Save key" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){(void)action;NSString *key=alert.textFields.firstObject.text;if(key.length!=64||[key rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdefABCDEF"] invertedSet]].location!=NSNotFound){[self feedback:@"Invalid key" detail:@"Exactly 64 hexadecimal characters are required"];return;}NSString *dir=[NSHomeDirectory() stringByAppendingPathComponent:@"Library/BackThread"];[[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:@{NSFileProtectionKey:NSFileProtectionCompleteUntilFirstUserAuthentication} error:nil];NSString *path=[dir stringByAppendingPathComponent:@"session.key"];NSError *error=nil;if([key writeToFile:path atomically:YES encoding:NSASCIIStringEncoding error:&error]){[[NSFileManager defaultManager] setAttributes:@{NSFilePosixPermissions:@0600,NSFileProtectionKey:NSFileProtectionCompleteUntilFirstUserAuthentication} ofItemAtPath:path error:nil];[self feedback:@"Key saved" detail:@"Reopen BackThread to use it."];}else [self feedback:@"Key not saved" detail:error.localizedDescription];}]];[self presentViewController:alert animated:YES completion:nil];}
+- (void)didReceiveMemoryWarning{[super didReceiveMemoryWarning];[_media purgeArtwork];for(BTCompanionPage *page in _pageCache.allValues)[page purgeIcons];self.agent.memoryPressure=YES;NSUInteger generation=++_memoryGeneration;__weak typeof(self) weak=self;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,10*NSEC_PER_SEC),dispatch_get_main_queue(),^{BTViewController *owner=weak;if(owner&&owner->_memoryGeneration==generation)owner.agent.memoryPressure=NO;});}
 @end

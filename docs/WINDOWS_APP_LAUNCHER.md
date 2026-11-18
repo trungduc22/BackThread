@@ -1,0 +1,3 @@
+# Windows application launcher
+
+Tray Apps supports local pinning of executables, Start Menu shortcuts and packaged identities. Genuine bounded Windows icons and ID metadata go to the phone; executable paths and fixed arguments remain local. Canonical path/reparse checks reject unsafe paths, catalog max32, corrupt catalog is preserved. Phone sends IDs only, shows actual acknowledgments and supports reorder. Windows tests launch an owned fixture and reject injected arguments/unknown IDs. Packaged activation, populated phone grid and physical phone tap-to-launch have not been accepted. Real phone Apps screenshot currently shows an empty catalog.

@@ -10,8 +10,8 @@ import subprocess
 from ios_build_support import debian, macho, stable_uuid, write_debian
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SOURCES = ['src/iOS/UI/main.m', 'src/iOS/UI/BTViewController.m', 'src/iOS/Agent/BTAgent.m', 'src/iOS/AudioReceiver/BTAudioReceiver.m', 'src/iOS/AudioReceiver/BTPcmRing.c', 'src/Shared/Protocol/bt_wire.c']
-FRAMEWORKS = ['UIKit', 'Foundation', 'AVFoundation', 'AudioToolbox', 'MediaPlayer', 'Security', 'ImageIO', 'CoreGraphics', 'QuartzCore']
+SOURCES = ['src/iOS/UI/main.m', 'src/iOS/UI/BTViewController.m'] + [p.relative_to(ROOT).as_posix() for p in sorted((ROOT / 'src/iOS/UI').glob('*.m')) if p.name not in ('main.m','BTViewController.m')] + [p.relative_to(ROOT).as_posix() for p in sorted((ROOT/'src/iOS/Transport').glob('*.m'))] + ['src/iOS/Agent/BTAgent.m', 'src/iOS/AudioReceiver/BTAudioReceiver.m', 'src/iOS/AudioReceiver/BTPcmRing.c', 'src/Shared/Protocol/bt_wire.c']
+FRAMEWORKS = ['UIKit', 'Foundation', 'AVFoundation', 'CoreMedia', 'AudioToolbox', 'MediaPlayer', 'Security', 'ImageIO', 'CoreGraphics', 'QuartzCore']
 
 
 def run(command, log, env):

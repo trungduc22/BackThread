@@ -1,0 +1,107 @@
+{
+  "runId": "194c745d1e574a03b6584ef6c2391884",
+  "startedUtc": "2026-11-18T15:13:49.435132+00:00",
+  "expectedTranslationUnits": 16,
+  "complete": true,
+  "passed": true,
+  "currentSource": null,
+  "results": [
+    {
+      "source": "src/iOS/UI/main.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/UI/BTViewController.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/Agent/BTAgent.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/Agent/main.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/AudioReceiver/BTAudioReceiver.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/AudioReceiver/BTPcmRing.c",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/Shared/Protocol/bt_wire.c",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/Probe/main.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/Probe/entry.c",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/Probe/loader.c",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/UI/BTCompanionPage.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/UI/BTMediaView.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/UI/BTNavigation.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/UI/BTNotificationCoordinator.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/UI/BTTheme.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/Transport/BTChannel.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    }
+  ],
+  "finishedUtc": "2026-11-18T15:15:43.617510+00:00"
+}

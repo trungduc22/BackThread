@@ -9,6 +9,7 @@ internal static class Program
     private static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
+        if(args.Length==2&&args[0]=="--apps-ui"){Application.Run(new AppsForm(new AppCatalog(args[1])));return;}
         string config = args.Length == 1 ? Path.GetFullPath(args[0]) : Path.Combine(AppContext.BaseDirectory, "config", "local.json");
         try { Application.Run(new TrayContext(config)); }
         catch (Exception ex) { MessageBox.Show(ex.Message, "BackThread", MessageBoxButtons.OK, MessageBoxIcon.Error); }
@@ -30,6 +31,9 @@ internal sealed class TrayContext : ApplicationContext
         runtime.Log += message => { lock (logs) { logs.Enqueue(message); while (logs.Count > 30) logs.Dequeue(); } };
         hostTask = Task.Run(() => runtime.RunAsync(stop.Token));
         var menu = new ContextMenuStrip();
+        menu.Items.Add("Pinned Windows apps…",null,(_,_)=>new AppsForm(runtime.Apps).ShowDialog());
+        menu.Items.Add("Temporary Wi-Fi…",null,(_,_)=>new WifiForm(runtime).ShowDialog());
+        menu.Items.Add("Enable Windows notifications for this run…",null,async(_,_)=>{try{var permission=await NotificationAccess.RequestFromUiAsync();if(permission.Status=="Allowed")runtime.EnableNotificationCollection();MessageBox.Show(permission.Status+Environment.NewLine+permission.Reason,"BackThread notification access");}catch(Exception ex){MessageBox.Show(ex.Message,"BackThread notification access");}});
         menu.Items.Add("Connection and diagnostics", null, (_, _) => { string text; lock (logs) text = string.Join(Environment.NewLine, logs); MessageBox.Show(JsonSerializer.Serialize(runtime.Status) + Environment.NewLine + text, "BackThread diagnostics"); });
         menu.Items.Add("Open configuration", null, (_, _) => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("notepad.exe") { ArgumentList = { config }, UseShellExecute = false }));
         menu.Items.Add("Exit", null, async (_, _) => { stop.Cancel(); try { await hostTask; } catch (Exception) { } ExitThread(); });

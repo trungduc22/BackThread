@@ -9,6 +9,7 @@ public sealed class NotificationCollector
 {
     public async Task<int> CollectAsync(Func<CompanionEvent, CancellationToken, Task> publish, CancellationToken ct)
     {
+        if(!NotificationAccess.Inspect().Supported)return 0;
         var listener = UserNotificationListener.Current;
         if (listener.GetAccessStatus() != UserNotificationListenerAccessStatus.Allowed) return 0;
         var notifications = await listener.GetNotificationsAsync(NotificationKinds.Toast);
@@ -21,7 +22,7 @@ public sealed class NotificationCollector
             if (binding is null) continue;
             var text = binding.GetTextElements().Select(t => t.Text).ToArray(); if (text.Length == 0) continue;
             string source = n.AppInfo?.AppUserModelId ?? "windows.notification";
-            var e = new CompanionEvent("win-" + n.Id + "-" + n.CreationTime.ToUnixTimeSeconds(), source, text[0][..Math.Min(text[0].Length, 256)], string.Join(" ", text.Skip(1))[..Math.Min(string.Join(" ", text.Skip(1)).Length, 2048)], 1, n.CreationTime.AddMinutes(2), true);
+            var e = new CompanionEvent("win-" + n.Id + "-" + n.CreationTime.ToUnixTimeSeconds(), source, text[0][..Math.Min(text[0].Length, 256)], string.Join(" ", text.Skip(1))[..Math.Min(string.Join(" ", text.Skip(1)).Length, 2048)], 1, n.CreationTime.AddMinutes(2), true,"windows.toast");
             await publish(e, ct); count++;
         }
         return count;

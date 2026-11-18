@@ -1,5 +1,19 @@
 # Hardware test results — 2026-11-18
 
+## Native UI 2.0 session — current results, 2026-11-18
+
+Target confirmed iPhone7,2 / ARM64 / iOS12.5.8. Existing paired TLS pin passed; port44 exposed Dropbear, port23451 served the new embedded Agent. No SSH login or system change was used in this mission. Paired `com.apple.mobile.installation_proxy` returned `InvalidService`; user subsequently installed the IPA through their own method. Exact installer mechanics were not observed.
+
+New native hello advertises apps/ui-inspect/temporary-wifi-tls. Protocol-only checks: 13/13. Native inspection: **40/40 with 10 real own-view PNGs**, 667×375 points; phone user confirmed the new UI. Initial attempts hit USB disappearance and a foreground guard; a bounded retry after reconnect passed. These PNGs are actual UIKit rendering, not computer-generated layout sketches; media artwork is real PC metadata. Touch swipes, animation frame rate and bright-video contrast remain unmeasured.
+
+Three-second PCM fixture: **24/24**, 301 frames, gain0.15, routeSpeaker, 48kHz, AudioQueue running/primed, getters/noErr, peaks4096, sampled silence/overflow/gaps0, sender drops0. System volume was observed about0.8366 and was not changed. Human audibility of this particular test was not confirmed. RSS before/after24,252,416/24,498,176 bytes. [Full report](reports/ui2-physical-pcm.json).
+
+Temporary Wi-Fi: explicit selected private Wi-Fi interface, 15-minute enrollment, manual switch policy. Phone acknowledged enrollment; no connected TLS ownership within25s. Test revoked the session. No firewall, trust store or network change. Do not attribute this conclusively to client isolation, firewall or native TLS. [Failure report](reports/ui2-wifi-physical.json).
+
+Final observed Host: physical USB connected, Wi-Fi off, notification collection unavailable/disabled, audio streaming intentionally off for UI QA. See [final status](reports/ui2-host-final-status.json). Old audio-quality failures remain below and have not been waived.
+
+## Historical evidence follows
+
 ## Resumed build and physical playback — 2026-11-18 evening
 
 Fetched every branch/tag from GitHub before continuing: only `master` at `307e167` existed, with the six original commits. No additional Antigravity commit was present on this remote. Continued from that full history. New implementation checkpoint: `6c2fb35`.

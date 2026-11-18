@@ -1,0 +1,3 @@
+# Temporary Wi-Fi
+
+Off by default. Explicit15/30minute or until-off session binds one selected private IPv4. Authenticated USB enrolls fresh session ID and public leaf certificate pin. Native iOS12 TLS1.2/pin + existing HMAC protects framed channels, with one owner and optional USB preference; Wi-Fi PCM stays disabled. Windows TLS/rejection/expiry tests pass. Physical enrollment was acknowledged but TLS ownership did not connect within25s; test failed, revoked the session and retained USB. Cause remains undetermined. No firewall/network/system repair was made. Reproduce with scripts/test-temporary-wifi.py and inspect reports/ui2-wifi-physical.json. Windows uses a temporary current-user crypto key container, no trust-store write; crash cleanup is not certified.

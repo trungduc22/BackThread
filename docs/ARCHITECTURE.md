@@ -1,5 +1,13 @@
 # Architecture
 
+## Native UI 2.0 additions
+
+`BTTheme` owns vector glyphs/colors/bounded images; `BTPageCoordinator` retains lazy pages; `BTCornerDrawer` controls navigation; `BTMediaView` owns one persistent AVPlayer; `BTCompanionPage` supplies reusable grids/lists/settings; `BTNotificationCoordinator` owns bounded history/queue/expiry/privacy. Root coordinates models and main-thread UIKit updates. Shared C interaction decisions are used by production UI and targeted tests.
+
+Windows `AppCatalog` keeps locally approved canonical executables/fixed arguments or packaged identities. Phone receives bounded metadata/icons and sends IDs only. `ICompanionTransport` unifies USB/simulator/TLS leases. Native `BTChannel` preserves raw USB and implements one serialized nonblocking SecureTransport pump for Wi-Fi. Enrollment uses authenticated USB; TLS pin/session/HMAC authenticate before one session takes ownership. Wi-Fi PCM stays disabled.
+
+The latest requested HUD/audio destination and banner-only redesign are not present yet. See current handoff before extending these boundaries.
+
 ## Processes and boundaries
 
 ```mermaid

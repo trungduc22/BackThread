@@ -1,0 +1,48 @@
+{
+  "selfContainedWindowsExecutables": true,
+  "physicalIPhoneTest": false,
+  "hostConnectedToSimulator": true,
+  "unauthorizedApiRejected": true,
+  "uploadSha256Verified": true,
+  "sseProgressReceived": true,
+  "remoteIntegrityJobCompleted": true,
+  "artifactBytesVerified": true,
+  "privacyMaskVerified": true,
+  "agentProcessRestartAndHostReconnect": true,
+  "persistedArtifactAfterRestart": true,
+  "status": {
+    "state": "connected",
+    "lastError": "",
+    "audioError": "",
+    "transport": "localhost",
+    "simulated": true,
+    "wifi": {
+      "enabled": false,
+      "state": "Off",
+      "remainingSeconds": 0,
+      "untilDisconnected": false,
+      "preferUsb": true
+    },
+    "notifications": {
+      "supported": false,
+      "status": "unavailable",
+      "reason": "Windows notification collection requires package identity and the userNotificationListener capability. The authenticated events API remains available."
+    },
+    "notificationCollectionEnabled": false,
+    "appsError": null,
+    "device": null,
+    "captureError": null,
+    "audioFrames": 7,
+    "captureBufferedBytes": 0,
+    "captureDroppedBytes": 0,
+    "captureSilenceBytes": 0,
+    "audioDroppedFrames": 0,
+    "audioWriteMaximumMilliseconds": 0.138,
+    "audioSlowWrites": 0,
+    "audioQueueMaximumMilliseconds": 0.03,
+    "audioPacingMaximumLatenessMilliseconds": 1,
+    "audioPacingLateFrames": 0,
+    "audioPacingResets": 0
+  },
+  "passed": true
+}

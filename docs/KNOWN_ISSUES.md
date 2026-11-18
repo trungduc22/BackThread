@@ -1,5 +1,18 @@
 # Known issues and limits — 0.1.2
 
+## Current UI 2.0 limitations — 2026-11-18
+
+- Latest top-bar-only notifications, system/usage strip, three-way audio routing and inline volume request is not implemented. Existing critical fullscreen behavior must change.
+- Real Wi-Fi handover timed out after successful USB enrollment. Listener was revoked; physical TLS is unverified.
+- Portable Windows Host lacks package identity/userNotificationListener capability; regular Windows notification collection is unavailable. No notification permission was silently granted.
+- Paired installer currently returns InvalidService. User installed build5 independently; do not repair activation/system/jailbreak components.
+- Native UI inspection passed, but app grid is empty, phone-to-PC tap launch, touch gestures, direct video, font scaling, long-duration memory and interruption tests remain open.
+- Audit follow-up: `BTAgent.setNativePlaybackActive` changes the flag and stops the receiver in separate critical sections; `audio.start` checks ownership before calling receiver start. Review/serialize the complete ownership/start operation to prevent a narrow concurrent handoff race. This is a source-review concern, not a reproduced crash; no fix or acceptance claim yet.
+- UI polish seen in real snapshot: IP placeholder has poor dark-mode contrast; page indicators can overlap the last partially visible Settings row; check new status-strip space before expanding controls.
+- Ten-second command deadline reports an unknown outcome; do not automatically retry a launch that might already have executed.
+
+## Historical issues follow
+
 1. **Audio stutters.** A new short fixture and ordinary Windows WASAPI playback were heard on the physical iPhone. The corrected 90-second profile still shows significant sender/receiver loss and the user reported stutter. Latest pooled single-write Windows transport has not been physically tested after the user unplugged USB. Earlier two silent tests remain recorded; no universal root cause is established.
 2. **Native repairs require real runtime validation.** Audio errors now discard queued PCM and preserve the USB session; reset checks playback intent under the lifecycle lock; failed volume requests return errors. These compile/analyze; physical failure injection, route/interruption/reset and stop/start behavior remain unverified.
 3. **No system repair.** The user has unplugged USB; device work is waiting for reconnection. Missing frameworks/services in the user's prepared system are recorded as blockers. No firmware, activation, trust cache, AMFI, jailbreak component, launchd or system configuration repair is authorized.

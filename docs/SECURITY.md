@@ -1,5 +1,11 @@
 # Security boundary and review
 
+## UI 2.0 security boundaries
+
+Wi-Fi is off by default, explicit private-interface only, enrolled over authenticated USB with a fresh session ID/certificate SHA256 pin. TLS1.2 ECDHE-RSA AES-GCM on iOS12 plus existing HMAC; exact constant-time leaf pin validation; bounded TLS buffers/attempts/deadlines; expiry/revocation closes channels. Windows Schannel requires reimporting the generated key into a temporary current-user key container; there is no trust-store write. Do not call this pure-memory key storage; crash cleanup has not been certified. No private key is transmitted or logged. Real phone TLS handover has not passed.
+
+App launch accepts only locally pinned IDs; phone cannot supply executable paths or arguments. Local Host API remains loopback/Bearer/Origin-rejecting. Own-view inspection is authenticated and foreground guarded; screenshot files are limited to BackThread's own Documents directory. Normal notification collection remains opt-in and requires supported package identity/capability/consent; portable mode reports unavailable. No iPhone system, activation, jailbreak, trust policy or firmware modification was made.
+
 BackThread is a local user-session application, not a privileged device-management tool. Device preparation and system security changes are outside its scope.
 
 ## Implemented controls

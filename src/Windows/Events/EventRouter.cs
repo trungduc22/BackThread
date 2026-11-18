@@ -1,6 +1,6 @@
 namespace BackThread.Events;
 
-public sealed record CompanionEvent(string Id, string Source, string Title, string Body, int Priority, DateTimeOffset ExpiresUtc, bool Sensitive = false);
+public sealed record CompanionEvent(string Id, string Source, string Title, string Body, int Priority, DateTimeOffset ExpiresUtc, bool Sensitive = false,string? Category=null,string? IconBase64=null);
 public sealed class EventRouter
 {
     private readonly Queue<CompanionEvent> history = new();
@@ -13,6 +13,7 @@ public sealed class EventRouter
     public CompanionEvent? Accept(CompanionEvent e, DateTimeOffset? now = null)
     {
         var time = now ?? DateTimeOffset.UtcNow;
+        if(e.Category?.Length>64||e.IconBase64?.Length>12000)return null;
         if (e.Id is not { Length: > 0 and <= 64 } || e.Source is not { Length: > 0 and <= 128 } || e.Title is null || e.Title.Length > 256 || e.Body is null || e.Body.Length > 2048 || e.Priority is < 0 or > 3 || e.ExpiresUtc <= time || e.ExpiresUtc > time.AddDays(1)) return null;
         lock (gate)
         {

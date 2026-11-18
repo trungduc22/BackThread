@@ -333,7 +333,7 @@ await Test("host.receiver-audio-error-preserves-session", async () =>
             await connection.RunAsync(async(frame,message,token)=>{
                 if(message?.Id is not{} id)return;
                 if(failStartup&&message.Type=="audio.start"){await connection.SendAsync(frame.Channel,Message.Create("error",new{error="injected receiver failure"},replyTo:id),token);return;}
-                object body=message.Type=="hello"?new{agent="BackThread test peer",simulated=true}:message.Type=="job.query"?new{jobId="after-audio-error",state="completed",progress=1}:new{received=true};
+                object body=message.Type=="hello"?new{agent="BackThread test peer",simulated=true}:message.Type=="ui.inspect"?new{page=0,width=667,height=375,fixture=true}:message.Type=="job.query"?new{jobId="after-audio-error",state="completed",progress=1}:new{received=true};
                 await connection.SendAsync(frame.Channel,Message.Create("ok",body,replyTo:id),token);
                 if(!failStartup&&message.Type=="action.registry")await connection.SendAsync(LogicalChannel.Diagnostics,Message.Create("audio.error",new{error="injected receiver failure",lastOSStatus=-1}),token);
             },peerStop.Token);
@@ -345,6 +345,11 @@ await Test("host.receiver-audio-error-preserves-session", async () =>
     try{
         await Check.Eventually(()=>{var state=JsonSerializer.SerializeToElement(host.Status,Message.Json);return Task.FromResult(state.GetProperty("state").GetString()=="connected"&&state.GetProperty("audioError").GetString()=="injected receiver failure");});
         Check.Equal("completed",(await host.Worker.QueryAsync("after-audio-error",ct)).Body.GetProperty("state").GetString());
+        using var http=new HttpClient{BaseAddress=new Uri($"http://127.0.0.1:{apiPort}")};
+        http.DefaultRequestHeaders.Authorization=new("Bearer",Convert.ToHexString(key).ToLowerInvariant());
+        using var response=await http.PostAsync("/v1/ui",new StringContent("{}",Encoding.UTF8,"application/json"),ct);
+        Check.Equal(HttpStatusCode.OK,response.StatusCode);Check.Equal("application/json",response.Content.Headers.ContentType?.MediaType);
+        using var ui=JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));Check.Equal(667,ui.RootElement.GetProperty("width").GetInt32());Check.True(ui.RootElement.GetProperty("fixture").GetBoolean());
         await Task.Delay(3200,ct); // let the ordinary heartbeat use the same session too
         Check.Equal(1,connections);Check.True(!running.IsCompleted,"Host ended after audio-only failure");
     }finally{hostStop.Cancel();peerStop.Cancel();listener.Stop();await running;await peer;}
@@ -384,6 +389,8 @@ if (Environment.GetEnvironmentVariable("BACKTHREAD_WINDOWS_PROBES") == "1") awai
     Check.True(bridge.DeviceName != null && bridge.LastError is null, "WASAPI bridge capture reported an error");
     Console.WriteLine("WINDOWS_BRIDGE " + JsonSerializer.Serialize(new { realWindowsCapture = true, simulatedReceiver = true, physicalIPhoneTest = false, receiver = stats }, Message.Json));
 });
+
+await CompanionChecks.Run(Test,root,key,ct);
 
 // Explicit opt-in sustained run. Uses the real protocol and worker concurrently; no physical playback claim.
 int duration = int.TryParse(Environment.GetEnvironmentVariable("BACKTHREAD_SOAK_SECONDS"), out int seconds) && seconds > 0 ? Math.Clamp(seconds, 1, 3600) : 0;

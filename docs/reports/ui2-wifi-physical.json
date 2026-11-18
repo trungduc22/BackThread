@@ -1,0 +1,19 @@
+{
+  "timestampUtc": "2026-11-18T15:32:05.478654+00:00",
+  "physicalIPhone": true,
+  "passed": false,
+  "wifiPcmEnabled": false,
+  "checks": [
+    {
+      "name": "physical USB enrollment",
+      "passed": true
+    },
+    {
+      "name": "phone acknowledged USB enrollment",
+      "passed": true
+    }
+  ],
+  "privateEnrollmentLogged": false,
+  "error": "TimeoutError: Requested physical transport state was not reached",
+  "revokedAfterFailure": true
+}

@@ -10,6 +10,7 @@ public sealed record HostConfig
     public string Transport { get; init; } = "usb";
     public int DevicePort { get; init; } = 23451;
     public string? DeviceSerial { get; init; }
+    public string? AppCatalogFile { get; init; }
     public int ApiPort { get; init; } = 23452;
     public bool StreamAudio { get; init; } = true;
     public float AudioGain { get; init; } = 1;

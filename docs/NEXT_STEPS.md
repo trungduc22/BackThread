@@ -1,5 +1,19 @@
 # Next steps — 0.1.2
 
+## Current continuation order — user requested handoff, 2026-11-18
+
+1. Read [HANDOFF_ANTIGRAVITY.md](HANDOFF_ANTIGRAVITY.md) first and continue the current local commit. Do not reset to an old GitHub checkpoint; new work has not been pushed.
+2. Implement the latest user request: top-only notification bar; useful clock and device/connectivity/PC usage strip; restrained living motion and distinctive special banner; PC-only/phone-only/both audio destinations and inline volume. Existing fullscreen acceptance is superseded.
+3. Finish the supported Windows notification permission/identity path and prove real Windows toast-to-iPhone copying. Portable listener currently reports unavailable. Do not substitute the events fixture.
+4. Investigate possible audio-owner/start race identified in handoff before adding routing. Preserve capture/receiver gains, queue thresholds, protocol/worker and the old strict soak gate.
+5. Diagnose the physical Wi-Fi timeout without changing firewall, school network or iPhone system. Native enrollment succeeded; TLS connection did not.
+6. Run the native UI script against the final build; obtain app-grid populated/touch-launch evidence, video/loading/seek/gesture/RSS and disconnect acceptance. New features require a fresh IPA and independent user installation if Installation Proxy remains unavailable.
+7. Validate real WASAPI/listening after routing, then 30-minute load/interruption/reconnect tests. Keep the historical 120-second simulator failure and Windows capture zero-fill finding visible.
+
+The current 0.2.0 build5 has 13 protocol, 24 PCM and 40 UI checks on hardware, not complete product acceptance. User asked to stop active development and hand off because quota is low.
+
+## Historical plan follows
+
 ## Resumed build and physical playback — 2026-11-18 evening
 
 Fetched every branch/tag from GitHub before continuing: only `master` at `307e167` existed, with the six original commits. No additional Antigravity commit was present on this remote. Continued from that full history. New implementation checkpoint: `6c2fb35`.

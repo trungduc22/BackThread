@@ -41,6 +41,16 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
             finally { capacity.Release(); }
         });
         application.MapGet("/v1/status", () => host.Status);
+        application.MapGet("/v1/apps",async()=>await host.Apps.WireCatalogAsync());
+        application.MapGet("/v1/wifi",()=>host.WifiStatus);
+        application.MapPost("/v1/wifi/enable",async(HttpContext c)=>{var b=await Body<JsonElement>(c);return await host.EnableWifiAsync(b.GetProperty("address").GetString()!,b.GetProperty("minutes").GetInt32(),b.TryGetProperty("fallback",out var fallback)&&fallback.GetBoolean(),c.RequestAborted);});
+        application.MapPost("/v1/wifi/disable",async(HttpContext c)=>{await host.DisableWifiAsync(c.RequestAborted);return new{success=true};});
+        application.MapPost("/v1/apps/launch",async(HttpContext c)=>await host.Apps.LaunchRequestAsync(await Body<JsonElement>(c),c.RequestAborted));
+        application.MapPost("/v1/ui",async(HttpContext c)=>
+        {
+            var result=await host.InspectUiAsync(await Body<JsonElement>(c),c.RequestAborted);
+            await c.Response.WriteAsJsonAsync(result,Message.Json,c.RequestAborted);
+        });
         application.MapPost("/v1/jobs", async (HttpContext c) => (await host.Worker.SubmitAsync(await Body<JobSpec>(c), c.RequestAborted)).Body);
         application.MapGet("/v1/jobs/{id}", async (string id, HttpContext c) => (await host.Worker.QueryAsync(id, c.RequestAborted)).Body);
         application.MapDelete("/v1/jobs/{id}", async (string id, HttpContext c) => (await host.Worker.CancelAsync(id, c.RequestAborted)).Body);

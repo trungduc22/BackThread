@@ -11,3 +11,5 @@ __pycache__/
 *.key
 state/
 config/local.json
+config/apps.json
+config/app-icons/

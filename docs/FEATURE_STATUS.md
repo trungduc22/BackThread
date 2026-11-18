@@ -1,5 +1,26 @@
 # Feature acceptance matrix — 0.1.2
 
+## Current checkpoint: Native UI 2.0, 0.2.0 build 5 — 2026-11-18
+
+This section supersedes historical assessments below. Continued from fetched HEAD `6b986ce`; no newer remote commit was found. The user installed the IPA independently after paired Installation Proxy returned `InvalidService`. No system repair was attempted.
+
+| Area | Current evidence and boundary |
+|---|---|
+| Native UI 2.0 | Real iPhone: 40 automated inspection checks, 10 SHA-verified native-view PNGs, six retained pages, drawer, compact/critical notifications and restoration. User saw the new dark UI/corner grip. Touch gestures, FPS and accessibility hardware acceptance remain pending. |
+| Physical protocol/worker | 13 checks passed without audio on the new native Agent. |
+| Physical PCM fixture | 24 checks passed, 3 seconds, gain 0.15, Speaker route, noErr, nonzero buffers; sampled gaps/drop/silence zero, sender drops zero. No new listening confirmation: speaker audibility is not inferred from counters. |
+| Memory | New UI protocol RSS 23,080,960–23,146,496 bytes; after opening all pages, PCM before/after RSS 24,252,416–24,498,176 bytes. Bounded samples, not a leak or video profile. |
+| App launcher | Local pinning GUI/catalog, real bounded icons, ID-only requests, fixed arguments and execution feedback implemented. Windows fixture launch tested. Real phone grid had no pins; phone touch-to-launch and packaged activation not accepted. |
+| Wi-Fi | Windows TLS/pin/HMAC/expiry/rejection tests pass. Real phone acknowledged USB enrollment; TLS handover timed out in 25 seconds. Session revoked, USB retained. Cause not isolated; physical Wi-Fi is not accepted. |
+| Windows notifications | Portable Host reports package identity/capability unavailable. Normal Windows notification copying has NOT been verified. Authenticated events API and native presentation are separate. |
+| Build/regression | Managed 33/33, Python 22/22, native protocol/ring and 27 shared interaction decisions pass. ARM64/iOS12 app links 13 units; analyzer clean across 16 including probe; nine artifact checks and self-contained portable smoke pass. |
+
+Latest user request changes the design: **all notifications become a top bar**, including critical events. Add a prominent clock, PC/iPhone batteries, Wi-Fi/Bluetooth, PC CPU/RAM, subtle living motion/special notification treatment, PC-only/phone-only/both routing and inline volume. These changes are **requested, not implemented** at this checkpoint. Do not accept the current fullscreen screenshot as the new requirement.
+
+The earlier strict 120-second simulator soak still failed with 9,600 silence bytes. Earlier short ordinary WASAPI listening success remains historical 0.1.2 evidence. No new soak, 30-minute acceptance, native direct-video acceptance or provider integration is claimed. See [current handoff](HANDOFF_ANTIGRAVITY.md), [UI inspection](reports/ui2-native-ui.json), [PCM](reports/ui2-physical-pcm.json), [Wi-Fi failure](reports/ui2-wifi-physical.json).
+
+## Historical 0.1.2 evidence follows
+
 ## Resumed build and physical playback — 2026-11-18 evening
 
 Fetched every branch/tag from GitHub before continuing: only `master` at `307e167` existed, with the six original commits. No additional Antigravity commit was present on this remote. Continued from that full history. New implementation checkpoint: `6c2fb35`.

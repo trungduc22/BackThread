@@ -27,7 +27,7 @@ public sealed class MediaSessions
                     var decoder = await BitmapDecoder.CreateAsync(stream);
                     if (decoder.PixelWidth is > 0 and <= 8192 && decoder.PixelHeight is > 0 and <= 8192)
                     {
-                        double scale = Math.Min(1d, 128d / Math.Max(decoder.PixelWidth, decoder.PixelHeight));
+                        double scale = Math.Min(1d, 256d / Math.Max(decoder.PixelWidth, decoder.PixelHeight));
                         uint width = Math.Max(1u, (uint)(decoder.PixelWidth * scale)), height = Math.Max(1u, (uint)(decoder.PixelHeight * scale));
                         var pixels = await decoder.GetPixelDataAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore, new BitmapTransform { ScaledWidth = width, ScaledHeight = height }, ExifOrientationMode.RespectExifOrientation, ColorManagementMode.DoNotColorManage);
                         using var thumbnail = new InMemoryRandomAccessStream(); var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.JpegEncoderId, thumbnail);

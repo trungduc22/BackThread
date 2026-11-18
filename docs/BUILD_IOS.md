@@ -1,5 +1,9 @@
 # iOS 12 build and authorized installation
 
+## Current UI2 build note
+
+0.2.0 build5 uses13 production units and16 analyzer units including probe, minimum iOS12.0/SDK12.4. CoreMedia is linked. Output: artifacts/ui2/ios; nine artifact tests pass. User installed the IPA independently after paired Installation Proxy returned InvalidService. Build-only manifest flags remain separate from ui2 physical reports. Latest HUD/banner/audio request is pending.
+
 The current sources have actually compiled and linked on Windows as baseline ARM64 / minimum iOS 12.0, with the iPhoneOS 12.4 SDK. Both an embedded-Agent UIKit app package and a standalone Agent package were produced. Ad-hoc signatures pass local integrity checks. **Embedded Agent execution was verified in the recorded prepared environment; earlier two listening checks failed; the latest repaired app was upgraded and a new fixture was heard. Ordinary Windows audio was also heard with stutter. Latest Windows batching remains physically untested after unplug.** See [hardware results](HARDWARE_TEST_RESULTS.md) and [native audit](IOS_NATIVE_AUDIT.md).
 
 ## Recorded Windows cross-build

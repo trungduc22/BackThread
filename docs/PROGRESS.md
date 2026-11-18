@@ -1,5 +1,11 @@
 # BackThread progress — 0.1.2
 
+## 2026-11-18 — UI 2.0 handoff checkpoint
+
+Continued fetched6b986ce, implemented native retained UI/drawer/media/notifications/apps and optional pinned TLS transport, Windows local pinning/launch UI and permission-aware notifications. New IPA was installed independently by the user. Managed33/33, Python22/22, nine artifact checks, native protocol/ring,27 shared UI decisions,16-unit analyzer and portable smoke passed. Real protocol13/13, PCM24/24, native UI40/40 with10PNG passed within documented scopes; Wi-Fi physical handover failed and was revoked. Fixed a real `/v1/ui` empty-JSON response and added regression coverage; fixture test file writes now publish atomically.
+
+User changed requirements to banner-only notifications, clock/batteries/connectivity/CPU-RAM strip, living motion, special banner, three audio destinations and inline volume. Implementation of that change has not started. User then requested immediate Antigravity handoff due low quota. See HANDOFF_ANTIGRAVITY.md; preserve the working implementation and historical failed audio quality gate.
+
 ## Resumed build and physical playback — 2026-11-18 evening
 
 Fetched every branch/tag from GitHub before continuing: only `master` at `307e167` existed, with the six original commits. No additional Antigravity commit was present on this remote. Continued from that full history. New implementation checkpoint: `6c2fb35`.

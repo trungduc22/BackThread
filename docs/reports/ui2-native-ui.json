@@ -1,0 +1,491 @@
+{
+  "timestampUtc": "2026-11-18T15:29:27.748769+00:00",
+  "physicalIPhone": true,
+  "screenshots": [
+    {
+      "name": "01-current-media",
+      "file": "01-current-media.png",
+      "state": {
+        "height": 375,
+        "notification": {
+          "fullscreen": 0,
+          "history": 1,
+          "activeId": "",
+          "queued": 0,
+          "visible": 0
+        },
+        "drawerOpen": false,
+        "width": 667,
+        "media": {
+          "preview": false,
+          "owner": "pc",
+          "state": "idle",
+          "controlsVisible": 1,
+          "position": 0,
+          "playerInstancesCreated": 1
+        },
+        "connected": true,
+        "snapshot": {
+          "bytes": 244440,
+          "scope": "Own foreground native view; fixture label indicates injected design data",
+          "name": "ui-snapshot.png",
+          "sha256": "349514893082f95dc52496c0a096e309a78973067bc5d42ecd345878b034c7b0"
+        },
+        "page": 0
+      }
+    },
+    {
+      "name": "02-corner-drawer",
+      "file": "02-corner-drawer.png",
+      "state": {
+        "height": 375,
+        "notification": {
+          "fullscreen": 0,
+          "history": 1,
+          "activeId": "",
+          "queued": 0,
+          "visible": 0
+        },
+        "drawerOpen": true,
+        "width": 667,
+        "media": {
+          "preview": false,
+          "owner": "pc",
+          "state": "idle",
+          "controlsVisible": 1,
+          "position": 0,
+          "playerInstancesCreated": 1
+        },
+        "connected": true,
+        "snapshot": {
+          "bytes": 187204,
+          "scope": "Own foreground native view; fixture label indicates injected design data",
+          "name": "ui-snapshot.png",
+          "sha256": "2ca6b297f1452099dc085801091970b2ba9f6109aa8bdd8920e3ec00e94b1e03"
+        },
+        "page": 0
+      }
+    },
+    {
+      "name": "03-windows-apps",
+      "file": "03-windows-apps.png",
+      "state": {
+        "height": 375,
+        "notification": {
+          "fullscreen": 0,
+          "history": 1,
+          "activeId": "",
+          "queued": 0,
+          "visible": 0
+        },
+        "drawerOpen": false,
+        "width": 667,
+        "media": {
+          "preview": false,
+          "owner": "pc",
+          "state": "idle",
+          "controlsVisible": 1,
+          "position": 0,
+          "playerInstancesCreated": 1
+        },
+        "connected": true,
+        "snapshot": {
+          "bytes": 29311,
+          "scope": "Own foreground native view; fixture label indicates injected design data",
+          "name": "ui-snapshot.png",
+          "sha256": "0c2ae246dab24afae5ad0f88b0cd3a58299a0e39412f500baa15f25d05a43611"
+        },
+        "page": 1
+      }
+    },
+    {
+      "name": "04-actions",
+      "file": "04-actions.png",
+      "state": {
+        "height": 375,
+        "notification": {
+          "fullscreen": 0,
+          "history": 1,
+          "activeId": "",
+          "queued": 0,
+          "visible": 0
+        },
+        "drawerOpen": false,
+        "width": 667,
+        "media": {
+          "preview": false,
+          "owner": "pc",
+          "state": "idle",
+          "controlsVisible": 1,
+          "position": 0,
+          "playerInstancesCreated": 1
+        },
+        "connected": true,
+        "snapshot": {
+          "bytes": 19416,
+          "scope": "Own foreground native view; fixture label indicates injected design data",
+          "name": "ui-snapshot.png",
+          "sha256": "f395c2d0916f4a6dbe54f08a31a16f6bb77eef973d4c982471c2a336154a20d6"
+        },
+        "page": 2
+      }
+    },
+    {
+      "name": "05-worker",
+      "file": "05-worker.png",
+      "state": {
+        "height": 375,
+        "notification": {
+          "fullscreen": 0,
+          "history": 1,
+          "activeId": "",
+          "queued": 0,
+          "visible": 0
+        },
+        "drawerOpen": false,
+        "width": 667,
+        "media": {
+          "preview": false,
+          "owner": "pc",
+          "state": "idle",
+          "controlsVisible": 1,
+          "position": 0,
+          "playerInstancesCreated": 1
+        },
+        "connected": true,
+        "snapshot": {
+          "bytes": 32687,
+          "scope": "Own foreground native view; fixture label indicates injected design data",
+          "name": "ui-snapshot.png",
+          "sha256": "a55357030a0e60f613840f96bcd522d7c49c950497380df7fb87aa6b350acfc2"
+        },
+        "page": 3
+      }
+    },
+    {
+      "name": "06-history",
+      "file": "06-history.png",
+      "state": {
+        "height": 375,
+        "notification": {
+          "fullscreen": 0,
+          "history": 1,
+          "activeId": "",
+          "queued": 0,
+          "visible": 0
+        },
+        "drawerOpen": false,
+        "width": 667,
+        "media": {
+          "preview": false,
+          "owner": "pc",
+          "state": "idle",
+          "controlsVisible": 1,
+          "position": 0,
+          "playerInstancesCreated": 1
+        },
+        "connected": true,
+        "snapshot": {
+          "bytes": 24296,
+          "scope": "Own foreground native view; fixture label indicates injected design data",
+          "name": "ui-snapshot.png",
+          "sha256": "be917e992d92fe91ff46129df2360fe8cdbc288aee116c9f5c774f4aca028b6f"
+        },
+        "page": 4
+      }
+    },
+    {
+      "name": "07-connection",
+      "file": "07-connection.png",
+      "state": {
+        "height": 375,
+        "notification": {
+          "fullscreen": 0,
+          "history": 1,
+          "activeId": "",
+          "queued": 0,
+          "visible": 0
+        },
+        "drawerOpen": false,
+        "width": 667,
+        "media": {
+          "preview": false,
+          "owner": "pc",
+          "state": "idle",
+          "controlsVisible": 1,
+          "position": 0,
+          "playerInstancesCreated": 1
+        },
+        "connected": true,
+        "snapshot": {
+          "bytes": 48423,
+          "scope": "Own foreground native view; fixture label indicates injected design data",
+          "name": "ui-snapshot.png",
+          "sha256": "67f808bb5f3e34e7eb236daa5868e950c0b25d0233c6edd276735d82dee4b823"
+        },
+        "page": 5
+      }
+    },
+    {
+      "name": "08-compact-notification",
+      "file": "08-compact-notification.png",
+      "state": {
+        "height": 375,
+        "notification": {
+          "fullscreen": 0,
+          "history": 1,
+          "activeId": "aa1d9b93ac8b4daca9c1b72699bc629d",
+          "queued": 0,
+          "visible": 1
+        },
+        "drawerOpen": false,
+        "width": 667,
+        "media": {
+          "preview": false,
+          "owner": "pc",
+          "state": "idle",
+          "controlsVisible": 1,
+          "position": 0,
+          "playerInstancesCreated": 1
+        },
+        "connected": true,
+        "snapshot": {
+          "bytes": 235589,
+          "scope": "Own foreground native view; fixture label indicates injected design data",
+          "name": "ui-snapshot.png",
+          "sha256": "0194a02b1ff365a3b1eac99bac01cfdbb80432dbe8aebe2b764d3e13c60d4a4e"
+        },
+        "page": 0
+      }
+    },
+    {
+      "name": "09-critical-notification",
+      "file": "09-critical-notification.png",
+      "state": {
+        "height": 375,
+        "notification": {
+          "fullscreen": 1,
+          "history": 2,
+          "activeId": "7c4f1c9435ca431cbdc2dda81101046b",
+          "queued": 0,
+          "visible": 1
+        },
+        "drawerOpen": false,
+        "width": 667,
+        "media": {
+          "preview": false,
+          "owner": "pc",
+          "state": "idle",
+          "controlsVisible": 1,
+          "position": 0,
+          "playerInstancesCreated": 1
+        },
+        "connected": true,
+        "snapshot": {
+          "bytes": 43040,
+          "scope": "Own foreground native view; fixture label indicates injected design data",
+          "name": "ui-snapshot.png",
+          "sha256": "42affe6f2577de461d0c96fba562cf549bdc8d5923d0bb34fc1348a6b7754b8b"
+        },
+        "page": 0
+      }
+    },
+    {
+      "name": "10-media-restored",
+      "file": "10-media-restored.png",
+      "state": {
+        "height": 375,
+        "notification": {
+          "fullscreen": 0,
+          "history": 2,
+          "activeId": "",
+          "queued": 0,
+          "visible": 0
+        },
+        "drawerOpen": false,
+        "width": 667,
+        "media": {
+          "preview": false,
+          "owner": "pc",
+          "state": "idle",
+          "controlsVisible": 1,
+          "position": 0,
+          "playerInstancesCreated": 1
+        },
+        "connected": true,
+        "snapshot": {
+          "bytes": 244440,
+          "scope": "Own foreground native view; fixture label indicates injected design data",
+          "name": "ui-snapshot.png",
+          "sha256": "349514893082f95dc52496c0a096e309a78973067bc5d42ecd345878b034c7b0"
+        },
+        "page": 0
+      }
+    }
+  ],
+  "checks": [
+    {
+      "name": "physical USB Host connected",
+      "passed": true
+    },
+    {
+      "name": "new native inspection capability",
+      "passed": true
+    },
+    {
+      "name": "landscape iPhone 6 logical bounds",
+      "passed": true
+    },
+    {
+      "name": "01-current-media snapshot bounded",
+      "passed": true
+    },
+    {
+      "name": "01-current-media snapshot SHA-256",
+      "passed": true
+    },
+    {
+      "name": "02-corner-drawer snapshot bounded",
+      "passed": true
+    },
+    {
+      "name": "02-corner-drawer snapshot SHA-256",
+      "passed": true
+    },
+    {
+      "name": "03-windows-apps snapshot bounded",
+      "passed": true
+    },
+    {
+      "name": "03-windows-apps snapshot SHA-256",
+      "passed": true
+    },
+    {
+      "name": "03-windows-apps selected",
+      "passed": true
+    },
+    {
+      "name": "03-windows-apps retained player",
+      "passed": true
+    },
+    {
+      "name": "04-actions snapshot bounded",
+      "passed": true
+    },
+    {
+      "name": "04-actions snapshot SHA-256",
+      "passed": true
+    },
+    {
+      "name": "04-actions selected",
+      "passed": true
+    },
+    {
+      "name": "04-actions retained player",
+      "passed": true
+    },
+    {
+      "name": "05-worker snapshot bounded",
+      "passed": true
+    },
+    {
+      "name": "05-worker snapshot SHA-256",
+      "passed": true
+    },
+    {
+      "name": "05-worker selected",
+      "passed": true
+    },
+    {
+      "name": "05-worker retained player",
+      "passed": true
+    },
+    {
+      "name": "06-history snapshot bounded",
+      "passed": true
+    },
+    {
+      "name": "06-history snapshot SHA-256",
+      "passed": true
+    },
+    {
+      "name": "06-history selected",
+      "passed": true
+    },
+    {
+      "name": "06-history retained player",
+      "passed": true
+    },
+    {
+      "name": "07-connection snapshot bounded",
+      "passed": true
+    },
+    {
+      "name": "07-connection snapshot SHA-256",
+      "passed": true
+    },
+    {
+      "name": "07-connection selected",
+      "passed": true
+    },
+    {
+      "name": "07-connection retained player",
+      "passed": true
+    },
+    {
+      "name": "08-compact-notification snapshot bounded",
+      "passed": true
+    },
+    {
+      "name": "08-compact-notification snapshot SHA-256",
+      "passed": true
+    },
+    {
+      "name": "08-compact-notification visible",
+      "passed": true
+    },
+    {
+      "name": "08-compact-notification presentation",
+      "passed": true
+    },
+    {
+      "name": "08-compact-notification duplicate ignored",
+      "passed": true
+    },
+    {
+      "name": "09-critical-notification snapshot bounded",
+      "passed": true
+    },
+    {
+      "name": "09-critical-notification snapshot SHA-256",
+      "passed": true
+    },
+    {
+      "name": "09-critical-notification visible",
+      "passed": true
+    },
+    {
+      "name": "09-critical-notification presentation",
+      "passed": true
+    },
+    {
+      "name": "09-critical-notification duplicate ignored",
+      "passed": true
+    },
+    {
+      "name": "10-media-restored snapshot bounded",
+      "passed": true
+    },
+    {
+      "name": "10-media-restored snapshot SHA-256",
+      "passed": true
+    },
+    {
+      "name": "same media owner after notifications",
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "gestureTouchTested": false,
+  "audiblePlaybackTested": false
+}
