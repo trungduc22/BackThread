@@ -1,0 +1,15 @@
+{
+  "state": "connected",
+  "transport": "usb",
+  "audioFrames": 112892,
+  "audioError": "",
+  "audioDroppedFrames": 2,
+  "notifications": {
+    "supported": true,
+    "status": "Allowed",
+    "reason": "Permission granted; collection still requires opt-in"
+  },
+  "notificationCollectionEnabled": true,
+  "userHeardAudioAgain": true,
+  "streamAudioConfig": true
+}

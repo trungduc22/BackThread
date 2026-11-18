@@ -41,6 +41,7 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
             finally { capacity.Release(); }
         });
         application.MapGet("/v1/status", () => host.Status);
+        application.MapGet("/v1/metrics", () => host.Metrics);
         application.MapGet("/v1/apps",async()=>await host.Apps.WireCatalogAsync());
         application.MapGet("/v1/wifi",()=>host.WifiStatus);
         application.MapPost("/v1/wifi/enable",async(HttpContext c)=>{var b=await Body<JsonElement>(c);return await host.EnableWifiAsync(b.GetProperty("address").GetString()!,b.GetProperty("minutes").GetInt32(),b.TryGetProperty("fallback",out var fallback)&&fallback.GetBoolean(),c.RequestAborted);});

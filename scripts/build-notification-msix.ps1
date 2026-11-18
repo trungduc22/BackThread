@@ -1,7 +1,8 @@
 param(
  [Parameter(Mandatory=$true)][string]$PublishDir,
  [Parameter(Mandatory=$true)][string]$SdkBin,
- [string]$OutputDir='artifacts/notification-msix'
+ [string]$OutputDir='artifacts/notification-msix',
+ [string]$CertificateThumbprint=''
 )
 $ErrorActionPreference='Stop'
 $repoRoot=Split-Path -Parent $PSScriptRoot
@@ -29,6 +30,30 @@ foreach($item in @(@('StoreLogo.png',50),@('Square150x150Logo.png',150),@('Squar
 $package=Join-Path $outputPath 'BackThread-Notifications.msix'
 & $makeAppx pack /o /d $stage /p $package
 if($LASTEXITCODE -ne 0){throw 'MSIX validation/packing failed'}
+if(!$CertificateThumbprint){
+ $candidates=[Security.Cryptography.X509Certificates.X509Store]::new('My','CurrentUser')
+ try{
+  $candidates.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)
+  $usable=@($candidates.Certificates | Where-Object {$_.Subject -eq 'CN=BackThreadLocalDev' -and $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date)})
+  if($usable.Count -eq 1){$CertificateThumbprint=$usable[0].Thumbprint}
+  elseif($usable.Count -gt 1){throw 'Select the intended signing identity explicitly with CertificateThumbprint'}
+ }finally{$candidates.Close()}
+}
+if($CertificateThumbprint){
+ $personal=[Security.Cryptography.X509Certificates.X509Store]::new('My','CurrentUser')
+ try{
+  $personal.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)
+  $matches=$personal.Certificates.Find([Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint,$CertificateThumbprint,$false)
+  if($matches.Count -ne 1 -or !$matches[0].HasPrivateKey -or $matches[0].Subject -ne 'CN=BackThreadLocalDev'){throw 'A matching private code signing identity is required'}
+  $identity=$matches[0]
+  & $signTool sign /fd SHA256 /s My /sha1 $identity.Thumbprint $package
+  if($LASTEXITCODE -ne 0){throw 'Signing failed'}
+  [IO.File]::WriteAllBytes((Join-Path $outputPath 'BackThreadLocalDev.cer'),$identity.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+  @{subject=$identity.Subject;thumbprint=$identity.Thumbprint;notAfter=$identity.NotAfter.ToUniversalTime().ToString('o');stablePrivateKeyInUserStore=$true;package=(Split-Path -Leaf $package)} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputPath 'SIGNING-INFO.json')
+ }finally{$personal.Close()}
+ Write-Output 'Signed using the existing current-user signing identity. No trust or installation changed.'
+ return
+}
 # A development signing key is generated in memory, never installed or trusted.
 $rsa=[Security.Cryptography.RSA]::Create(2048)
 $request=[Security.Cryptography.X509Certificates.CertificateRequest]::new('CN=BackThreadLocalDev',$rsa,[Security.Cryptography.HashAlgorithmName]::SHA256,[Security.Cryptography.RSASignaturePadding]::Pkcs1)

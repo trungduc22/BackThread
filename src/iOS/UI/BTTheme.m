@@ -16,7 +16,8 @@ UIImage *BTGlyph(NSString *name){
     static NSCache *cache;static dispatch_once_t once;dispatch_once(&once,^{cache=[NSCache new];cache.countLimit=40;cache.totalCostLimit=256*1024;});
     UIImage *saved=[cache objectForKey:name];if(saved)return saved;
     UIGraphicsBeginImageContextWithOptions(CGSizeMake(24,24),NO,2);[[UIColor whiteColor] setStroke];[[UIColor whiteColor] setFill];
-    if([name isEqual:@"play"]||[name isEqual:@"next"]||[name isEqual:@"previous"]){
+    if([name isEqual:@"bluetooth"]){UIBezierPath *p=[UIBezierPath bezierPath];p.lineWidth=1.6;p.lineCapStyle=kCGLineCapRound;p.lineJoinStyle=kCGLineJoinRound;[p moveToPoint:CGPointMake(7,6)];[p addLineToPoint:CGPointMake(17,16)];[p addLineToPoint:CGPointMake(12,21)];[p addLineToPoint:CGPointMake(12,3)];[p addLineToPoint:CGPointMake(17,8)];[p addLineToPoint:CGPointMake(7,18)];[p stroke];}
+    else if([name isEqual:@"play"]||[name isEqual:@"next"]||[name isEqual:@"previous"]){
         BOOL previous=[name isEqual:@"previous"];CGContextRef c=UIGraphicsGetCurrentContext();if(previous){CGContextTranslateCTM(c,24,0);CGContextScaleCTM(c,-1,1);}
         UIBezierPath *p=[UIBezierPath bezierPath];[p moveToPoint:CGPointMake(7,5)];[p addLineToPoint:CGPointMake(18,12)];[p addLineToPoint:CGPointMake(7,19)];[p closePath];[p fill];if(![name isEqual:@"play"])line(19,5,19,19);
     }else if([name isEqual:@"pause"]){UIRectFill(CGRectMake(7,5,3,14));UIRectFill(CGRectMake(14,5,3,14));}

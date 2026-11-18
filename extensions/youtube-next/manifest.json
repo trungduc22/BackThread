@@ -1,0 +1,8 @@
+{
+ "manifest_version":3,
+ "name":"BackThread YouTube Next",
+ "version":"0.1.0",
+ "minimum_chrome_version":"111",
+ "description":"Connects the Windows Next media action to YouTube's own Next button. Only runs on youtube.com.",
+ "content_scripts":[{"matches":["https://www.youtube.com/*"],"js":["next.js"],"run_at":"document_idle","world":"MAIN","all_frames":false}]
+}

@@ -19,6 +19,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', required=True, type=pathlib.Path)
     parser.add_argument('--output', type=pathlib.Path, default=ROOT/'artifacts/native-ui')
+    parser.add_argument('--require-build9', action='store_true', help='Require left HH:mm clock and live PC monitor from matching Host9')
     parser.add_argument('--wait-seconds', type=int, default=0, choices=range(0, 121))
     args = parser.parse_args()
     config = json.loads(args.config.read_text())
@@ -87,6 +88,11 @@ def main():
         if previous is None:
             previous = inspect({})
         check('new native inspection capability', previous['media'].get('playerInstancesCreated') == 1)
+        if args.require_build9:
+            clock=previous.get('clock', {})
+            check('left clock without seconds', clock.get('format') == 'HH:mm' and clock.get('x', 999) <= 40 and len(clock.get('time', '')) == 5)
+            monitor=previous.get('pcMonitor', '')
+            check('live PC monitor supplied', 'CPU' in monitor and 'RAM' in monitor and '—' not in monitor)
         check('landscape iPhone 6 logical bounds', previous['width'] == 667 and previous['height'] == 375)
         capture('01-current-media', {'page': 0, 'drawer': False})
         capture('02-corner-drawer', {'drawer': True})

@@ -27,6 +27,8 @@ public sealed class HostRuntime(HostConfig config)
     public void EnableNotificationCollection(){var permission=NotificationAccess.Inspect();if(!permission.Supported||permission.Status!="Allowed")throw new InvalidOperationException(permission.Reason);collectNotifications=true;}
     private CancellationTokenSource? activeAudio;
     private readonly SemaphoreSlim audioModeChanged=new(0,1);
+    private readonly PcMetricsCounter metricsCounter=new();
+    public PcMetrics? Metrics {get;private set;}
     private bool supportsApps;
     private int catalogDirty,catalogPublishing;
     private readonly SemaphoreSlim catalogSend=new(1,1);
@@ -203,7 +205,7 @@ public sealed class HostRuntime(HostConfig config)
     {
         while (!ct.IsCancellationRequested)
         {
-            try { await c.SendAsync(LogicalChannel.Media, Message.Create("media.state", new { session = await media.SnapshotAsync() }), ct); }
+            try { Metrics=metricsCounter.Sample();await c.SendAsync(LogicalChannel.Media, Message.Create("media.state", new { session = await media.SnapshotAsync(),system=Metrics }), ct); }
             catch (Exception ex) when (!ct.IsCancellationRequested) { Log?.Invoke("Media update: " + ex.Message); }
             await Task.Delay(1000, ct);
         }
@@ -244,7 +246,7 @@ public sealed class HostRuntime(HostConfig config)
                 else if(m.Type=="apps.order"){if(m.Body.EnumerateObject().Any(p=>p.Name!="appIds"))throw new UnauthorizedAccessException("Only pinned IDs may be reordered");Apps.Reorder(m.Body.GetProperty("appIds").Deserialize<string[]>(Message.Json)??throw new InvalidDataException());result=new{success=true};}
                 else if(m.Type=="apps.unpin"){if(m.Body.EnumerateObject().Any(p=>p.Name!="appId"))throw new UnauthorizedAccessException();Apps.Remove(m.Body.GetProperty("appId").GetString()!);result=new{success=true};}
                 else if(m.Type=="apps.refresh"){if(c!=null)await PublishCatalogAsync(c,ct);result=new{success=true};}
-                else if(m.Type=="media.command")result=new{success=await media.CommandAsync(m.Body.GetProperty("command").GetString()!,m.Body.TryGetProperty("seconds",out var seconds)?seconds.GetDouble():0,m.Body.TryGetProperty("source",out var source)?source.GetString():null)};
+                else if(m.Type=="media.command"){bool success=await media.CommandAsync(m.Body.GetProperty("command").GetString()!,m.Body.TryGetProperty("seconds",out var seconds)?seconds.GetDouble():0,m.Body.TryGetProperty("source",out var source)?source.GetString():null);result=new{success,error=success?"":"The Windows player did not accept this command. For YouTube, Next requires browser/player support or a playlist."};}
                 else result=await ActionAsync(m.Body.GetProperty("actionId").GetString()!,ct);
                 if (c != null) await c.SendAsync(f.Channel, Message.Create("ok", result, replyTo: m.Id), ct);
             }

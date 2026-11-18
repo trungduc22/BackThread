@@ -27,6 +27,7 @@ async Task Test(string name, Func<Task> action)
     try { await action(); Console.WriteLine("PASS " + name); results.Add(new { name, passed = true, milliseconds = watch.ElapsedMilliseconds }); }
     catch (Exception ex) { failed++; Console.WriteLine("FAIL " + name + ": " + ex); results.Add(new { name, passed = false, milliseconds = watch.ElapsedMilliseconds, error = ex.ToString() }); }
 }
+await Test("windows.system-metrics-real-samples",async()=>{var counter=new PcMetricsCounter();var first=counter.Sample();await Task.Delay(80,ct);var next=counter.Sample();Check.True(first.RamTotalBytes>0&&next.RamUsedBytes<=next.RamTotalBytes);Check.True(next.CpuPercent is >=0 and <=100);});
 await Test("wire.fragmentation-and-json", async () =>
 {
     var f = new Frame(LogicalChannel.Jobs, 123, 987654321, Message.Create("job.query", new { jobId = "abc" }, "request").Encode());

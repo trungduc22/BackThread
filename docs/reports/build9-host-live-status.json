@@ -1,0 +1,19 @@
+{
+  "hostVersion": "0.2.0.9",
+  "usbState": "connected",
+  "audioFrames": 42799,
+  "audioError": "",
+  "senderDrops": 0,
+  "notificationPermission": "Allowed",
+  "notificationCollection": true,
+  "metrics": {
+    "cpuPercent": 92.6923076923077,
+    "ramUsedBytes": 10658402304,
+    "ramTotalBytes": 17053794304
+  },
+  "audioHumanConfirmed": true,
+  "youtubeExtensionId": "efnhpcdnicoeeoigkkgmfanfbdmddnnl",
+  "youtubeExtensionEnabledObserved": true,
+  "newSigningTrustAuthorized": true,
+  "oldCertificateRemoved": true
+}

@@ -38,7 +38,8 @@ public sealed class MediaSessions
             }
         }
         var c = playback.Controls;
-        return new(session.SourceAppUserModelId, info.Title ?? "", info.Artist ?? "", info.AlbumTitle ?? "", playback.PlaybackStatus.ToString(), Math.Max(0, (timeline.Position - timeline.StartTime).TotalSeconds), Math.Max(0, (timeline.EndTime - timeline.StartTime).TotalSeconds), c.IsPlaybackPositionEnabled, artwork, c.IsPlayEnabled, c.IsPauseEnabled, c.IsNextEnabled, c.IsPreviousEnabled);
+        double duration=Math.Max(0,(timeline.EndTime-timeline.StartTime).TotalSeconds);double position=Math.Max(0,(timeline.Position-timeline.StartTime).TotalSeconds);if(playback.PlaybackStatus==GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)position+=Math.Max(0,(DateTimeOffset.UtcNow-timeline.LastUpdatedTime).TotalSeconds)*(playback.PlaybackRate??1);if(duration>0)position=Math.Min(position,duration);
+        return new(session.SourceAppUserModelId, info.Title ?? "", info.Artist ?? "", info.AlbumTitle ?? "", playback.PlaybackStatus.ToString(), position, duration, c.IsPlaybackPositionEnabled, artwork, c.IsPlayEnabled, c.IsPauseEnabled, c.IsNextEnabled, c.IsPreviousEnabled);
     }
     public async Task<bool> CommandAsync(string command, double seconds = 0, string? source = null)
     {
@@ -50,7 +51,7 @@ public sealed class MediaSessions
             "toggle" => await s.TryTogglePlayPauseAsync(),
             "play" when c.IsPlayEnabled => await s.TryPlayAsync(),
             "pause" when c.IsPauseEnabled => await s.TryPauseAsync(),
-            "next" when c.IsNextEnabled => await s.TrySkipNextAsync(),
+            "next" => await s.TrySkipNextAsync(),
             "previous" when c.IsPreviousEnabled => await s.TrySkipPreviousAsync(),
             "seek" when c.IsPlaybackPositionEnabled && double.IsFinite(seconds) && seconds >= 0 => await s.TryChangePlaybackPositionAsync((s.GetTimelineProperties().StartTime + TimeSpan.FromSeconds(Math.Min(seconds, Math.Max(0, (s.GetTimelineProperties().EndTime - s.GetTimelineProperties().StartTime).TotalSeconds)))).Ticks),
             _ => false

@@ -1,0 +1,15 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+let handler=null,clicks=0,ad=false,disabled=false,present=true,recommended=false,refresh,unload;
+const location={hostname:'www.youtube.com',pathname:'/watch',href:'https://www.youtube.com/watch?v=aaaaaaaaaaa'};
+const button={get disabled(){return disabled;},getAttribute:()=>null,getClientRects:()=>[{}],click:()=>clicks++};
+const suggestion={getClientRects:()=>[{}],closest:()=>null,getAttribute:()=>'/watch?v=bbbbbbbbbbb',click:()=>clicks++};
+const document={querySelectorAll:()=>recommended?[suggestion]:[],querySelector:s=>s.includes('ad-showing')?(ad?{}:null):(present?button:null),addEventListener:()=>{}};
+vm.runInNewContext(fs.readFileSync('extensions/youtube-next/next.js','utf8'),{URL,navigator:{mediaSession:{setActionHandler:(name,callback)=>{assert.equal(name,'nexttrack');handler=callback;}}},location,document,window:{addEventListener:(_,callback)=>unload=callback},setInterval:callback=>(refresh=callback,1),clearInterval:()=>{}});
+assert.equal(typeof handler,'function');handler();assert.equal(clicks,1);
+ad=true;refresh();assert.equal(handler,null);assert.equal(clicks,1);
+ad=false;disabled=true;refresh();assert.equal(handler,null);
+disabled=false;present=false;refresh();assert.equal(handler,null);
+recommended=true;refresh();assert.equal(typeof handler,'function');handler();assert.equal(clicks,2);recommended=false;present=true;refresh();assert.equal(typeof handler,'function');
+location.pathname='/';refresh();assert.equal(handler,null);
+location.pathname='/watch';refresh();unload();assert.equal(handler,null);
+console.log('PASS YouTube Next helper: dispatch, ads, disabled/missing button, SPA navigation and unload');

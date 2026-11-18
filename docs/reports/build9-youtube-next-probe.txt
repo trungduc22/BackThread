@@ -1,0 +1,1 @@
+{"requested":true,"accepted":true,"source":"thorium.exe","canNext":false,"canSeek":true,"state":"Playing","trackChanged":false,"positionBefore":815.8777798,"positionAfter":819.9844443999999}

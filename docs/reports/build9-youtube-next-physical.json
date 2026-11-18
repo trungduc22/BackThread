@@ -1,0 +1,20 @@
+{
+  "youtubeExtensionEnabled": true,
+  "extensionId": "efnhpcdnicoeeoigkkgmfanfbdmddnnl",
+  "windowsProbe": {
+    "requested": true,
+    "accepted": true,
+    "source": "thorium.exe",
+    "canNext": true,
+    "canSeek": true,
+    "state": "Playing",
+    "trackChanged": true,
+    "positionBefore": 944.0627886,
+    "positionAfter": 0.7282846000000001
+  },
+  "physicalPhoneButtonTestPassed": true,
+  "userAnswer": "Đã chuyển video từ nút trên iPhone",
+  "extensionScope": "https://www.youtube.com/*",
+  "browserDeveloperModeAlreadyEnabled": true,
+  "nextFallback": "YouTube Next button, or first ordinary visible recommended watch link; no ad bypass"
+}
