@@ -2,7 +2,7 @@
 
 BackThread connects a Windows 10 computer to an iPhone over Lightning USB for PCM audio, media controls, notifications, and independent file jobs.
 
-**Current checkpoint: 0.2.0 build9.** Host0.2.0.9 is installed, phone audio is restored/heard and notifications remain enabled. The site-scoped YouTube helper is installed; Windows Next really changed video and the user confirmed Next from the physical iPhone. Native9 adds left HH:mm status, CPU/RAM display, smooth progress, faded volume and continuous artwork transitions; these visuals still require separate IPA installation/inspection. See [build9 notes](docs/BUILD9_NOTES.md) and [evidence](docs/reports/build9-validation.json).
+**Current source/package checkpoint: native 0.2.0 build10; installed Windows Host remains0.2.0.9.** Build10 adds monochrome glass battery, artwork swipes, LIVE display, direct signed-stream support and scoped foreground SSH control. Windows metadata resolution/HEAD for one YouTube sample passed; native playback and a phone-local resolver are not verified. Previous heard PCM/notification/YouTube Next results remain historical. See [build10 notes](docs/BUILD10_NOTES.md), [verified scope](docs/reports/build10-validation.json), and [companion/automation design](docs/COMPANION_WORKSPACE.md).
 
 Implemented Windows components include authenticated usbmux and localhost transport, WASAPI loopback, GSMTC media controls, bounded event routing, resumable binary transfers, SHA-256 verification, text and metadata jobs, an authenticated local integration API, and a WinForms tray. The simulator executes actual jobs and receives actual PCM frames; it does not play through an iPhone speaker.
 

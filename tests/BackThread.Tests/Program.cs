@@ -138,6 +138,14 @@ await Test("handoff.requires-connectivity-and-direct-resource", () =>
 {
     var provider = new DirectMediaProvider(); Check.True(!provider.Evaluate(new("https://example.com/audio.mp3"), false).Supported); Check.True(!provider.Evaluate(new("https://youtube.com/watch?v=abc"), true).Supported); Check.True(!provider.Evaluate(new("http://example.com/a.mp3"), true).Supported); Check.True(provider.Evaluate(new("https://example.com/a.mp3"), true).Supported); return Task.CompletedTask;
 });
+await Test("handoff.signed-cdn-url-and-host-boundaries", () =>
+{
+    var p = new DirectMediaProvider();
+    Check.True(p.Evaluate(new("https://r1---sn.googlevideo.com/videoplayback?expire=123&sig=x"), true).Supported);
+    foreach (string text in new[] { "https://googlevideo.com.evil/videoplayback?x=1", "https://googlevideo.com/videoplayback?x=1", "https://r1.googlevideo.com/watch?x=1", "https://user@r1.googlevideo.com/videoplayback?x=1", "https://r1.googlevideo.com:8443/videoplayback?x=1" }) Check.True(!p.Evaluate(new(text), true).Supported);
+    foreach (string ext in new[] { "m4v", "mov", "wav" }) Check.True(p.Evaluate(new("https://example.com/a."+ext), true).Supported);
+    return Task.CompletedTask;
+});
 await Test("auth.wrong-key-rejected-and-recovery", async () =>
 {
     await using var server = new AgentServer(0, key, Path.Combine(root, "auth")); server.Start();

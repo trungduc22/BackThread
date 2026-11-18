@@ -9,6 +9,7 @@
 - (void)updateWindows:(NSDictionary *)session;
 - (void)setConnected:(BOOL)connected transport:(NSString *)transport;
 - (BOOL)openURL:(NSString *)url;
+- (NSDictionary *)phoneControl:(NSDictionary *)request;
 - (void)returnToPC;
 - (void)purgeArtwork;
 - (NSDictionary *)snapshot;

@@ -1,0 +1,16 @@
+{
+  "codec": "avc1.42001E",
+  "audioCodec": "mp4a.40.2",
+  "height": 360,
+  "fps": 30,
+  "isLive": false,
+  "resolverLocation": "win32",
+  "videoRelay": false,
+  "transcoding": false,
+  "resolver": "yt-dlp",
+  "requiresPhysicalValidation": true,
+  "scope": "metadata resolution only on Windows",
+  "installedOnPhone": false,
+  "nativePlaybackVerified": false,
+  "sourceUrlLogged": false
+}

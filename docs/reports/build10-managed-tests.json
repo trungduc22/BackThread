@@ -1,0 +1,182 @@
+{
+  "timestampUtc": "2026-11-18T19:22:00.6437059+00:00",
+  "simulated": true,
+  "results": [
+    {
+      "name": "windows.system-metrics-real-samples",
+      "passed": true,
+      "milliseconds": 218
+    },
+    {
+      "name": "wire.fragmentation-and-json",
+      "passed": true,
+      "milliseconds": 142
+    },
+    {
+      "name": "wire.async-write-retains-packet-until-completion",
+      "passed": true,
+      "milliseconds": 17
+    },
+    {
+      "name": "wire.network-writer-continues-with-paused-caller",
+      "passed": true,
+      "milliseconds": 104
+    },
+    {
+      "name": "transport.audio-queue-wait-includes-blocked-writer",
+      "passed": true,
+      "milliseconds": 133
+    },
+    {
+      "name": "config.audio-gain-keeps-system-volume-separate",
+      "passed": true,
+      "milliseconds": 185
+    },
+    {
+      "name": "wire.reject-size-version-channel-truncation",
+      "passed": true,
+      "milliseconds": 9
+    },
+    {
+      "name": "pcm.clipping-nan-and-bounded-ring",
+      "passed": true,
+      "milliseconds": 12
+    },
+    {
+      "name": "storage.path-traversal-and-reserved-names",
+      "passed": true,
+      "milliseconds": 4
+    },
+    {
+      "name": "validation.null-json-fields",
+      "passed": true,
+      "milliseconds": 48
+    },
+    {
+      "name": "storage.reserves-quota-before-reception",
+      "passed": true,
+      "milliseconds": 48
+    },
+    {
+      "name": "events.privacy-expiry-dedup-flood-bound",
+      "passed": true,
+      "milliseconds": 16
+    },
+    {
+      "name": "handoff.requires-connectivity-and-direct-resource",
+      "passed": true,
+      "milliseconds": 6
+    },
+    {
+      "name": "handoff.signed-cdn-url-and-host-boundaries",
+      "passed": true,
+      "milliseconds": 9
+    },
+    {
+      "name": "auth.wrong-key-rejected-and-recovery",
+      "passed": true,
+      "milliseconds": 167
+    },
+    {
+      "name": "auth.replay-rejected",
+      "passed": true,
+      "milliseconds": 134
+    },
+    {
+      "name": "wire.malformed-socket-and-reconnect",
+      "passed": true,
+      "milliseconds": 124
+    },
+    {
+      "name": "transport.audio-backpressure-is-bounded",
+      "passed": true,
+      "milliseconds": 28
+    },
+    {
+      "name": "simulator.slow-file-io-keeps-control-responsive",
+      "passed": true,
+      "milliseconds": 3131
+    },
+    {
+      "name": "integration.heartbeat-audio-order-and-content",
+      "passed": true,
+      "milliseconds": 3026
+    },
+    {
+      "name": "integration.transfer-hash-text-download-and-failed-job",
+      "passed": true,
+      "milliseconds": 262
+    },
+    {
+      "name": "worker.rejects-corrupt-artifact-ranges-and-recovers",
+      "passed": true,
+      "milliseconds": 34
+    },
+    {
+      "name": "storage.resume-duplicate-incomplete-and-checksum",
+      "passed": true,
+      "milliseconds": 32
+    },
+    {
+      "name": "worker.cancel-low-memory-duplicate-and-restart",
+      "passed": true,
+      "milliseconds": 63
+    },
+    {
+      "name": "integration.socket-reset-reconnect-and-format-error",
+      "passed": true,
+      "milliseconds": 85
+    },
+    {
+      "name": "integration.notification-routing",
+      "passed": true,
+      "milliseconds": 166
+    },
+    {
+      "name": "acceptance.audio-window-excludes-slow-shutdown-tail",
+      "passed": true,
+      "milliseconds": 1083
+    },
+    {
+      "name": "acceptance.audio-window-rejects-source-failure",
+      "passed": true,
+      "milliseconds": 820
+    },
+    {
+      "name": "host.receiver-audio-error-preserves-session",
+      "passed": true,
+      "milliseconds": 8624
+    },
+    {
+      "name": "host.local-api-authentication-and-auto-reconnect",
+      "passed": true,
+      "milliseconds": 793
+    },
+    {
+      "name": "apps.id-only-launch-fixed-arguments-and-feedback",
+      "passed": true,
+      "milliseconds": 248
+    },
+    {
+      "name": "apps.invalid-paths-order-icons-and-corrupt-catalog",
+      "passed": true,
+      "milliseconds": 13
+    },
+    {
+      "name": "wifi.explicit-bind-disable-and-expiry",
+      "passed": true,
+      "milliseconds": 3453
+    },
+    {
+      "name": "wifi.tls-pin-hmac-framing-and-single-session",
+      "passed": true,
+      "milliseconds": 527
+    },
+    {
+      "name": "wifi.rejects-wrong-pin-session-and-key",
+      "passed": true,
+      "milliseconds": 504
+    }
+  ],
+  "failed": 0
+}

@@ -20,7 +20,7 @@
 - (void)hideDots:(NSUInteger)generation{__weak typeof(self) weak=self;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,2*NSEC_PER_SEC),dispatch_get_main_queue(),^{BTPageCoordinator *owner=weak;if(owner&&generation==owner->_generation)BTAnimate(.3,^{owner->_dots.alpha=0;},nil);});}
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gesture{
     UIPanGestureRecognizer *pan=(id)gesture;CGPoint v=[pan velocityInView:self.view],p=[pan locationInView:self.view];BOOL control=NO;
-    UIView *hit=[self.view hitTest:p withEvent:nil];for(UIView *view=hit;view&&view!=self.view;view=view.superview)if([view isKindOfClass:UIControl.class]||[view isKindOfClass:UITextView.class]){control=YES;break;}
+    UIView *hit=[self.view hitTest:p withEvent:nil];for(UIView *view=hit;view&&view!=self.view;view=view.superview)if([view isKindOfClass:UIControl.class]||[view isKindOfClass:UITextView.class]||[view.accessibilityIdentifier isEqual:@"BackThread.mediaArtwork"]){control=YES;break;}
     return bt_page_target((int)_selectedPage,p.x,self.view.bounds.size.width,v.x,v.y,control,self.gesturesBlocked)>=0;
 }
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other{(void)gesture;return [other.view isKindOfClass:UIScrollView.class];}

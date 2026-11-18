@@ -46,7 +46,7 @@ public sealed class HostRuntime(HostConfig config)
         {
             lock(stateGate) return new
             {
-                state,lastError,audioError,transport=activeTransport,simulated=config.Transport=="localhost",wifi=wifi.Status,notifications=NotificationAccess.Inspect(),notificationCollectionEnabled=collectNotifications,appsError=Apps.LoadError,
+                state,lastError,audioError,playbackOwner=phonePlayback?"phone":"pc",transport=activeTransport,simulated=config.Transport=="localhost",wifi=wifi.Status,notifications=NotificationAccess.Inspect(),notificationCollectionEnabled=collectNotifications,appsError=Apps.LoadError,
                 device=audio?.DeviceName,captureError=audio?.LastError,audioFrames=audio?.FramesSent??0,
                 captureBufferedBytes=audio?.Ring.Count??0,captureDroppedBytes=audio?.Ring.DroppedBytes??0,captureSilenceBytes=audio?.Ring.SilenceBytes??0,
                 audioDroppedFrames=connection?.DroppedAudio??0,audioWriteMaximumMilliseconds=connection?.AudioWriteMaximumMilliseconds??0,

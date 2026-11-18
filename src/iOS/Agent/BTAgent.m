@@ -66,7 +66,7 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
 }
 - (BTAudioReceiver *)audio { return _audio; }
 - (BOOL)nativePlaybackActive { @synchronized(self){return _nativePlaybackActive;} }
-- (void)setNativePlaybackActive:(BOOL)active { @synchronized(self){_nativePlaybackActive=active;if(active)[_audio stop];} }
+- (void)setNativePlaybackActive:(BOOL)active { @synchronized(self){_nativePlaybackActive=active;if(active){_audioOn=NO;[_audio stop];}} }
 - (void)networkPhase:(NSString *)phase error:(int)code {
     // Own diagnostic only: no keys, peer identity or system configuration.
     NSDictionary *record=@{@"phase":phase,@"errno":@(code),@"port":@23451,@"pid":@(getpid())};

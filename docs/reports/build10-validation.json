@@ -1,0 +1,33 @@
+{
+  "timestampUtc": "2026-11-18T19:32:37.160203+00:00",
+  "scope": "build/regression and Windows metadata/HEAD only; NOT native YouTube playback acceptance",
+  "nativeBuild": "0.2.0(10)",
+  "baseCommit": "5d36a98",
+  "managedPassed": 35,
+  "pythonUnitAndBaselineArtifactTestsPassed": 31,
+  "currentNativeArtifactTestsPassed": 9,
+  "nativeAnalyzerUnits": 19,
+  "nativeAnalyzerClean": true,
+  "buildAndRegressionPassed": true,
+  "physicalBuild10Accepted": false,
+  "physicalPreflight": "blocked: connected physical client lacks build10 direct check capability; no playback initiated",
+  "youtubeMetadataResolvedOn": "Windows",
+  "youtubeMetadata": {
+    "videoCodec": "avc1.42001E",
+    "audioCodec": "mp4a.40.2",
+    "height": 360,
+    "fps": 30
+  },
+  "youtubeWindowsHeadStatus": 200,
+  "youtubeNativePlaybackVerified": false,
+  "phoneLocalYoutubeResolverImplemented": false,
+  "sshBannerReadOnly": "Dropbear on USB44",
+  "sshAuthenticationAttempted": false,
+  "sshInboxRuntimeVerified": false,
+  "dailySchedulerImplemented": false,
+  "mailOtpCollectionImplemented": false,
+  "personalMessengerZaloCollectionImplemented": false,
+  "systemOrFirmwareChanged": false,
+  "installedHostChanged": false,
+  "priorStrictSimulatorSoakFailureStillOpen": true
+}

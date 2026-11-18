@@ -1,5 +1,16 @@
 # Next steps — 0.1.2
 
+## Build10 continuation — 2026-11-19
+
+Native0.2.0(10) adds a monochrome blurred battery, native LIVE label (explicit/indefinite sources only), artwork swipe next/previous without page-gesture theft, extensionless signed Googlevideo stream support and native playback diagnostics. Adds a foreground app-private SSH command inbox (open/status/play/pause/seek/return-pc), without a new listener/daemon. Existing UI2 layout and installed Host9 are preserved.
+
+A real optional yt-dlp/EJS metadata-only run on Windows resolved the public YouTube sample to a single H.264/AAC360p30 stream. Windows HEAD returned200/video/mp4 without a media body. This is NOT phone playback or phone-local resolution. The connected physical client lacked build10 verification capability; the new test refused before opening video. SSH44 answered a read-only Dropbear banner check; authentication/inbox execution was not attempted. No phone system, activation, jailbreak or firmware changes.
+
+Verification:35managed checks,31Python checks,9checks against the new native artifacts,19native analyzer units clean. IPA prepared, not installed. Native visual changes, audible YouTube playback, thermal benefit, hardware decoding and PC-disconnect survival remain unverified. Historical strict simulator soak failure remains open. Mail/OTP providers, personal Messenger/Zalo access, build-console UI and a daily scheduler are not implemented. See [Build10 notes](BUILD10_NOTES.md), [validation](reports/build10-validation.json), and [companion/automation design](COMPANION_WORKSPACE.md).
+
+
+Immediate next gates: install the exact build10 IPA using the user's chosen method; keep BackThread foreground and run scripts/test-native-direct.py with a freshly resolved private URL. Require H.264/display readiness/time advancement/network activity and stopped PC PCM, then verify PC ownership/audio recovery. Do not claim success from metadata/HEAD. Test the SSH inbox separately with existing verified trust. Then design a bounded Build/Run log feed and a read-only scheduled job; do not enable account actions or claim unattended background execution.
+
 ## Build9 continuation — 2026-11-19
 
 User requested left-aligned clock/battery, no seconds, Wi-Fi/Bluetooth icons, PC CPU/RAM bottom right, faster progress, volume faded until interaction, YouTube Next repair and restored phone audio. Later instructions add a brighter progress tint from the artwork palette, continuous palette transition including idle, a4second bright hold and a slightly brighter final dark palette.

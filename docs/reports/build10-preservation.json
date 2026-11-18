@@ -1,0 +1,16 @@
+{
+  "timestampUtc": "2026-11-18T19:31:37.781949+00:00",
+  "scope": "existing installed Host/client preservation; not build10 playback",
+  "state": "connected",
+  "transport": "usb",
+  "simulated": false,
+  "audioError": "",
+  "captureError": null,
+  "audioFrames": 192646,
+  "audioDroppedFrames": 0,
+  "notificationCollectionEnabled": true,
+  "configuredStreamAudio": true,
+  "installedWindowsPackageChanged": false,
+  "phoneSystemChanged": false,
+  "sshAuthenticationAttempted": false
+}

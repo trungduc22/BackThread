@@ -1,0 +1,9 @@
+{
+  "timestampUtc": "2026-11-18T19:27:48.545337+00:00",
+  "scope": "Windows HEAD only; no media body; not iPhone playback",
+  "sourceUrlLogged": false,
+  "httpStatus": 200,
+  "contentType": "video/mp4",
+  "contentLength": "43776160",
+  "passed": true
+}

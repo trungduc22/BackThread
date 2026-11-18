@@ -3,6 +3,7 @@
 #import "BTClockView.h"
 #import "BTNavigation.h"
 #import "BTMediaView.h"
+#import "BTPhoneControl.h"
 #import "BTCompanionPage.h"
 #import "BTNotificationCoordinator.h"
 #import "../Agent/BTAgent.h"
@@ -15,6 +16,7 @@
     NSMutableArray *_apps;NSDictionary *_actions,*_windows,*_wifiState,*_pauseToken;
     BOOL _connected,_captureDisconnect,_reordering,_fullscreenNotice;NSString *_transport;UILabel *_preview;NSUInteger _memoryGeneration;
     void (^_handoffReply)(NSDictionary *,BOOL);NSUInteger _handoffGeneration;BOOL _acceptingHandoff;
+    BTPhoneControl *_phoneControl;
 }
 - (BOOL)prefersStatusBarHidden{return YES;}
 - (void)viewDidLoad{[super viewDidLoad];self.view.backgroundColor=BTBackground();_pageCache=[NSMutableDictionary new];_jobs=[NSMutableDictionary new];_apps=[NSMutableArray new];_transport=@"USB";
@@ -31,6 +33,7 @@
     _notifications=[[BTNotificationCoordinator alloc] initWithHost:self.view];_notifications.historyChanged=^(NSArray *events){BTViewController *owner=weak;if(!owner)return;[owner->_pageCache[@4] receive:@"history" body:@{@"events":events}];};_notifications.presentationChanged=^(BOOL fullscreen,BOOL visible){BTViewController *owner=weak;if(!owner)return;if(visible)[owner->_drawer setOpen:NO animated:YES];owner->_fullscreenNotice=fullscreen&&visible;owner->_pages.gesturesBlocked=owner->_fullscreenNotice||owner->_reordering;if(fullscreen&&visible&&[NSUserDefaults.standardUserDefaults boolForKey:@"pauseForFullscreen"]&&!owner->_pauseToken)owner->_pauseToken=[owner->_media pauseForNotification];if(!visible&&owner->_pauseToken){[owner->_media restoreAfterNotification:owner->_pauseToken];owner->_pauseToken=nil;}};
     _preview=BTLabel(10,UIFontWeightSemibold);_preview.text=@"DESIGN PREVIEW · FIXTURE DATA";_preview.textColor=BTAccent();_preview.frame=CGRectMake(28,39,360,18);_preview.hidden=YES;_preview.userInteractionEnabled=NO;[self.view addSubview:_preview];
     _media.fillVideo=[NSUserDefaults.standardUserDefaults boolForKey:@"fillVideo"];
+    _phoneControl=[BTPhoneControl new];_phoneControl.perform=^NSDictionary *(NSDictionary *request){BTViewController *owner=weak;return owner?[owner->_media phoneControl:request]:nil;};[_phoneControl start];
 }
 - (void)cancelHandoff:(NSString *)reason{_handoffGeneration++;if(_handoffReply){void(^reply)(NSDictionary *,BOOL)=_handoffReply;_handoffReply=nil;reply(@{@"error":reason},NO);}}
 - (void)setAgent:(BTAgent *)agent{_agent=agent;__weak typeof(self) weak=self;agent.uiRequest=^(NSString *type,NSDictionary *body,void(^reply)(NSDictionary *,BOOL)){BTViewController *owner=weak;if(!owner){reply(@{@"error":@"UI is unavailable"},NO);return;}[owner loadViewIfNeeded];if([type isEqual:@"ui.inspect"]){reply([owner inspect:body],YES);return;}if([type isEqual:@"media.handoff"]){[owner cancelHandoff:@"Replaced by another media request"];owner->_handoffReply=[reply copy];NSUInteger generation=++owner->_handoffGeneration;owner->_acceptingHandoff=YES;BOOL opened=[owner->_media openURL:BTString(body[@"url"],@"")];owner->_acceptingHandoff=NO;if(!opened){[owner cancelHandoff:@"A supported HTTPS media URL and an available audio session are required"];return;}dispatch_after(dispatch_time(DISPATCH_TIME_NOW,12*NSEC_PER_SEC),dispatch_get_main_queue(),^{BTViewController *current=weak;if(current&&current->_handoffReply&&generation==current->_handoffGeneration){void(^completion)(NSDictionary *,BOOL)=current->_handoffReply;current->_handoffReply=nil;completion(@{@"error":@"Native media has not reached playing before the deadline"},NO);}});}};}
@@ -56,6 +59,7 @@
     if([request[@"controls"] boolValue])[_media showControls];
     if([request[@"dismissNotification"] boolValue])[_notifications dismiss];
     if([request[@"notification"] isKindOfClass:NSDictionary.class])[_notifications accept:request[@"notification"]];
+    if([request[@"phoneControl"] isKindOfClass:NSDictionary.class]){NSDictionary *result=[_media phoneControl:request[@"phoneControl"]];if(![result[@"success"] boolValue])return @{@"error":result[@"error"]?:@"Invalid native media command"};}
     if([request[@"videoURL"] isKindOfClass:NSString.class])[_media openURL:request[@"videoURL"]];
     [self.view layoutIfNeeded];NSMutableDictionary *state=[@{@"clock":[_clockView snapshot],@"pcMonitor":_pcMonitor.text?:@"",@"width":@(self.view.bounds.size.width),@"height":@(self.view.bounds.size.height),@"page":@(_pages.selectedPage),@"drawerOpen":@(_drawer.open),@"media":[_media snapshot],@"notification":[_notifications snapshot],@"connected":@(_connected)} mutableCopy];
     if([request[@"capture"] boolValue]){UIGraphicsBeginImageContextWithOptions(self.view.bounds.size,YES,1);BOOL rendered=[self.view drawViewHierarchyInRect:self.view.bounds afterScreenUpdates:YES];UIImage *image=UIGraphicsGetImageFromCurrentImageContext();UIGraphicsEndImageContext();NSData *png=UIImagePNGRepresentation(image);if(rendered&&png.length&&png.length<=2*1024*1024){NSString *path=[NSHomeDirectory() stringByAppendingPathComponent:@"Documents/BackThread/ui-snapshot.png"];NSError *error=nil;if([png writeToFile:path options:NSDataWritingAtomic error:&error]){uint8_t hash[CC_SHA256_DIGEST_LENGTH];CC_SHA256(png.bytes,(CC_LONG)png.length,hash);NSMutableString *digest=[NSMutableString new];for(unsigned i=0;i<sizeof(hash);i++)[digest appendFormat:@"%02x",hash[i]];state[@"snapshot"]=@{@"name":@"ui-snapshot.png",@"bytes":@(png.length),@"sha256":digest,@"scope":@"Own foreground native view; fixture label indicates injected design data"};}else state[@"error"]=error.localizedDescription?:@"Snapshot write failed";}else state[@"error"]=@"Snapshot rendering failed";}

@@ -1,0 +1,12 @@
+{
+  "timestampUtc": "2026-11-18T19:30:00.155325+00:00",
+  "passed": false,
+  "physical": true,
+  "acousticVerified": false,
+  "hardwareDecoderVerified": false,
+  "sourceUrlLogged": false,
+  "samples": [],
+  "clientSupportsDirectCheck": false,
+  "errorType": "RuntimeError",
+  "failureStage": "check-client"
+}
