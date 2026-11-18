@@ -6,7 +6,7 @@ GhostCode does not need to be installed. No GhostCode repository or database is 
 
 | Intent | Method and path | Body / response |
 |---|---|---|
-| QueryStatus | GET `/v1/status` | Connection state, capture diagnostics, simulated flag |
+| QueryStatus | GET `/v1/status` | Connection state, capture diagnostics, receiver audioError, simulated flag |
 | SubmitJob | POST `/v1/jobs` | `{jobId,kind,name,expectedSha256?}` → remote state |
 | Query job | GET `/v1/jobs/{id}` | Remote state/result/error |
 | CancelJob | DELETE `/v1/jobs/{id}` | Cooperative cancellation request |

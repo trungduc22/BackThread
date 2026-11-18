@@ -1,0 +1,109 @@
+{
+  "timestampUtc": "2026-11-18T03:20:01.943861+00:00",
+  "baseCommit": "0e9f88c6030929156384a023c0efee81ffb20ba9",
+  "version": "0.1.2",
+  "physical": {
+    "device": "iPhone7,2",
+    "ios": "12.5.8",
+    "sshPort": 44,
+    "pairedTlsPinned": true,
+    "appSync": {
+      "package": "ai.akemi.appsyncunified",
+      "version": "116.2",
+      "status": "install ok installed",
+      "dylibFilesVerified": true,
+      "changedByBackThread": false
+    },
+    "uiInstalledVersion": "0.1.2",
+    "uiUpgradeAccepted": true,
+    "installedIpaMatchesCurrentIpa": true,
+    "probeUpgradeSentinelPreserved": true,
+    "probeContainerPathRotated": true,
+    "probeDpkgInstallExit": 0,
+    "probeDpkgRemoveExit": 0,
+    "probeAbsentAfterCleanup": true,
+    "standaloneSmokeExit": 137,
+    "standaloneKernelReason": "System Policy process-exec denied",
+    "appExitObservation": "SpringBoard reports voluntary exits; no fresh main/entry marker",
+    "nativeEntryVerified": false,
+    "agentConnected": false,
+    "speakerVerified": false,
+    "nativeMemoryProfile": null,
+    "debugserverAvailable": false,
+    "uiKeyProvisionedOnlyIfAbsent": true,
+    "uiKeyOwner": "mobile:mobile",
+    "uiKeyMode": "0600",
+    "probeStagingRemoved": true
+  },
+  "validation": {
+    "solutionBuildErrors": 0,
+    "solutionBuildWarnings": 0,
+    "managedPassed": 21,
+    "managedFailed": 0,
+    "nativeCorePassed": true,
+    "artifactTestsPassed": 9,
+    "deviceToolTestsPassed": 9,
+    "analyzer": [
+      {
+        "source": "src/iOS/UI/main.m",
+        "exitCode": 0,
+        "diagnostics": 0
+      },
+      {
+        "source": "src/iOS/UI/BTViewController.m",
+        "exitCode": 0,
+        "diagnostics": 0
+      },
+      {
+        "source": "src/iOS/Agent/BTAgent.m",
+        "exitCode": 0,
+        "diagnostics": 0
+      },
+      {
+        "source": "src/iOS/Agent/main.m",
+        "exitCode": 0,
+        "diagnostics": 0
+      },
+      {
+        "source": "src/iOS/AudioReceiver/BTAudioReceiver.m",
+        "exitCode": 0,
+        "diagnostics": 0
+      },
+      {
+        "source": "src/iOS/AudioReceiver/BTPcmRing.c",
+        "exitCode": 0,
+        "diagnostics": 0
+      },
+      {
+        "source": "src/Shared/Protocol/bt_wire.c",
+        "exitCode": 0,
+        "diagnostics": 0
+      },
+      {
+        "source": "src/iOS/Probe/main.m",
+        "exitCode": 0,
+        "diagnostics": 0
+      },
+      {
+        "source": "src/iOS/Probe/entry.c",
+        "exitCode": 0,
+        "diagnostics": 0
+      }
+    ],
+    "allFiveRepeatedNativeArtifactHashesIdentical": true,
+    "portableSimulatorChecks": 18,
+    "portableUsbGate": "blocked: port 23451 refused",
+    "windowsAudioProbe": true,
+    "windowsMediaProbe": true
+  },
+  "unverified": [
+    "native application/Agent entry",
+    "real USB application handshake",
+    "PCM reception/AudioQueue/speaker",
+    "UIKit rendering/touch",
+    "native worker/file processing",
+    "native RSS/Jetsam/crash/thermal/battery",
+    "physical cable unplug/reconnect",
+    "human listening"
+  ]
+}

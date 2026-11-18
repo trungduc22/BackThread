@@ -1,0 +1,62 @@
+{
+  "timestampUtc": "2026-11-18T07:39:45.193126+00:00",
+  "sourceBaseCommit": "0e9f88c",
+  "classification": "engineering checkpoint; first genuine speaker output achieved, continuous quality not accepted",
+  "functionalTests": {
+    "passed": 25,
+    "total": 25
+  },
+  "nativeArtifactTests": {
+    "passed": 9,
+    "total": 9
+  },
+  "deviceToolTests": {
+    "passed": 9,
+    "total": 9
+  },
+  "analyzerToolTests": {
+    "passed": 4,
+    "total": 4
+  },
+  "nativeStaticAnalysis": {
+    "translationUnits": 10,
+    "complete": true,
+    "passed": true
+  },
+  "nativeReproducibility": {
+    "artifacts": 5,
+    "byteIdentical": true
+  },
+  "portableSmokePassed": true,
+  "portableAcceptance": {
+    "passed": 19,
+    "total": 19,
+    "simulated": true,
+    "priorTransientIOFailureRetained": true
+  },
+  "physicalFixture": {
+    "checksPassed": 27,
+    "speakerHeard": true,
+    "simulated": false
+  },
+  "ordinaryWASAPIAudible": true,
+  "humanNormalPlayback": "Có nhưng bị ngắt/giật",
+  "continuousAudioQualityPassed": false,
+  "strictFinalSimulatorSoak": {
+    "passed": false,
+    "seconds": 120,
+    "zeroLossThresholdUnchanged": true,
+    "report": "repairs-soak-final-metrics.json"
+  },
+  "latestWindowsTransportPhysicallyTested": false,
+  "deviceAvailability": "User confirmed unplug; reconnect pending",
+  "systemOrFirmwareChangesPerformed": false,
+  "notes": [
+    "Do not equate automated passed:true with acoustic/continuous quality acceptance",
+    "Native reset/queue-failure physical injection, full UIKit/touch, cable reconnect and extended real mixed workload remain outstanding",
+    "Final simulator quality gate failed; no thresholds relaxed or failed reports removed"
+  ],
+  "nativeReleaseIpaMatchesPhysicallyTested": true,
+  "hostAudioStartupFailureIsolationTested": true,
+  "hostGainDefault": 1
+}

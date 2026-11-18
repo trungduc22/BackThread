@@ -1,0 +1,1727 @@
+{
+  "timestampUtc": "2026-11-18T06:18:37.5590247+00:00",
+  "simulated": false,
+  "transport": "usb",
+  "connected": true,
+  "passed": true,
+  "speakerAudibilityVerified": false,
+  "listeningCheck": "not established by this automated runner; record the human result separately",
+  "UIKitRenderingVerified": false,
+  "physicalUnplugTested": false,
+  "checks": [
+    {
+      "name": "authenticated session",
+      "passed": true
+    },
+    {
+      "name": "wrong-key rejection",
+      "passed": true
+    },
+    {
+      "name": "unsupported frame version closes session",
+      "passed": true
+    },
+    {
+      "name": "peer simulation classification matches requested transport",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 1",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 2",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 3",
+      "passed": true
+    },
+    {
+      "name": "agent accepts unexpired event",
+      "passed": true
+    },
+    {
+      "name": "agent rejects duplicate event",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: sha256/acceptance-f069af63021b4bc08b10f2d70467b2b7.dat",
+      "passed": true
+    },
+    {
+      "name": "whole file SHA-256",
+      "passed": true
+    },
+    {
+      "name": "artifact range contents",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "PCM frames sent",
+      "passed": true
+    },
+    {
+      "name": "PCM bytes received",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue callbacks executed",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue status is noErr",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue running and primed",
+      "passed": true
+    },
+    {
+      "name": "built-in speaker route",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue reports hardware running",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "control still responds after workload",
+      "passed": true
+    },
+    {
+      "name": "new socket authenticates after prior session closes",
+      "passed": true
+    }
+  ],
+  "measurements": {
+    "audioSource": "WASAPI loopback",
+    "requestedQueueGain": 0.25,
+    "physicalUsbDeviceCount": 1,
+    "hello": {
+      "agent": "BackThread.Agent",
+      "simulated": false,
+      "capabilities": [
+        "pcm",
+        "jobs",
+        "files",
+        "events",
+        "UIKit",
+        "direct-handoff"
+      ]
+    },
+    "memoryBefore": {
+      "virtualBytes": 4904558592,
+      "residentBytes": 11948032,
+      "physicalMemory": 1037041664
+    },
+    "agentTestFile": "acceptance-f069af63021b4bc08b10f2d70467b2b7.dat",
+    "audio": [
+      {
+        "bufferedBytes": 0,
+        "callbacks": 83,
+        "inputNonzeroSamples": 0,
+        "bytes": 0,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": false,
+        "silenceBytes": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 0,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 3840,
+        "callbacks": 185,
+        "inputNonzeroSamples": 0,
+        "bytes": 161280,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 84,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 7680,
+        "callbacks": 286,
+        "inputNonzeroSamples": 0,
+        "bytes": 357120,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 186,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 388,
+        "inputNonzeroSamples": 0,
+        "bytes": 551040,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 287,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 489,
+        "inputNonzeroSamples": 0,
+        "bytes": 744960,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 388,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 7680,
+        "callbacks": 603,
+        "inputNonzeroSamples": 0,
+        "bytes": 965760,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 503,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 3840,
+        "callbacks": 706,
+        "inputNonzeroSamples": 0,
+        "bytes": 1159680,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 604,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 810,
+        "inputNonzeroSamples": 0,
+        "bytes": 1361280,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 709,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 7680,
+        "callbacks": 910,
+        "inputNonzeroSamples": 0,
+        "bytes": 1555200,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 810,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 1012,
+        "inputNonzeroSamples": 0,
+        "bytes": 1749120,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 911,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 1126,
+        "inputNonzeroSamples": 0,
+        "bytes": 1968000,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 1025,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 7680,
+        "callbacks": 1226,
+        "inputNonzeroSamples": 0,
+        "bytes": 2161920,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 1126,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 3840,
+        "callbacks": 1328,
+        "inputNonzeroSamples": 0,
+        "bytes": 2353920,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 1226,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 1428,
+        "inputNonzeroSamples": 0,
+        "bytes": 2547840,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 1327,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 1529,
+        "inputNonzeroSamples": 0,
+        "bytes": 2741760,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 1428,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 1643,
+        "inputNonzeroSamples": 0,
+        "bytes": 2960640,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 1542,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 1744,
+        "inputNonzeroSamples": 0,
+        "bytes": 3154560,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 1643,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 1845,
+        "inputNonzeroSamples": 0,
+        "bytes": 3348480,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 1744,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 7680,
+        "callbacks": 1945,
+        "inputNonzeroSamples": 0,
+        "bytes": 3542400,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 1845,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 2046,
+        "inputNonzeroSamples": 0,
+        "bytes": 3734400,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 1945,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 2161,
+        "inputNonzeroSamples": 0,
+        "bytes": 3955200,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 2060,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 2262,
+        "inputNonzeroSamples": 0,
+        "bytes": 4149120,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 2161,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 7680,
+        "callbacks": 2362,
+        "inputNonzeroSamples": 0,
+        "bytes": 4343040,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 2262,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 3840,
+        "callbacks": 2464,
+        "inputNonzeroSamples": 0,
+        "bytes": 4535040,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 2362,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 2564,
+        "inputNonzeroSamples": 0,
+        "bytes": 4728960,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 2463,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 7680,
+        "callbacks": 2678,
+        "inputNonzeroSamples": 0,
+        "bytes": 4949760,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 2578,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 2779,
+        "inputNonzeroSamples": 0,
+        "bytes": 5141760,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 2678,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 3840,
+        "callbacks": 2881,
+        "inputNonzeroSamples": 0,
+        "bytes": 5335680,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 2779,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 2982,
+        "inputNonzeroSamples": 0,
+        "bytes": 5531520,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 2881,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 7680,
+        "callbacks": 3082,
+        "inputNonzeroSamples": 0,
+        "bytes": 5725440,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 2982,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 3198,
+        "inputNonzeroSamples": 0,
+        "bytes": 5946240,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 3097,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 3299,
+        "inputNonzeroSamples": 0,
+        "bytes": 6140160,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 3198,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 3400,
+        "inputNonzeroSamples": 0,
+        "bytes": 6334080,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 3299,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 7680,
+        "callbacks": 3500,
+        "inputNonzeroSamples": 0,
+        "bytes": 6528000,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 3400,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 3602,
+        "inputNonzeroSamples": 0,
+        "bytes": 6721920,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 3501,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 3840,
+        "callbacks": 3717,
+        "inputNonzeroSamples": 0,
+        "bytes": 6940800,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 3615,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 7680,
+        "callbacks": 3817,
+        "inputNonzeroSamples": 0,
+        "bytes": 7136640,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 3717,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 3918,
+        "inputNonzeroSamples": 0,
+        "bytes": 7328640,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 3817,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 4019,
+        "inputNonzeroSamples": 0,
+        "bytes": 7522560,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 3918,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 4120,
+        "inputNonzeroSamples": 0,
+        "bytes": 7716480,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 4019,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 4234,
+        "inputNonzeroSamples": 0,
+        "bytes": 7935360,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 4133,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 4336,
+        "inputNonzeroSamples": 0,
+        "bytes": 8131200,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 4235,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 4436,
+        "inputNonzeroSamples": 0,
+        "bytes": 8323200,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 1920,
+        "hardwareSampleRate": 48000,
+        "packets": 4335,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 11520,
+        "callbacks": 4537,
+        "inputNonzeroSamples": 0,
+        "bytes": 8517120,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 7680,
+        "hardwareSampleRate": 48000,
+        "packets": 4436,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 11520,
+        "callbacks": 4640,
+        "inputNonzeroSamples": 0,
+        "bytes": 8711040,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 11520,
+        "hardwareSampleRate": 48000,
+        "packets": 4537,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 2,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 9600,
+        "callbacks": 4754,
+        "inputNonzeroSamples": 0,
+        "bytes": 8928000,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 11520,
+        "hardwareSampleRate": 48000,
+        "packets": 4650,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 2,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 11520,
+        "callbacks": 4854,
+        "inputNonzeroSamples": 0,
+        "bytes": 9121920,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 11520,
+        "hardwareSampleRate": 48000,
+        "packets": 4751,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 2,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 11520,
+        "callbacks": 4955,
+        "inputNonzeroSamples": 0,
+        "bytes": 9315840,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 11520,
+        "hardwareSampleRate": 48000,
+        "packets": 4852,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 2,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 11520,
+        "callbacks": 5056,
+        "inputNonzeroSamples": 0,
+        "bytes": 9509760,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 11520,
+        "hardwareSampleRate": 48000,
+        "packets": 4953,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 2,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 11520,
+        "callbacks": 5157,
+        "inputNonzeroSamples": 0,
+        "bytes": 9703680,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 11520,
+        "hardwareSampleRate": 48000,
+        "packets": 5054,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 2,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 11520,
+        "callbacks": 5271,
+        "inputNonzeroSamples": 0,
+        "bytes": 9922560,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 11520,
+        "hardwareSampleRate": 48000,
+        "packets": 5168,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 2,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 11520,
+        "callbacks": 5372,
+        "inputNonzeroSamples": 0,
+        "bytes": 10110720,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 17280,
+        "hardwareSampleRate": 48000,
+        "packets": 5266,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 4,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 11520,
+        "callbacks": 5473,
+        "inputNonzeroSamples": 0,
+        "bytes": 10304640,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 17280,
+        "hardwareSampleRate": 48000,
+        "packets": 5367,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 4,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 11520,
+        "callbacks": 5574,
+        "inputNonzeroSamples": 0,
+        "bytes": 10498560,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 17280,
+        "hardwareSampleRate": 48000,
+        "packets": 5468,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 4,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 13440,
+        "callbacks": 5674,
+        "inputNonzeroSamples": 0,
+        "bytes": 10692480,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 17280,
+        "hardwareSampleRate": 48000,
+        "packets": 5569,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 4,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 13440,
+        "callbacks": 5787,
+        "inputNonzeroSamples": 0,
+        "bytes": 10909440,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 17280,
+        "hardwareSampleRate": 48000,
+        "packets": 5682,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 4,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 11520,
+        "callbacks": 5889,
+        "inputNonzeroSamples": 0,
+        "bytes": 11103360,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 17280,
+        "hardwareSampleRate": 48000,
+        "packets": 5783,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 4,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 0,
+        "callbacks": 5989,
+        "inputNonzeroSamples": 0,
+        "bytes": 11281920,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 19200,
+        "hardwareSampleRate": 48000,
+        "packets": 5876,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 4,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 0,
+        "callbacks": 6090,
+        "inputNonzeroSamples": 0,
+        "bytes": 11281920,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 213120,
+        "hardwareSampleRate": 48000,
+        "packets": 5876,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 4,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 0,
+        "callbacks": 6193,
+        "inputNonzeroSamples": 0,
+        "bytes": 11281920,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 410880,
+        "hardwareSampleRate": 48000,
+        "packets": 5876,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 4,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      }
+    ],
+    "memoryDuringAudio": [
+      {
+        "elapsedSeconds": 5.0691048,
+        "memory": {
+          "virtualBytes": 4906360832,
+          "residentBytes": 12111872,
+          "physicalMemory": 1037041664
+        }
+      },
+      {
+        "elapsedSeconds": 10.2925187,
+        "memory": {
+          "virtualBytes": 4905656320,
+          "residentBytes": 12025856,
+          "physicalMemory": 1037041664
+        }
+      },
+      {
+        "elapsedSeconds": 15.4654966,
+        "memory": {
+          "virtualBytes": 4905066496,
+          "residentBytes": 11935744,
+          "physicalMemory": 1037041664
+        }
+      },
+      {
+        "elapsedSeconds": 20.6403094,
+        "memory": {
+          "virtualBytes": 4904476672,
+          "residentBytes": 11845632,
+          "physicalMemory": 1037041664
+        }
+      },
+      {
+        "elapsedSeconds": 25.8210544,
+        "memory": {
+          "virtualBytes": 4905050112,
+          "residentBytes": 11857920,
+          "physicalMemory": 1037041664
+        }
+      },
+      {
+        "elapsedSeconds": 31.0026289,
+        "memory": {
+          "virtualBytes": 4905050112,
+          "residentBytes": 11857920,
+          "physicalMemory": 1037041664
+        }
+      },
+      {
+        "elapsedSeconds": 36.190992,
+        "memory": {
+          "virtualBytes": 4904476672,
+          "residentBytes": 11845632,
+          "physicalMemory": 1037041664
+        }
+      },
+      {
+        "elapsedSeconds": 41.37464,
+        "memory": {
+          "virtualBytes": 4905050112,
+          "residentBytes": 11857920,
+          "physicalMemory": 1037041664
+        }
+      },
+      {
+        "elapsedSeconds": 46.5765539,
+        "memory": {
+          "virtualBytes": 4905050112,
+          "residentBytes": 11857920,
+          "physicalMemory": 1037041664
+        }
+      },
+      {
+        "elapsedSeconds": 51.7420273,
+        "memory": {
+          "virtualBytes": 4904476672,
+          "residentBytes": 11845632,
+          "physicalMemory": 1037041664
+        }
+      },
+      {
+        "elapsedSeconds": 56.9200587,
+        "memory": {
+          "virtualBytes": 4905050112,
+          "residentBytes": 11857920,
+          "physicalMemory": 1037041664
+        }
+      },
+      {
+        "elapsedSeconds": 62.1012843,
+        "memory": {
+          "virtualBytes": 4904476672,
+          "residentBytes": 11857920,
+          "physicalMemory": 1037041664
+        }
+      }
+    ],
+    "audioElapsedSeconds": 62.2538451,
+    "senderFrames": 5881,
+    "senderDroppedFrames": 5,
+    "captureDevice": "Speakers / Headphones (Realtek High Definition Audio)",
+    "captureError": null,
+    "memoryAfter": {
+      "virtualBytes": 4906164224,
+      "residentBytes": 11915264,
+      "physicalMemory": 1037041664
+    }
+  },
+  "error": null
+}

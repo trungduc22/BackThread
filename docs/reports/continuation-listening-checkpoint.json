@@ -1,0 +1,34 @@
+{
+  "timestampUtc": "2026-11-18T06:23:59.369484+00:00",
+  "status": "device work paused at user request",
+  "reason": "User reports black screen and is independently reflashing the system; no firmware operation performed by BackThread agent",
+  "speakerAudibilityVerified": false,
+  "humanListeningResults": [
+    {
+      "source": "three-second PCM fixture",
+      "queueGain": 0.08,
+      "result": "No sound"
+    },
+    {
+      "source": "three-second PCM fixture",
+      "queueGain": 0.25,
+      "result": "No sound"
+    }
+  ],
+  "nativeProtocolVerified": true,
+  "embeddedAgentVerified": true,
+  "standaloneAgentVerified": false,
+  "UIKitVisualAndTouchVerified": false,
+  "physicalUnplugVerified": false,
+  "latestNativeBuild": "LLD 23.1.5 build completed; subsequent deployment was not completed (paired StartSession timed out)",
+  "lastInstalledBuild": "audio-diagnostic build, before final startup/session diagnostics",
+  "nextAction": "Wait for user readiness, then re-enumerate and re-check paired certificate, services, installation and key before any deployment; do not assume previous environment survives",
+  "reportFiles": [
+    "continuation-first-native-pcm.json",
+    "continuation-native-pcm-peaks.json",
+    "continuation-native-wasapi-60s.json",
+    "continuation-native-wasapi-known-signal.json",
+    "continuation-paired-windows-known-signal.json",
+    "continuation-launcher-native-protocol.json"
+  ]
+}

@@ -24,8 +24,24 @@ Quota admission counts both existing complete files and declared partial-transfe
 
 Completed files use replace semantics. Callers must choose unique backup names when preserving previous versions. Job idempotency is bounded by the sixty-four-record history; it is not an unlimited exactly-once database. Power-loss durability is not guaranteed by managed flush operations. A local pairing record is not proof that the current device is trusted or jailbroken.
 
-All native translation units compile for iOS 12 ARM64 and pass Clang's analyzer; none has executed on the phone. Static review corrected the asynchronous authentication boundary and generation-fenced delayed commands/file responses against socket descriptor reuse. This does not establish runtime race freedom, fuzz resistance or device authorization. Locally valid ad-hoc code/resource hashes did not satisfy the real device's installation/execution policy; those policies were not changed.
+Native code compiles for iOS 12 ARM64 and has executed through the embedded Agent on the recorded physical phone. Current recovery repairs are compiled/analyzed but not physically verified. Static review generation-fences delayed commands/file responses against descriptor reuse; this does not establish complete race freedom or fuzz resistance. User-prepared normal installation succeeded; standalone execution policy remained unchanged and denied. No BackThread repair of missing system/jailbreak components is authorized. Current hardware state is unknown after the user's black-screen maintenance.
 
 ## Checks performed
 
 Managed tests exercise malformed/oversized frames, fragmented reads, wrong keys, replayed authentication, socket recovery, unsafe paths, checksum/offset errors, unsupported jobs/formats, cancellation, queue saturation, privacy masking, API authorization, Origin rejection, and reconnects. Shared C framing/ring code compiles with warnings as errors. NuGet advisory output is preserved with the reports. Passing these checks is not a complete penetration test.
+
+## 0.1.2 deployment and transport review
+
+The user's prepared AppSync/dpkg environment was inspected read only. BackThread initiated only normal installation/upgrade/uninstall of its own UI/probes and scoped file staging; no jailbreak package, activation, firmware, trust cache, AMFI, sandbox or unrelated service policy was changed. A normal dpkg probe removal processed the package manager's existing Cydia trigger; no unrelated package was installed/removed or edited.
+
+Existing apps use Installation Proxy Upgrade, not a fresh Install. A physical sentinel test verifies data preservation while the container path rotates; callers must refresh own app metadata. The installer only accepts BackThread's fixed UI/probe identifiers. Explicit uninstall removes only the selected app/container; package removal is scoped to the named BackThread package. No automatic broad data cleanup is performed.
+
+Debian archives now contain only explicit app-owned directory roots, not shared parent metadata. Agent directories use target mobile UID/GID 501 and private mode 0700 at the data root; /var/mobile ownership is not packaged. Executables/resources contain no generated key or SDK/framework binary. Own probes were installed/removed during separate diagnostic stages; the last recorded UI used a private matching key provisioned only when absent. Current app/key/probe presence must be rechecked after readiness rather than assumed.
+
+Launch-only URL schemes open the apps but do not interpret arguments as actions, jobs or key material. Device syslog records support NUL/LF framing, bounded retention/partial lines and UUID redaction; only BackThread matches are retained. Entry markers, PIDs, installer completion and actual application behavior remain separate evidence.
+
+Windows artifact responses now validate offset, requested length and declared reply length, with an atomic four-download limit. A real-socket fault test rejects corrupt data/metadata and recovers on a valid response. Native file reads/writes use bounded utility work and generation-fenced replies; basic native audio/file concurrency was exercised; extended failure/restart behavior is still unverified. No new production dependency or wire version was introduced.
+
+## Device boundary during repairs
+
+After the black-screen report all repair work is offline. Existing connection, certificate and app metadata may only be rechecked when the user reports readiness. New installation remains restricted to BackThread-owned payloads through already available authorized methods. Do not repair or install missing frameworks, daemons, drivers, jailbreak/activation/bypass components, or alter firmware/AMFI/trust caches/Jetsam. If these are unavailable, document the blocker and continue independent repository work. No password/key/pairing data is included in releases.

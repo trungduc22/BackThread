@@ -1,0 +1,10 @@
+{
+  "com.apple.debugserver": {
+    "available": false,
+    "error": "InvalidService"
+  },
+  "com.apple.debugserver.DVTSecureSocketProxy": {
+    "available": false,
+    "error": "InvalidService"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "scope": "Final source and current toolchain, separate output directories",
+  "passed": true,
+  "linker": "LLD 23.1.5 (https://github.com/rust-lang/llvm-project.git 0a5579eb649d3634a9c30ac873300cc2944fa070)",
+  "artifacts": {
+    "BackThread": {
+      "bytes": 199392,
+      "sha256": "513cbbe2c16f67ee511d2b61adc88c548e8989f25f61d1075feb0696aee0d948"
+    },
+    "BackThread.Agent": {
+      "bytes": 132352,
+      "sha256": "464406629f6d7490d91ff3010422d71bb69948c87c35872208ab4b80af18fde7"
+    },
+    "libBackThread.Agent.a": {
+      "bytes": 179792,
+      "sha256": "4baab84ca02acafeb2555d9baecce8e39dd593fb40dc289e5771dd5439ddfa15"
+    },
+    "app.backthread.companion_0.1.2_iphoneos-arm.deb": {
+      "bytes": 68518,
+      "sha256": "13c84b43fd1b3018c6f59466243621c5a02edf64fd20538cca16714f688303d3"
+    },
+    "app.backthread.agent_0.1.2_iphoneos-arm.deb": {
+      "bytes": 45972,
+      "sha256": "031581b48b489641efeb6cd456f9678cce0b5bcf1fb84564cb24b5e40f1ccdbf"
+    }
+  }
+}

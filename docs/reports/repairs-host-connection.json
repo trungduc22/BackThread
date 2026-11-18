@@ -1,0 +1,20 @@
+{
+  "transport": "usb",
+  "simulated": false,
+  "hostStatus": {
+    "state": "connected",
+    "lastError": "",
+    "audioError": "",
+    "transport": "usb",
+    "simulated": false,
+    "device": null,
+    "captureError": null,
+    "audioFrames": 0,
+    "audioDroppedFrames": 0
+  },
+  "recordedHostAuthSucceeded": true,
+  "humanObservedConnectedByUSB": true,
+  "humanReportsOtherAppsSpeakerWorks": true,
+  "speakerVerifiedForBackThread": false,
+  "workerQueryNote": "Earlier API attempt returned 503 after connection stopped; no worker success claimed"
+}

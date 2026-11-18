@@ -1,30 +1,41 @@
-BackThread 0.1 engineering checkpoint — Windows x64
+BackThread 0.1.2 engineering checkpoint — Windows x64
 
-This directory contains self-contained Windows Host, native tray and simulator.
-Keep all DLLs, runtime configuration and license files together. A .NET SDK or
-system .NET 8 runtime is not required to run these executables.
+Self-contained Host, native Tray, Simulator and DeviceTests are included. Keep
+DLLs, runtime configuration and licenses together. No .NET SDK/runtime install
+is needed to run these executables. No private key is shipped.
 
-1. Open PowerShell in this extracted directory.
-2. Run: powershell -File Setup-Portable.ps1 -Transport usb
-   For local simulation, select -Transport localhost instead.
-3. USB mode needs an installed, running BackThread iOS app with the same private
-   key provisioned through its Pair screen. This session did not build an iOS app.
-4. Run BackThread.Tray.exe, or use:
-   .\BackThread.Host.exe --config config/local.json
-   Do not run Tray and Host together on the same API port.
-5. For simulator mode, in a separate terminal run:
-   .\BackThread.Simulator.exe --key-file config/session.key
+1. Open PowerShell in this directory. Run Setup-Portable.ps1 -Transport usb
+   (or -Transport localhost for simulation). Keep config/session.key private.
+2. An iOS app must actually run with the matching key. The session's phone now
+   previously ran the embedded Agent and received nonzero PCM buffers, but
+   the latest fixture and ordinary Windows media were heard. Media still
+   stutters; newest Windows batching needs physical retest after unplug.
+   Do not repair missing system/jailbreak components. Wait for reconnection.
+3. Start BackThread.Tray.exe OR BackThread.Host.exe --config config/local.json.
+   Do not run both on the same API port.
+4. Simulator: BackThread.Simulator.exe --key-file config/session.key
 
-Device diagnostics: .\BackThread.Host.exe --diagnose
-Windows capture check (quiet tone): .\BackThread.Host.exe --audio-probe
-Windows media check (silent fixture): .\BackThread.Host.exe --media-self-test
+Physical acceptance gate (no sound by default):
+ BackThread.DeviceTests.exe --key-file config/session.key
+After the prepared app actually executes, a quiet fixture is explicit and short:
+ BackThread.DeviceTests.exe --key-file config/session.key --fixture --seconds 3 --worker
+Use --simulator --port 23461 only with an explicitly started local simulator.
+Reports distinguish physical USB from simulation; listening, visual UI and cable
+unplug are not automatically certified. See DEVICE_ACCEPTANCE.md in the source.
 
-API: http://127.0.0.1:23452/v1, bearer authentication using the lowercase hex key.
-No key is included in this package. Keep your generated config/session.key private.
+Windows-only probes:
+ BackThread.Host.exe --diagnose
+ BackThread.Host.exe --audio-probe
+ BackThread.Host.exe --media-self-test
 
-The attached iPhone 6 / iOS 12.5.8 was detected, but SSH and the application port
-were refused. No iPhone speaker output, screen-off playback, UI, memory footprint
-or installation was verified. No phone firmware/jailbreak/activation changes were
-made. See the source package's README and docs for actual feature status and tests.
+The HTTP API is loopback-only at /v1 on port 23452, with bearer authentication
+using the matching lowercase hex session key. No cloud, Wi-Fi or iPhone internet
+is required for USB PCM/jobs. No kernel sound driver is installed. This remains
+an engineering checkpoint with explicit native execution/audio limitations.
 
-This is not an end-to-end hardware-verified production release.
+The updated runner starts timing at PCM pacing, excludes late/shutdown stats,
+and reports zeroLossInSampledWindow separately from functional checks. Use
+--require-nonzero with an intentional known Windows source for loopback.
+Receiver audio.error is visible as audioError in /v1/status; it does not
+certify sound or trigger system repair. Reports/releases are engineering
+checkpoints, not a declaration of full hardware acceptance.

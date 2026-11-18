@@ -20,11 +20,11 @@ public sealed class HostRuntime(HostConfig config)
     private readonly object stateGate = new();
     private Connection? connection;
     private RemoteWorker? worker;
-    private string state = "starting", lastError = "";
+    private string state = "starting", lastError = "", audioError = "";
     private LoopbackBridge? audio;
     public event Action<string>? Log;
     public event Action<JobState>? JobProgress;
-    public object Status { get { lock (stateGate) return new { state, lastError, transport = config.Transport, simulated = config.Transport == "localhost", device = audio?.DeviceName, captureError = audio?.LastError, audioFrames = audio?.FramesSent ?? 0, audioDroppedFrames = connection?.DroppedAudio ?? 0 }; } }
+    public object Status { get { lock (stateGate) return new { state, lastError, audioError, transport = config.Transport, simulated = config.Transport == "localhost", device = audio?.DeviceName, captureError = audio?.LastError, audioFrames = audio?.FramesSent ?? 0, audioDroppedFrames = connection?.DroppedAudio ?? 0,audioWriteMaximumMilliseconds=connection?.AudioWriteMaximumMilliseconds??0,audioSlowWrites=connection?.AudioSlowWrites??0 }; } }
     private void SetState(string value, string error = "") { lock (stateGate) { state = value; lastError = error; } Log?.Invoke(value + (error.Length == 0 ? "" : ": " + error)); }
     public RemoteWorker Worker => worker ?? throw new IOException("Agent is not connected");
     public async Task RunAsync(CancellationToken ct)
@@ -64,11 +64,12 @@ public sealed class HostRuntime(HostConfig config)
                         try
                         {
                             var hello = await c.RequestAsync(LogicalChannel.Control, "hello", new { host = "BackThread.Host", protocol = 1 }, session.Token);
+                            lock(stateGate)audioError="";
                             SetState("connected"); Log?.Invoke("Agent capabilities: " + hello.Body.GetRawText()); attempt = 0;
                             await c.RequestAsync(LogicalChannel.Control, "action.registry", new { actions = config.Actions.Select(a => new { a.Id, a.Title }) }, session.Token);
                             heartbeat = HeartbeatAsync(c, session.Token); mediaLoop = MediaLoopAsync(c, session.Token);
                             if (config.CollectWindowsNotifications) notificationLoop = NotificationLoopAsync(session.Token);
-                            audio = new LoopbackBridge(); audioLoop = config.StreamAudio ? audio.RunAsync(c, config.FixtureAudio, session.Token) : Task.Delay(Timeout.Infinite, session.Token);
+                            audioLoop=AudioLoopAsync(c,session.Token);
                             var completed = await Task.WhenAny(reader, heartbeat, audioLoop, apiTask); await completed;
                         }
                         finally
@@ -86,6 +87,22 @@ public sealed class HostRuntime(HostConfig config)
             }
         }
         finally { api.Stop(); try { await apiTask; } catch (Exception) when (ct.IsCancellationRequested) { } SetState("stopped"); }
+    }
+    private async Task AudioLoopAsync(Connection c,CancellationToken ct)
+    {
+        audio=new LoopbackBridge();
+        try {
+            if(!config.StreamAudio){await Task.Delay(Timeout.Infinite,ct);return;}
+            // Restore app gain after quiet tests; never change the phone system volume.
+            if(config.Transport=="usb")await c.RequestAsync(LogicalChannel.Control,"audio.volume",new{value=config.AudioGain},ct);
+            await audio.RunAsync(c,config.FixtureAudio,ct);
+        }catch(Exception ex)when(!ct.IsCancellationRequested&&(ex is IOException or OperationCanceledException)){
+            lock(stateGate)audioError=ex.Message;
+            Log?.Invoke("Audio unavailable; control remains connected: "+ex.Message);
+            // Reader/heartbeat still detect real connection loss. An audio-only startup
+            // error must not repeatedly tear down working jobs and media control.
+            await Task.Delay(Timeout.Infinite,ct);
+        }
     }
     private static async Task HeartbeatAsync(Connection c, CancellationToken ct)
     {
@@ -116,6 +133,7 @@ public sealed class HostRuntime(HostConfig config)
     private async ValueTask ReceiveAsync(Frame f, Message? m, CancellationToken ct)
     {
         worker?.Receive(f, m); if (m is null) return;
+        if(m.Type=="audio.error") { string error=m.Body.TryGetProperty("error",out var value)?value.GetString()??"Receiver audio failed":"Receiver audio failed";lock(stateGate)audioError=error;Log?.Invoke("Audio receiver: "+error);return; }
         if (m.Type == "job.progress") { var s = m.Body.Deserialize<JobState>(Message.Json); if (s != null) JobProgress?.Invoke(s); return; }
         if (m.Type is not ("media.command" or "action.invoke")) return;
         // Dispatch without blocking the protocol reader, since actions can issue agent requests.

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
+using System.Diagnostics;
 
 namespace BackThread.Transport;
 
@@ -16,8 +17,11 @@ public sealed class Connection : IAsyncDisposable
     private readonly CancellationTokenSource lifetime = new();
     private readonly Task writer;
     private long dropped;
+    private long audioWriteMaximumUs,audioSlowWrites;
     private long lastReceive = Environment.TickCount64;
     public long DroppedAudio => Interlocked.Read(ref dropped);
+    public double AudioWriteMaximumMilliseconds=>Interlocked.Read(ref audioWriteMaximumUs)/1000d;
+    public long AudioSlowWrites=>Interlocked.Read(ref audioSlowWrites);
     public TimeSpan ReceiveAge => TimeSpan.FromMilliseconds(Environment.TickCount64 - Interlocked.Read(ref lastReceive));
     public Connection(Stream stream)
     {
@@ -84,7 +88,9 @@ public sealed class Connection : IAsyncDisposable
                 while (control.Reader.TryRead(out var f) || audio.Reader.TryRead(out f) || bulk.Reader.TryRead(out f))
                 {
                     using var timeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); timeout.CancelAfter(TimeSpan.FromSeconds(3));
+                    long started=Stopwatch.GetTimestamp();
                     await Wire.WriteAsync(stream, f, timeout.Token);
+                    if(f.Channel==LogicalChannel.Audio){long elapsed=Stopwatch.GetElapsedTime(started).Ticks/10;long old=Interlocked.Read(ref audioWriteMaximumUs);while(elapsed>old){long observed=Interlocked.CompareExchange(ref audioWriteMaximumUs,elapsed,old);if(observed==old)break;old=observed;}if(elapsed>=50000)Interlocked.Increment(ref audioSlowWrites);}
                 }
             }
         }

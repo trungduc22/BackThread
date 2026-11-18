@@ -1,0 +1,207 @@
+{
+  "timestampUtc": "2026-11-18T06:15:28.0812515+00:00",
+  "simulated": false,
+  "transport": "usb",
+  "connected": true,
+  "passed": true,
+  "speakerAudibilityVerified": false,
+  "listeningCheck": "pending human confirmation after real audio output",
+  "UIKitRenderingVerified": false,
+  "physicalUnplugTested": false,
+  "checks": [
+    {
+      "name": "authenticated session",
+      "passed": true
+    },
+    {
+      "name": "wrong-key rejection",
+      "passed": true
+    },
+    {
+      "name": "unsupported frame version closes session",
+      "passed": true
+    },
+    {
+      "name": "peer simulation classification matches requested transport",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 1",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 2",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 3",
+      "passed": true
+    },
+    {
+      "name": "agent accepts unexpired event",
+      "passed": true
+    },
+    {
+      "name": "agent rejects duplicate event",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: sha256/acceptance-2d4b1f9f911d451fb04a702dff913e8a.dat",
+      "passed": true
+    },
+    {
+      "name": "whole file SHA-256",
+      "passed": true
+    },
+    {
+      "name": "artifact range contents",
+      "passed": true
+    },
+    {
+      "name": "PCM frames sent",
+      "passed": true
+    },
+    {
+      "name": "PCM bytes received",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue callbacks executed",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue status is noErr",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue running and primed",
+      "passed": true
+    },
+    {
+      "name": "built-in speaker route",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "control still responds after workload",
+      "passed": true
+    },
+    {
+      "name": "new socket authenticates after prior session closes",
+      "passed": true
+    }
+  ],
+  "measurements": {
+    "audioSource": "quiet fixture",
+    "physicalUsbDeviceCount": 1,
+    "hello": {
+      "agent": "BackThread.Agent",
+      "simulated": false,
+      "capabilities": [
+        "pcm",
+        "jobs",
+        "files",
+        "events",
+        "UIKit",
+        "direct-handoff"
+      ]
+    },
+    "memoryBefore": {
+      "virtualBytes": 4904542208,
+      "residentBytes": 11780096,
+      "physicalMemory": 1037041664
+    },
+    "agentTestFile": "acceptance-2d4b1f9f911d451fb04a702dff913e8a.dat",
+    "audio": [
+      {
+        "bufferedBytes": 3840,
+        "callbacks": 83,
+        "inputNonzeroSamples": 79546,
+        "bytes": 159360,
+        "running": true,
+        "renderNonzeroSamples": 77630,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 4096,
+        "primed": true,
+        "silenceBytes": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 83,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 4096,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 184,
+        "inputNonzeroSamples": 177304,
+        "bytes": 355200,
+        "running": true,
+        "renderNonzeroSamples": 174428,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 4096,
+        "primed": true,
+        "silenceBytes": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 185,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 4096,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 1920,
+        "callbacks": 284,
+        "inputNonzeroSamples": 271226,
+        "bytes": 543360,
+        "running": true,
+        "renderNonzeroSamples": 270268,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 4096,
+        "primed": true,
+        "silenceBytes": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 283,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 4096,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      }
+    ],
+    "senderFrames": 283,
+    "senderDroppedFrames": 0,
+    "captureDevice": null,
+    "captureError": null,
+    "memoryAfter": {
+      "virtualBytes": 4906868736,
+      "residentBytes": 12013568,
+      "physicalMemory": 1037041664
+    }
+  },
+  "error": null
+}

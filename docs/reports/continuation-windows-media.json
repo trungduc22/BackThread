@@ -1,0 +1,13 @@
+{
+  "realWindowsSession": true,
+  "physicalIPhoneTest": false,
+  "metadataVerified": true,
+  "play": true,
+  "pause": true,
+  "playEvents": 1,
+  "pauseEvents": 1,
+  "seekSupported": true,
+  "seek": true,
+  "seekEvents": 1,
+  "source": "BackThread.Host.exe"
+}

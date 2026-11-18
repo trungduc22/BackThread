@@ -1,0 +1,25 @@
+{
+  "probeKind": "C entry only",
+  "image": {
+    "architecture": "arm64",
+    "fileType": 2,
+    "flags": 3145861,
+    "linkedLibraries": [
+      "/usr/lib/libSystem.B.dylib",
+      "/usr/lib/system/libdyld.dylib",
+      "/usr/lib/system/libsystem_c.dylib",
+      "/usr/lib/system/libsystem_kernel.dylib"
+    ],
+    "signed": true,
+    "platform": 2,
+    "minimumOS": "12.0.0",
+    "sdkVersion": "12.0.0"
+  },
+  "signature": {
+    "codePages": 13,
+    "pageSize": 4096,
+    "sha256": "170b95ac63d74ba5e2b5d0421eeda87d3f101961d5603be023f88e0147c538d4"
+  },
+  "sha256": "5fb332e1a6424729b5e40ebafe44327deb15d52a911170170e0bec473dd4f2ba",
+  "packageSha256": "b446c86cc9ad0b5528a45c8e3739df4b0bb19227dcb51ee3aae1034911d7c8c9"
+}

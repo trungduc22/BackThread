@@ -1,0 +1,261 @@
+{
+  "timestampUtc": "2026-11-18T07:13:39.0888866+00:00",
+  "simulated": false,
+  "transport": "usb",
+  "connected": true,
+  "passed": true,
+  "speakerAudibilityVerified": false,
+  "listeningCheck": "not established by this automated runner; record the human result separately",
+  "UIKitRenderingVerified": false,
+  "physicalUnplugTested": false,
+  "checks": [
+    {
+      "name": "authenticated session",
+      "passed": true
+    },
+    {
+      "name": "wrong-key rejection",
+      "passed": true
+    },
+    {
+      "name": "unsupported frame version closes session",
+      "passed": true
+    },
+    {
+      "name": "peer simulation classification matches requested transport",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 1",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 2",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 3",
+      "passed": true
+    },
+    {
+      "name": "agent accepts unexpired event",
+      "passed": true
+    },
+    {
+      "name": "agent rejects duplicate event",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: sha256/acceptance-7ed2fdc35c1d484da0d2390c5db2034d.dat",
+      "passed": true
+    },
+    {
+      "name": "whole file SHA-256",
+      "passed": true
+    },
+    {
+      "name": "artifact range contents",
+      "passed": true
+    },
+    {
+      "name": "PCM frames sent",
+      "passed": true
+    },
+    {
+      "name": "statistics sampled while source was active",
+      "passed": true
+    },
+    {
+      "name": "PCM bytes received",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue callbacks executed",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue status is noErr",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue running and primed",
+      "passed": true
+    },
+    {
+      "name": "built-in speaker route",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue reports hardware running",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue diagnostic getters succeed",
+      "passed": true
+    },
+    {
+      "name": "fixture input has nonzero PCM",
+      "passed": true
+    },
+    {
+      "name": "fixture rendered buffers have nonzero PCM",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "control still responds after workload",
+      "passed": true
+    },
+    {
+      "name": "new socket authenticates after prior session closes",
+      "passed": true
+    }
+  ],
+  "measurements": {
+    "audioSource": "quiet fixture",
+    "requestedQueueGain": 0.25,
+    "physicalUsbDeviceCount": 1,
+    "hello": {
+      "agent": "BackThread.Agent",
+      "simulated": false,
+      "capabilities": [
+        "pcm",
+        "jobs",
+        "files",
+        "events",
+        "UIKit",
+        "direct-handoff"
+      ]
+    },
+    "memoryBefore": {
+      "virtualBytes": 4904230912,
+      "residentBytes": 11112448,
+      "physicalMemory": 1037041664
+    },
+    "agentTestFile": "acceptance-7ed2fdc35c1d484da0d2390c5db2034d.dat",
+    "audioSampleTimesSeconds": [
+      1.0195623,
+      2.0096428,
+      2.7606629
+    ],
+    "audioWindowSeconds": 3,
+    "audioMeasurementScope": "Only replies completed during active PCM pacing; shutdown tail excluded",
+    "audio": [
+      {
+        "bufferedBytes": 3840,
+        "callbacks": 100,
+        "inputNonzeroSamples": 95840,
+        "queuePresent": 1,
+        "bytes": 192000,
+        "sessionCategory": "AVAudioSessionCategoryPlayback",
+        "running": true,
+        "renderNonzeroSamples": 93922,
+        "outputVolume": 1,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 4096,
+        "secondaryAudioSilencedHint": false,
+        "primed": true,
+        "silenceBytes": 0,
+        "queueGainStatus": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 100,
+        "interrupted": false,
+        "queueGain": 0.25,
+        "otherAudioPlaying": false,
+        "inputPeak": 4096,
+        "queueRunningStatus": 0,
+        "sessionMode": "AVAudioSessionModeDefault",
+        "lastOSStatus": 0,
+        "gaps": 0,
+        "droppedBytes": 0,
+        "acceptingPCM": true
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 199,
+        "inputNonzeroSamples": 191680,
+        "queuePresent": 1,
+        "bytes": 384000,
+        "sessionCategory": "AVAudioSessionCategoryPlayback",
+        "running": true,
+        "renderNonzeroSamples": 188804,
+        "outputVolume": 1,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 4096,
+        "secondaryAudioSilencedHint": false,
+        "primed": true,
+        "silenceBytes": 0,
+        "queueGainStatus": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 200,
+        "interrupted": false,
+        "queueGain": 0.25,
+        "otherAudioPlaying": false,
+        "inputPeak": 4096,
+        "queueRunningStatus": 0,
+        "sessionMode": "AVAudioSessionModeDefault",
+        "lastOSStatus": 0,
+        "gaps": 0,
+        "droppedBytes": 0,
+        "acceptingPCM": true
+      },
+      {
+        "bufferedBytes": 3840,
+        "callbacks": 275,
+        "inputNonzeroSamples": 263560,
+        "queuePresent": 1,
+        "bytes": 528000,
+        "sessionCategory": "AVAudioSessionCategoryPlayback",
+        "running": true,
+        "renderNonzeroSamples": 261642,
+        "outputVolume": 1,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 4096,
+        "secondaryAudioSilencedHint": false,
+        "primed": true,
+        "silenceBytes": 0,
+        "queueGainStatus": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 275,
+        "interrupted": false,
+        "queueGain": 0.25,
+        "otherAudioPlaying": false,
+        "inputPeak": 4096,
+        "queueRunningStatus": 0,
+        "sessionMode": "AVAudioSessionModeDefault",
+        "lastOSStatus": 0,
+        "gaps": 0,
+        "droppedBytes": 0,
+        "acceptingPCM": true
+      }
+    ],
+    "memoryDuringAudio": [],
+    "senderFrames": 301,
+    "senderDroppedFrames": 0,
+    "captureDevice": null,
+    "captureError": null,
+    "zeroLossInSampledWindow": true,
+    "memoryAfter": {
+      "virtualBytes": 4907130880,
+      "residentBytes": 11333632,
+      "physicalMemory": 1037041664
+    }
+  },
+  "error": null
+}

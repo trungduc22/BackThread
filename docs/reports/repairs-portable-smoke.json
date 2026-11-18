@@ -1,0 +1,27 @@
+{
+  "selfContainedWindowsExecutables": true,
+  "physicalIPhoneTest": false,
+  "hostConnectedToSimulator": true,
+  "unauthorizedApiRejected": true,
+  "uploadSha256Verified": true,
+  "sseProgressReceived": true,
+  "remoteIntegrityJobCompleted": true,
+  "artifactBytesVerified": true,
+  "privacyMaskVerified": true,
+  "agentProcessRestartAndHostReconnect": true,
+  "persistedArtifactAfterRestart": true,
+  "status": {
+    "state": "connected",
+    "lastError": "",
+    "audioError": "",
+    "transport": "localhost",
+    "simulated": true,
+    "device": null,
+    "captureError": null,
+    "audioFrames": 2,
+    "audioDroppedFrames": 0,
+    "audioWriteMaximumMilliseconds": 0.163,
+    "audioSlowWrites": 0
+  },
+  "passed": true
+}

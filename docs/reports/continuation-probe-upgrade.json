@@ -1,0 +1,58 @@
+{
+  "bundleIdentifier": "app.backthread.probe",
+  "ipaSha256": "6756ee6ea39fa9a0b7b421ab7a920eb76dfb9633d3cf1b03b1395f2b3931c6b9",
+  "method": "paired AFC + Installation Proxy",
+  "statuses": [
+    {
+      "PercentComplete": 5,
+      "Status": "CreatingStagingDirectory"
+    },
+    {
+      "PercentComplete": 15,
+      "Status": "ExtractingPackage"
+    },
+    {
+      "PercentComplete": 20,
+      "Status": "InspectingPackage"
+    },
+    {
+      "PercentComplete": 20,
+      "Status": "TakingInstallLock"
+    },
+    {
+      "PercentComplete": 30,
+      "Status": "PreflightingApplication"
+    },
+    {
+      "PercentComplete": 40,
+      "Status": "VerifyingApplication"
+    },
+    {
+      "PercentComplete": 50,
+      "Status": "CreatingContainer"
+    },
+    {
+      "PercentComplete": 60,
+      "Status": "InstallingApplication"
+    },
+    {
+      "PercentComplete": 70,
+      "Status": "PostflightingApplication"
+    },
+    {
+      "PercentComplete": 80,
+      "Status": "SandboxingApplication"
+    },
+    {
+      "PercentComplete": 90,
+      "Status": "GeneratingApplicationMap"
+    },
+    {
+      "Status": "Complete"
+    }
+  ],
+  "installed": true,
+  "stagingRemoved": true,
+  "pairedCertificatePinned": true,
+  "command": "Upgrade"
+}

@@ -59,6 +59,14 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
     } return self;
 }
 - (BTAudioReceiver *)audio { return _audio; }
+- (void)networkPhase:(NSString *)phase error:(int)code {
+    // Own diagnostic only: no keys, peer identity or system configuration.
+    NSDictionary *record=@{@"phase":phase,@"errno":@(code),@"port":@23451,@"pid":@(getpid())};
+    NSString *path=[_root stringByAppendingPathComponent:@".network-diagnostics.json"];
+    [[NSJSONSerialization dataWithJSONObject:record options:0 error:NULL] writeToFile:path atomically:YES];
+    [[NSFileManager defaultManager] setAttributes:@{NSFilePosixPermissions:@0600} ofItemAtPath:path error:NULL];
+    NSLog(@"BackThread.Agent network %@ errno=%d",phase,code);
+}
 - (void)notify:(NSString *)type body:(NSDictionary *)body { void(^callback)(NSString *,NSDictionary *)=self.stateChanged;if(callback)dispatch_async(dispatch_get_main_queue(),^{callback(type,body);}); }
 - (BOOL)send:(NSString *)type body:(NSDictionary *)body reply:(id)reply channel:(uint16_t)channel {
     return [self send:type body:body reply:reply channel:channel generation:0];
@@ -90,13 +98,14 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
     [_tx lock];if(_started){[_tx unlock];return;}_started=YES;_stopping=NO;[_tx unlock];
     dispatch_async(_network,^{@autoreleasepool {
         if(self->_stopping){[self->_tx lock];self->_started=NO;[self->_tx unlock];return;}
-        int fd=socket(AF_INET,SOCK_STREAM,0);if(fd<0){[self->_tx lock];self->_started=NO;[self->_tx unlock];[self notify:@"connection" body:@{@"state":@"socket failed"}];return;}
+        int fd=socket(AF_INET,SOCK_STREAM,0);if(fd<0){int code=errno;[self networkPhase:@"socket-failed" error:code];[self->_tx lock];self->_started=NO;[self->_tx unlock];[self notify:@"connection" body:@{@"state":[NSString stringWithFormat:@"USB socket failed (%d)",code]}];return;}
         [self->_tx lock];self->_listener=fd;[self->_tx unlock];int yes=1;setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof(yes));
         struct sockaddr_in address={0};address.sin_len=sizeof(address);address.sin_family=AF_INET;address.sin_port=htons(23451);address.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
-        if(bind(fd,(struct sockaddr *)&address,sizeof(address))||listen(fd,2)){[self->_tx lock];self->_listener=-1;self->_started=NO;close(fd);[self->_tx unlock];[self notify:@"connection" body:@{@"state":@"Cannot bind localhost:23451"}];return;}
+        if(bind(fd,(struct sockaddr *)&address,sizeof(address))||listen(fd,2)){int code=errno;[self networkPhase:@"listen-failed" error:code];[self->_tx lock];self->_listener=-1;self->_started=NO;close(fd);[self->_tx unlock];[self notify:@"connection" body:@{@"state":[NSString stringWithFormat:@"Cannot listen on USB port 23451 (%d)",code]}];return;}
+        [self networkPhase:@"listening" error:0];
         [self notify:@"connection" body:@{@"state":@"Waiting for USB host"}];
         while(!self->_stopping) {
-            int client=accept(fd,NULL,NULL);if(client<0){if(errno==EINTR)continue;break;}
+            int client=accept(fd,NULL,NULL);if(client<0){int code=errno;if(code==EINTR)continue;if(!self->_stopping){[self networkPhase:@"accept-failed" error:code];[self notify:@"connection" body:@{@"state":[NSString stringWithFormat:@"USB listener stopped (%d); reopen BackThread",code]}];}break;}
             struct timeval timeout={5,0},sendTimeout={3,0};setsockopt(client,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));setsockopt(client,SOL_SOCKET,SO_SNDTIMEO,&sendTimeout,sizeof(sendTimeout));setsockopt(client,SOL_SOCKET,SO_NOSIGPIPE,&yes,sizeof(yes));
             setsockopt(client,IPPROTO_TCP,TCP_NODELAY,&yes,sizeof(yes));
             [self->_tx lock];self->_client=client;self->_authenticated=NO;self->_generation++;memset(self->_sequences,0,sizeof(self->_sequences));[self->_tx unlock];
@@ -126,8 +135,11 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
     for(;;) {@autoreleasepool {
         BTHeader h;NSData *payload;NSDictionary *m=[self read:fd header:&h payload:&payload];if(!m)break;
         if(h.channel==2) {
-            if(!_audioOn||payload.length%4)break;
-            if(!_audio.running){NSLog(@"BackThread: AudioQueue stopped, OSStatus=%@",[_audio statistics][@"lastOSStatus"]);break;}
+            if(payload.length%4)break;
+            // Audio failure is local to this channel. Keep heartbeats, jobs and files alive.
+            // Also discard already queued PCM after audio.stop or a failed audio.start.
+            if(!_audioOn)continue;
+            if(!_audio.running){_audioOn=NO;NSDictionary *stats=[_audio statistics];[_audio stop];[self send:@"audio.error" body:@{@"error":@"AudioQueue stopped; request audio.start to retry",@"lastOSStatus":stats[@"lastOSStatus"]?:@0} reply:nil channel:7];[self notify:@"error" body:@{@"error":@"Audio playback stopped; USB control remains connected"}];continue;}
             if(_previousAudio&&h.sequence!=_previousAudio+1)_audioGaps++;_previousAudio=h.sequence;_audioPackets++;_audioBytes+=payload.length;[_audio receive:payload];continue;
         }
         if(h.channel==6) {
@@ -144,14 +156,16 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         else if([type isEqual:@"hello"]) { [self send:@"ok" body:@{@"agent":@"BackThread.Agent",@"simulated":@NO,@"capabilities":@[@"pcm",@"jobs",@"files",@"events",@"UIKit",@"direct-handoff"]} reply:rid channel:h.channel]; }
         else if([type isEqual:@"audio.start"]) {
             NSError *error=nil;if([b[@"sampleRate"] intValue]!=48000||[b[@"channels"] intValue]!=2||[b[@"bits"] intValue]!=16) { [self fail:@"Only 48 kHz stereo PCM16 supported" message:m channel:h.channel];continue; }
+            _audioOn=NO;
             if([_audio start:&error]) { _audioOn=YES;_audioPackets=_audioBytes=_audioGaps=0;_previousAudio=0;[self send:@"ok" body:@{@"ready":@YES} reply:rid channel:h.channel]; }
             else [self fail:error.localizedDescription message:m channel:h.channel];
         }
         else if([type isEqual:@"audio.stop"]) { _audioOn=NO;[_audio stop];[self send:@"ok" body:@{@"stopped":@YES} reply:rid channel:h.channel]; }
-        else if([type isEqual:@"audio.stats"]) { NSMutableDictionary *s=[[_audio statistics] mutableCopy];s[@"packets"]=@(_audioPackets);s[@"bytes"]=@(_audioBytes);s[@"gaps"]=@(_audioGaps);[self send:@"ok" body:s reply:rid channel:h.channel]; }
-        else if([type isEqual:@"audio.volume"]) { [_audio setVolume:[b[@"value"] floatValue]];[self send:@"ok" body:@{} reply:rid channel:h.channel]; }
+        else if([type isEqual:@"audio.stats"]) { NSMutableDictionary *s=[[_audio statistics] mutableCopy];s[@"packets"]=@(_audioPackets);s[@"bytes"]=@(_audioBytes);s[@"gaps"]=@(_audioGaps);s[@"acceptingPCM"]=@(_audioOn);[self send:@"ok" body:s reply:rid channel:h.channel]; }
+        else if([type isEqual:@"audio.volume"]) { NSError *error=nil;if(![b[@"value"] isKindOfClass:NSNumber.class]||![_audio setVolume:[b[@"value"] floatValue] error:&error])[self fail:error.localizedDescription?:@"Invalid audio volume" message:m channel:h.channel];else [self send:@"ok" body:@{} reply:rid channel:h.channel]; }
         else if([type isEqual:@"media.state"]||[type isEqual:@"action.registry"]||[type isEqual:@"media.handoff"]) { [self notify:type body:b];[self send:@"ok" body:@{@"received":@YES} reply:rid channel:h.channel]; }
         else if([type isEqual:@"error"]) { [self notify:@"error" body:b]; }
+        else if([type isEqual:@"ok"]&&[m[@"replyTo"] isKindOfClass:NSString.class]&&[b[@"success"] isEqual:@NO]) { [self notify:@"error" body:@{@"error":@"Windows could not perform the requested action"}]; }
         else if([type isEqual:@"event.publish"]) { BOOL accepted=[self event:b];[self send:@"ok" body:@{@"accepted":@(accepted)} reply:rid channel:h.channel]; }
         else if([type isEqual:@"event.history"]) { [self send:@"ok" body:@{@"events":[_events copy]} reply:rid channel:h.channel]; }
         else if([type isEqual:@"job.submit"]) { [self submit:b message:m channel:h.channel]; }
@@ -159,7 +173,15 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         else if([type isEqual:@"job.cancel"]) { BOOL found;@synchronized(self){found=[@[@"queued",@"running"] containsObject:_jobs[b[@"jobId"]][@"state"]];if(found)[_cancelled addObject:b[@"jobId"]];}[self send:@"ok" body:@{@"cancelled":@(found)} reply:rid channel:h.channel]; }
         else if([type isEqual:@"file.begin"]) { [self begin:b message:m channel:h.channel]; }
         else if([type isEqual:@"file.commit"]) { [self commit:b message:m channel:h.channel client:fd]; }
-        else if([type isEqual:@"file.read"]) { [self download:b message:m channel:h.channel]; }
+        else if([type isEqual:@"file.read"]) {
+            if(dispatch_semaphore_wait(_fileSlots,DISPATCH_TIME_NOW)!=0){[self fail:@"File I/O queue is busy" message:m channel:h.channel];continue;}
+            [_tx lock];uint64_t generation=_generation;[_tx unlock];uint16_t channel=h.channel;
+            dispatch_async(_fileIO,^{@autoreleasepool {
+                @try{[self download:b message:m channel:channel generation:generation];}
+                @catch(NSException *e){[self send:@"error" body:@{@"error":e.reason?:@"Artifact read failed"} reply:m[@"id"] channel:channel generation:generation];}
+                @finally{dispatch_semaphore_signal(self->_fileSlots);}
+            }});
+        }
         else if([type isEqual:@"file.list"]) {
             NSMutableArray *files=[NSMutableArray new];for(NSString *name in [[NSFileManager defaultManager] contentsOfDirectoryAtPath:_root error:nil])if(![name hasPrefix:@"."]&&files.count<256){NSDictionary *a=[[NSFileManager defaultManager] attributesOfItemAtPath:[self path:name] error:nil];if(a)[files addObject:@{@"name":name,@"size":a[NSFileSize]}];}[self send:@"ok" body:@{@"files":files} reply:rid channel:h.channel];
         }
@@ -222,13 +244,17 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         else {[[NSFileManager defaultManager] removeItemAtPath:meta error:nil];[self send:@"ok" body:@{@"name":spec[@"name"],@"size":@(length),@"sha256":sha} reply:m[@"id"] channel:c generation:generation];}
     } @catch(NSException *e){[self send:@"error" body:@{@"error":e.reason?:@"Commit failed"} reply:m[@"id"] channel:c generation:generation];} @finally{@synchronized(self){self->_queuedJobs--;[self->_committing removeObject:tid];}} }});
 }
-- (void)download:(NSDictionary *)b message:(NSDictionary *)m channel:(uint16_t)c {
+- (void)download:(NSDictionary *)b message:(NSDictionary *)m channel:(uint16_t)c generation:(uint64_t)generation {
+    [_tx lock];BOOL current=_authenticated&&_generation==generation&&!_stopping;[_tx unlock];if(!current)return;
     NSString *path=[self path:b[@"name"]],*tid=b[@"transferId"];long long offset=[b[@"offset"] longLongValue];int count=[b[@"count"] intValue];
-    if(!path||!hexString(tid,32)||offset<0||count<1||count>32768){[self fail:@"Invalid artifact range" message:m channel:c];return;}
-    NSFileHandle *file=[NSFileHandle fileHandleForReadingAtPath:path];if(!file){[self fail:@"Artifact not found" message:m channel:c];return;}unsigned long long size=[file seekToEndOfFile];if((unsigned long long)offset>size){[file closeFile];[self fail:@"Read beyond file" message:m channel:c];return;}
-    [file seekToFileOffset:(unsigned long long)offset];NSData *chunk=[file readDataOfLength:(NSUInteger)count];[file closeFile];NSMutableData *payload=[NSMutableData dataWithLength:40];memcpy(payload.mutableBytes,[tid dataUsingEncoding:NSASCIIStringEncoding].bytes,32);bt_put64((uint8_t *)payload.mutableBytes+32,(uint64_t)offset);[payload appendData:chunk];
-    uint8_t header[BT_HEADER_SIZE];[_tx lock];BTHeader h={(uint32_t)payload.length,6,++_sequences[6],0};bt_header_encode(header,&h);BOOL ok=_client>=0&&exact(_client,header,sizeof(header),YES)&&exact(_client,payload.mutableBytes,payload.length,YES);[_tx unlock];
-    if(ok)[self send:@"ok" body:@{@"length":@(chunk.length)} reply:m[@"id"] channel:c];
+    if(!path||!hexString(tid,32)||offset<0||count<1||count>32768){[self send:@"error" body:@{@"error":@"Invalid artifact range"} reply:m[@"id"] channel:c generation:generation];return;}
+    NSFileHandle *file=[NSFileHandle fileHandleForReadingAtPath:path];if(!file){[self send:@"error" body:@{@"error":@"Artifact not found"} reply:m[@"id"] channel:c generation:generation];return;}
+    @try {
+        unsigned long long size=[file seekToEndOfFile];if((unsigned long long)offset>size){[self send:@"error" body:@{@"error":@"Read beyond file"} reply:m[@"id"] channel:c generation:generation];return;}
+        [file seekToFileOffset:(unsigned long long)offset];NSData *chunk=[file readDataOfLength:(NSUInteger)count];NSMutableData *payload=[NSMutableData dataWithLength:40];memcpy(payload.mutableBytes,[tid dataUsingEncoding:NSASCIIStringEncoding].bytes,32);bt_put64((uint8_t *)payload.mutableBytes+32,(uint64_t)offset);[payload appendData:chunk];
+        uint8_t header[BT_HEADER_SIZE];[_tx lock];BTHeader h={(uint32_t)payload.length,6,++_sequences[6],0};bt_header_encode(header,&h);BOOL ok=_authenticated&&_generation==generation&&_client>=0&&exact(_client,header,sizeof(header),YES)&&exact(_client,payload.mutableBytes,payload.length,YES);if(!ok&&_generation==generation&&_client>=0)shutdown(_client,SHUT_RDWR);[_tx unlock];
+        if(ok)[self send:@"ok" body:@{@"length":@(chunk.length)} reply:m[@"id"] channel:c generation:generation];
+    } @finally{[file closeFile];}
 }
 - (void)persist { NSData *data=[NSJSONSerialization dataWithJSONObject:_jobs options:0 error:nil];[data writeToFile:[_root stringByAppendingPathComponent:@".jobs.json"] atomically:YES]; }
 - (void)update:(NSDictionary *)state { @synchronized(self){NSString *previous=_jobs[state[@"jobId"]][@"state"];_jobs[state[@"jobId"]]=state;if(![previous isEqual:state[@"state"]])[self persist];}[self notify:@"job.progress" body:state];[self send:@"job.progress" body:state reply:nil channel:5]; }

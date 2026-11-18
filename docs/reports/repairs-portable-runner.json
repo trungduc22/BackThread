@@ -1,0 +1,159 @@
+{
+  "timestampUtc": "2026-11-18T07:34:27.9821624+00:00",
+  "simulated": true,
+  "transport": "localhost",
+  "connected": true,
+  "passed": true,
+  "speakerAudibilityVerified": false,
+  "listeningCheck": "not established by this automated runner; record the human result separately",
+  "UIKitRenderingVerified": false,
+  "physicalUnplugTested": false,
+  "checks": [
+    {
+      "name": "authenticated session",
+      "passed": true
+    },
+    {
+      "name": "wrong-key rejection",
+      "passed": true
+    },
+    {
+      "name": "unsupported frame version closes session",
+      "passed": true
+    },
+    {
+      "name": "peer simulation classification matches requested transport",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 1",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 2",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 3",
+      "passed": true
+    },
+    {
+      "name": "agent accepts unexpired event",
+      "passed": true
+    },
+    {
+      "name": "agent rejects duplicate event",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: sha256/acceptance-645d3731febf4b50a0736e1c12248d64.dat",
+      "passed": true
+    },
+    {
+      "name": "whole file SHA-256",
+      "passed": true
+    },
+    {
+      "name": "artifact range contents",
+      "passed": true
+    },
+    {
+      "name": "PCM frames sent",
+      "passed": true
+    },
+    {
+      "name": "statistics sampled while source was active",
+      "passed": true
+    },
+    {
+      "name": "PCM bytes received",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "control still responds after workload",
+      "passed": true
+    },
+    {
+      "name": "new socket authenticates after prior session closes",
+      "passed": true
+    }
+  ],
+  "measurements": {
+    "audioSource": "quiet fixture",
+    "requestedQueueGain": 0.08,
+    "hello": {
+      "agent": "BackThread.Simulator",
+      "simulated": true,
+      "capabilities": [
+        "pcm",
+        "jobs",
+        "files",
+        "events",
+        "faults"
+      ]
+    },
+    "memoryBefore": {
+      "managedBytes": 1556984,
+      "workingSetBytes": 35815424
+    },
+    "agentTestFile": "acceptance-645d3731febf4b50a0736e1c12248d64.dat",
+    "audioSampleTimesSeconds": [
+      1.0687557,
+      2.0311646,
+      2.7678788
+    ],
+    "audioWindowSeconds": 3,
+    "audioMeasurementScope": "Only replies completed during active PCM pacing; shutdown tail excluded",
+    "audio": [
+      {
+        "packets": 104,
+        "bytes": 199680,
+        "gaps": 0,
+        "bufferedBytes": 13440,
+        "droppedBytes": 11520,
+        "silenceBytes": 19200,
+        "playbackTicks": 101,
+        "sha256": "600fb916118727d0b8ca7fd146601490b06d7e1ba040dbc3b76054760e4671a6"
+      },
+      {
+        "packets": 192,
+        "bytes": 368640,
+        "gaps": 2,
+        "bufferedBytes": 13440,
+        "droppedBytes": 11520,
+        "silenceBytes": 34560,
+        "playbackTicks": 197,
+        "sha256": "69e2befdffbc42d5b4f861271904ec9a97f2e7b551ab1bd5c8020cc630484ec8"
+      },
+      {
+        "packets": 265,
+        "bytes": 508800,
+        "gaps": 2,
+        "bufferedBytes": 9600,
+        "droppedBytes": 11520,
+        "silenceBytes": 34560,
+        "playbackTicks": 272,
+        "sha256": "efc29515deb77f5038f565c0d06b3bcd334f99b2f1fac6140be27b4a1a18e9ba"
+      }
+    ],
+    "memoryDuringAudio": [],
+    "senderFrames": 301,
+    "senderDroppedFrames": 11,
+    "captureDevice": null,
+    "captureError": null,
+    "zeroLossInSampledWindow": false,
+    "memoryAfter": {
+      "managedBytes": 1172904,
+      "workingSetBytes": 41009152
+    }
+  },
+  "error": null
+}

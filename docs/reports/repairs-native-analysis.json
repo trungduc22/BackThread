@@ -1,0 +1,71 @@
+{
+  "runId": "f4d06029cb044b6fbd43544b18b5ca95",
+  "startedUtc": "2026-11-18T07:11:01.722800+00:00",
+  "expectedTranslationUnits": 10,
+  "complete": true,
+  "passed": true,
+  "currentSource": null,
+  "results": [
+    {
+      "source": "src/iOS/UI/main.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/UI/BTViewController.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/Agent/BTAgent.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/Agent/main.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/AudioReceiver/BTAudioReceiver.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/AudioReceiver/BTPcmRing.c",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/Shared/Protocol/bt_wire.c",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/Probe/main.m",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/Probe/entry.c",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    },
+    {
+      "source": "src/iOS/Probe/loader.c",
+      "exitCode": 0,
+      "diagnostics": [],
+      "reportProduced": true
+    }
+  ],
+  "finishedUtc": "2026-11-18T07:11:56.704602+00:00"
+}

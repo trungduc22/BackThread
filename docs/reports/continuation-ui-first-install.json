@@ -1,0 +1,57 @@
+{
+  "bundleIdentifier": "app.backthread.companion",
+  "ipaSha256": "1b1d08e7abc352a13ae877bb5e8c7ced612161ee29c1a3f89978c94eb5b4a7b6",
+  "method": "paired AFC + Installation Proxy",
+  "statuses": [
+    {
+      "PercentComplete": 5,
+      "Status": "CreatingStagingDirectory"
+    },
+    {
+      "PercentComplete": 15,
+      "Status": "ExtractingPackage"
+    },
+    {
+      "PercentComplete": 20,
+      "Status": "InspectingPackage"
+    },
+    {
+      "PercentComplete": 20,
+      "Status": "TakingInstallLock"
+    },
+    {
+      "PercentComplete": 30,
+      "Status": "PreflightingApplication"
+    },
+    {
+      "PercentComplete": 40,
+      "Status": "VerifyingApplication"
+    },
+    {
+      "PercentComplete": 50,
+      "Status": "CreatingContainer"
+    },
+    {
+      "PercentComplete": 60,
+      "Status": "InstallingApplication"
+    },
+    {
+      "PercentComplete": 70,
+      "Status": "PostflightingApplication"
+    },
+    {
+      "PercentComplete": 80,
+      "Status": "SandboxingApplication"
+    },
+    {
+      "PercentComplete": 90,
+      "Status": "GeneratingApplicationMap"
+    },
+    {
+      "Status": "Complete"
+    }
+  ],
+  "installed": true,
+  "stagingRemoved": true,
+  "pairedCertificatePinned": true
+}

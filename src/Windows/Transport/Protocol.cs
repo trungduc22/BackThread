@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Buffers;
 using System.Text.Json;
 
 namespace BackThread.Transport;
@@ -34,15 +35,18 @@ public static class Wire
     };
     public static byte[] Header(Frame f)
     {
-        if (f.Payload.Length > Limit(f.Channel)) throw new InvalidDataException("Frame too large");
         var h = new byte[HeaderSize];
+        WriteHeader(h,f);return h;
+    }
+    private static void WriteHeader(Span<byte> h,Frame f)
+    {
+        if (f.Payload.Length > Limit(f.Channel)) throw new InvalidDataException("Frame too large");
         BinaryPrimitives.WriteUInt32LittleEndian(h, (uint)f.Payload.Length);
-        BinaryPrimitives.WriteUInt32LittleEndian(h.AsSpan(4), Magic);
-        BinaryPrimitives.WriteUInt16LittleEndian(h.AsSpan(8), Version);
-        BinaryPrimitives.WriteUInt16LittleEndian(h.AsSpan(10), (ushort)f.Channel);
-        BinaryPrimitives.WriteUInt32LittleEndian(h.AsSpan(12), f.Sequence);
-        BinaryPrimitives.WriteUInt64LittleEndian(h.AsSpan(16), f.TimestampUs);
-        return h;
+        BinaryPrimitives.WriteUInt32LittleEndian(h[4..], Magic);
+        BinaryPrimitives.WriteUInt16LittleEndian(h[8..], Version);
+        BinaryPrimitives.WriteUInt16LittleEndian(h[10..], (ushort)f.Channel);
+        BinaryPrimitives.WriteUInt32LittleEndian(h[12..], f.Sequence);
+        BinaryPrimitives.WriteUInt64LittleEndian(h[16..], f.TimestampUs);
     }
     public static async ValueTask<Frame> ReadAsync(Stream stream, CancellationToken ct)
     {
@@ -59,7 +63,14 @@ public static class Wire
     }
     public static async ValueTask WriteAsync(Stream stream, Frame frame, CancellationToken ct)
     {
-        await stream.WriteAsync(Header(frame), ct);
-        await stream.WriteAsync(frame.Payload, ct);
+        if(frame.Payload.Length>Limit(frame.Channel))throw new InvalidDataException("Frame too large");
+        int length=HeaderSize+frame.Payload.Length;
+        byte[] packet=ArrayPool<byte>.Shared.Rent(length);
+        try {
+            WriteHeader(packet.AsSpan(0,HeaderSize),frame);
+            frame.Payload.CopyTo(packet,HeaderSize);
+            // One socket write avoids yielding between a tiny header and its PCM payload.
+            await stream.WriteAsync(packet.AsMemory(0,length),ct);
+        } finally {ArrayPool<byte>.Shared.Return(packet,clearArray:true);}
     }
 }

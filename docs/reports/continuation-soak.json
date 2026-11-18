@@ -1,0 +1,19 @@
+{
+  "durationSeconds": 120.3501122,
+  "jobs": 223,
+  "maximumBuffer": 9600,
+  "startMemory": 92618752,
+  "endMemory": 98242560,
+  "cpuSeconds": 88.46875,
+  "senderDropped": 0,
+  "receiver": {
+    "packets": 12036,
+    "bytes": 23109120,
+    "gaps": 0,
+    "bufferedBytes": 7680,
+    "droppedBytes": 0,
+    "silenceBytes": 0,
+    "playbackTicks": 12032,
+    "sha256": "b44c0031ed9f95befa064ed7531b2ad8ca32f51bb1227c9389859aecc7b56ee4"
+  }
+}

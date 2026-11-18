@@ -12,6 +12,7 @@ public sealed record HostConfig
     public string? DeviceSerial { get; init; }
     public int ApiPort { get; init; } = 23452;
     public bool StreamAudio { get; init; } = true;
+    public float AudioGain { get; init; } = 1;
     public bool FixtureAudio { get; init; }
     public bool DeviceHasInternet { get; init; }
     public bool HideSensitive { get; init; } = true;
@@ -22,6 +23,7 @@ public sealed record HostConfig
     {
         var c = JsonSerializer.Deserialize<HostConfig>(File.ReadAllText(path), Message.Json) ?? throw new InvalidDataException("Invalid configuration");
         if (c.Transport is not ("usb" or "localhost") || c.DevicePort is < 1024 or > 65535 || c.ApiPort is < 1024 or > 65535 || c.ApiPort == c.DevicePort || c.Actions.Length > 32) throw new InvalidDataException("Invalid endpoint or actions");
+        if(!float.IsFinite(c.AudioGain)||c.AudioGain<0||c.AudioGain>1)throw new InvalidDataException("audioGain must be between 0 and 1");
         return c;
     }
 }

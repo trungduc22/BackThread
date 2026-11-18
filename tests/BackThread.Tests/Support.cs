@@ -43,3 +43,11 @@ internal sealed class FragmentedStream(byte[] data) : MemoryStream(data)
     private int reads;
     public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) => base.ReadAsync(buffer[..Math.Min(buffer.Length, ++reads % 7 + 1)], ct);
 }
+internal sealed class DelayedWriteStream(Task gate) : MemoryStream
+{
+    public TaskCompletionSource Entered {get;}=new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public override async ValueTask WriteAsync(ReadOnlyMemory<byte> data,CancellationToken ct=default)
+    {
+        Entered.TrySetResult();await gate.WaitAsync(ct);await base.WriteAsync(data,ct);
+    }
+}

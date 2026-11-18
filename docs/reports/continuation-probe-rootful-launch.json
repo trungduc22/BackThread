@@ -1,0 +1,81 @@
+{
+  "timestampUtc": "2026-11-18T02:52:18.356844+00:00",
+  "persistentDeviceChanges": false,
+  "pairingAttempted": false,
+  "applicationTestsRun": false,
+  "trustSessionValidated": true,
+  "jailbroken": "not established",
+  "pairedCertificatePinned": true,
+  "ProductType": "iPhone7,2",
+  "ProductVersion": "12.5.8",
+  "ActivationState": "Activated",
+  "ports": {
+    "22": {
+      "usbmuxResult": 3,
+      "reachable": false
+    },
+    "44": {
+      "usbmuxResult": 0,
+      "reachable": true,
+      "sshBanner": "SSH-2.0-dropbear_2020.81"
+    },
+    "2222": {
+      "usbmuxResult": 3,
+      "reachable": false
+    },
+    "23451": {
+      "usbmuxResult": 3,
+      "reachable": false
+    }
+  },
+  "services": {
+    "com.apple.afc": {
+      "available": true,
+      "error": null
+    },
+    "com.apple.afc2": {
+      "available": false,
+      "error": "InvalidService"
+    },
+    "com.apple.mobile.installation_proxy": {
+      "available": true,
+      "error": null
+    },
+    "com.apple.syslog_relay": {
+      "available": true,
+      "error": null
+    }
+  },
+  "syslog": {
+    "bytesObserved": 110613,
+    "backThreadLines": [
+      "Nov 18 09:52:18 iPhone assertiond[71] <Notice>: [BackThreadProbe:2611] Got exit context: <BKSProcessExitContext: <address>; reason: voluntary>",
+      "Nov 18 09:52:18 iPhone SpringBoard(FrontBoard)[688] <Notice>: <FBApplicationProcess: <address>; BackThreadProbe (app.backthread.probe); pid: 2611> assertiond says the process actually exited with context: <BKSProcessExitContext: <address>; reason: voluntary>",
+      "Nov 18 09:52:18 iPhone SpringBoard(FrontBoard)[688] <Notice>: <FBApplicationProcess: <address>; BackThreadProbe (app.backthread.probe); pid: 2611> exited voluntarily.",
+      "Nov 18 09:52:18 iPhone SpringBoard(FrontBoard)[688] <Notice>: Removing: <FBApplicationProcess: <address>; BackThreadProbe (app.backthread.probe); pid: -1>",
+      "Nov 18 09:52:18 iPhone SpringBoard[688] <Notice>: Front display did change: <SBApplication: <address>; app.backthread.probe>",
+      "Nov 18 09:52:18 iPhone SpringBoard(FrontBoard)[688] <Notice>: [app.backthread.probe] Will update scene - foregroundness changed to: Background",
+      "Nov 18 09:52:18 iPhone assertiond[71] <Notice>: [BackThreadProbe:2611] Terminating because the job-submitter has disconnected.",
+      "Nov 18 09:52:18 iPhone assertiond[71] <Notice>: Deleted job with label: UIKitApplication:app.backthread.probe[0x2fbc][71]",
+      "Nov 18 09:52:18 iPhone assertiond[71] <Notice>: [BackThreadProbe:2611] Deleted launchd job with label: UIKitApplication:app.backthread.probe[0x2fbc][71]",
+      "Nov 18 09:52:18 iPhone assertiond[71] <Notice>: [BackThreadProbe:2611] Invalidation complete.",
+      "Nov 18 09:52:18 iPhone assertiond[71] <Notice>: [BackThreadProbe:2611] Removing client: <BKProcessInfoServerClient: <address>; pid: 688>",
+      "Nov 18 09:52:18 iPhone assertiond[71] <Notice>: [BackThreadProbe:2611] No clients remain.",
+      "Nov 18 09:52:19 iPhone assertiond[71] <Notice>: Checking for deferred bootstrap request for app.backthread.probe",
+      "Nov 18 09:52:19 iPhone mediaserverd(CoreMedia)[687] <Notice>: -CMSessionMgr- CMSessionMgrHandleApplicationStateChange: CMSession: Client app.backthread.probe with pid '2611' is now Terminated. Background entitlement: NO LongFormVideoApp: NO",
+      "Nov 18 09:52:19 iPhone SpringBoard[688] <Notice>: Process exited: <FBApplicationProcess: <address>; BackThreadProbe (app.backthread.probe); pid: -1> -> <FBApplicationProcessExitContext: <address>; exitReason: voluntary; terminationReason: (none)> {",
+      "Nov 18 09:52:19 iPhone SpringBoard[688] <Notice>: Application process state changed for app.backthread.probe: (null)",
+      "Nov 18 09:52:19 iPhone SpringBoard(WiFiPicker)[688] <Notice>: WIFI PICKER [app.backthread.probe]: isProcessLaunch: 0,    isForegroundActivation: 0,     isForegroundDeactivation: 1",
+      "Nov 18 09:52:19 iPhone symptomsd(SymptomEvaluator)[128] <Notice>: 2611 app.backthread.probe: Terminated (most elevated: Terminated)",
+      "Nov 18 09:52:19 iPhone appstored[168] <Notice>: [ODRLaunchServicesObserver]: Handling application installation: {bundleID = app.backthread.probe; version = 3; shortVersion = 0.1.2; variantID = (null)}",
+      "Nov 18 09:52:19 iPhone symptomsd(SymptomEvaluator)[128] <Notice>: Entry, display name app.backthread.probe uuid (null) pid 2608 isFront 0",
+      "Nov 18 09:52:19 iPhone symptomsd(SymptomEvaluator)[128] <Notice>: Entry, display name app.backthread.probe uuid (null) pid 2611 isFront 0"
+    ],
+    "entryMarkers": [],
+    "matchingLinesObserved": 21,
+    "truncatedMatches": 0,
+    "unrelatedLogContentStored": false
+  },
+  "standardInstallerServiceAvailable": true,
+  "deploymentValidated": false
+}

@@ -13,6 +13,7 @@ using BackThread.Simulator;
 using BackThread.Tests;
 using BackThread.Transport;
 using BackThread.Worker;
+using BackThread.DeviceTests;
 
 string root = Path.Combine(Path.GetTempPath(), "BackThread-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
 using var global = new CancellationTokenSource(TimeSpan.FromMinutes(10)); CancellationToken ct = global.Token;
@@ -31,6 +32,26 @@ await Test("wire.fragmentation-and-json", async () =>
     var f = new Frame(LogicalChannel.Jobs, 123, 987654321, Message.Create("job.query", new { jobId = "abc" }, "request").Encode());
     using var memory = new MemoryStream(); await Wire.WriteAsync(memory, f, ct); using var fragmented = new FragmentedStream(memory.ToArray()); var read = await Wire.ReadAsync(fragmented, ct);
     Check.Equal(f.Sequence, read.Sequence); Check.Equal(f.TimestampUs, read.TimestampUs); Check.Equal("abc", Message.Decode(read.Payload).Body.GetProperty("jobId").GetString());
+});
+await Test("wire.async-write-retains-packet-until-completion", async () =>
+{
+    var gate=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    using var first=new DelayedWriteStream(gate.Task);using var other=new MemoryStream();
+    var a=new Frame(LogicalChannel.Audio,1,123,Enumerable.Repeat((byte)0x19,1920).ToArray());
+    var b=new Frame(LogicalChannel.Audio,2,456,Enumerable.Repeat((byte)0x73,1920).ToArray());
+    Task writing=Wire.WriteAsync(first,a,ct).AsTask();await first.Entered.Task.WaitAsync(ct);
+    try{await Wire.WriteAsync(other,b,ct);}finally{gate.TrySetResult();}
+    await writing;first.Position=0;other.Position=0;
+    Check.True(first.ToArray().AsSpan(0,24).SequenceEqual(Convert.FromHexString("800700004254483101000200010000007B00000000000000")),"Wire header changed from the native-compatible format");
+    var one=await Wire.ReadAsync(first,ct);var two=await Wire.ReadAsync(other,ct);
+    Check.True(one.Payload.SequenceEqual(a.Payload));Check.True(two.Payload.SequenceEqual(b.Payload));
+    Check.Equal(a.Sequence,one.Sequence);Check.Equal(b.TimestampUs,two.TimestampUs);
+});
+await Test("config.audio-gain-keeps-system-volume-separate", async()=>
+{
+    string path=Path.Combine(root,"gain.json");await File.WriteAllTextAsync(path,"{}",ct);Check.Equal(1f,HostConfig.Load(path).AudioGain);
+    foreach(float gain in new[]{0f,.25f,1f}){await File.WriteAllTextAsync(path,JsonSerializer.Serialize(new{audioGain=gain},Message.Json),ct);Check.Equal(gain,HostConfig.Load(path).AudioGain);}
+    foreach(float gain in new[]{-.1f,1.1f}){await File.WriteAllTextAsync(path,JsonSerializer.Serialize(new{audioGain=gain},Message.Json),ct);await Check.Throws<InvalidDataException>(()=>{HostConfig.Load(path);return Task.CompletedTask;});}
 });
 await Test("wire.reject-size-version-channel-truncation", async () =>
 {
@@ -149,6 +170,32 @@ await Test("integration.transfer-hash-text-download-and-failed-job", async () =>
     await s.Worker.SubmitAsync(new("missing", "sha256", "missing.bin"), ct); await Check.Eventually(async () => (await s.Worker.QueryAsync("missing", ct)).Body.GetProperty("state").GetString() == "failed");
     await s.Worker.SubmitAsync(new("verify", "verify", "backup.txt", new string('0', 64)), ct); await Check.Eventually(async () => (await s.Worker.QueryAsync("verify", ct)).Body.GetProperty("state").GetString() == "failed");
 });
+await Test("worker.rejects-corrupt-artifact-ranges-and-recovers", async () =>
+{
+    var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
+    int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+    var peer = Task.Run(async () =>
+    {
+        using var socket = await listener.AcceptTcpClientAsync(ct); var stream = socket.GetStream();
+        await Authentication.ServerAsync(stream, key, ct);
+        for (int i = 0; i < 4; i++)
+        {
+            var request = Message.Decode((await Wire.ReadAsync(stream, ct)).Payload);
+            string transfer = request.Body.GetProperty("transferId").GetString()!;
+            byte[] data = i == 1 ? [1, 2, 3, 4, 5] : [1, 2, 3, 4];
+            await Wire.WriteAsync(stream, new(LogicalChannel.Files, (uint)i, 0, Storage.Chunk(transfer, i == 0 ? 9 : 8, data)), ct);
+            await Wire.WriteAsync(stream, new(LogicalChannel.Jobs, (uint)i, 0, Message.Create("ok", new { length = i == 2 ? 5 : data.Length }, replyTo: request.Id).Encode()), ct);
+        }
+    }, ct);
+    try
+    {
+        await using var session = await Session.Open(port, key, ct);
+        for (int i = 0; i < 3; i++) await Check.Throws<InvalidDataException>(() => session.Worker.ReadArtifactAsync("fixture.dat", 8, 4, ct));
+        Check.True((await session.Worker.ReadArtifactAsync("fixture.dat", 8, 4, ct)).SequenceEqual(new byte[] { 1, 2, 3, 4 }));
+        await peer;
+    }
+    finally { listener.Stop(); }
+});
 await Test("storage.resume-duplicate-incomplete-and-checksum", async () =>
 {
     var store = new Storage(Path.Combine(root, "resume")); byte[] data = RandomNumberGenerator.GetBytes(90000); string sha = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant(), id = Guid.NewGuid().ToString("N"); var spec = new TransferSpec(id, "data.bin", data.Length, sha);
@@ -193,6 +240,61 @@ await Test("integration.notification-routing", async () =>
     var events = (await s.Connection.RequestAsync(LogicalChannel.Notifications, "event.history", new { }, ct)).Body.GetProperty("events"); Check.Equal("Private notification", events[0].GetProperty("title").GetString());
 });
 
+await Test("acceptance.audio-window-excludes-slow-shutdown-tail", async () =>
+{
+    int reads=0;bool sourceActive=false;Task? lateReply=null;var watch=Stopwatch.StartNew();
+    var result=await AudioMeasurementWindow.RunAsync(TimeSpan.FromMilliseconds(600),
+        async(started,token)=>{sourceActive=true;started();try{await Task.Delay(Timeout.Infinite,token);}finally{sourceActive=false;}},
+        async(_,token)=>{
+            int read=++reads;
+            if(read==1)await Task.Delay(10,token);
+            else {lateReply=Task.Delay(800);await lateReply;} // emulate a reply that ignores cancellation
+            return sourceActive;
+        },ct,TimeSpan.FromMilliseconds(100));
+    Check.Equal(1,result.Samples.Count);Check.True(result.Samples.All(s=>s.Value&&s.ElapsedSeconds<.6));
+    Check.True(!sourceActive,"Source still active after its deadline");
+    Check.True(watch.Elapsed<TimeSpan.FromSeconds(2),"Late stats extended the source deadline");
+    if(lateReply!=null)await lateReply;
+});
+await Test("acceptance.audio-window-rejects-source-failure", async () =>
+{
+    await Check.Throws<IOException>(async()=>await AudioMeasurementWindow.RunAsync(TimeSpan.FromSeconds(1),
+        (_,_)=>Task.FromException(new IOException("source startup failed")),(_,_)=>Task.FromResult(1),ct));
+    await Check.Throws<IOException>(async()=>await AudioMeasurementWindow.RunAsync(TimeSpan.FromSeconds(1),
+        (started,_)=>{started();return Task.CompletedTask;},(_,_)=>Task.FromResult(1),ct));
+});
+await Test("host.receiver-audio-error-preserves-session", async () =>
+{
+    foreach(bool failStartup in new[]{false,true}) {
+    var listener=new TcpListener(IPAddress.Loopback,0);listener.Start();
+    int port=((IPEndPoint)listener.LocalEndpoint).Port;
+    var reservation=new TcpListener(IPAddress.Loopback,0);reservation.Start();int apiPort=((IPEndPoint)reservation.LocalEndpoint).Port;reservation.Stop();
+    using var peerStop=CancellationTokenSource.CreateLinkedTokenSource(ct);int connections=0;
+    Task peer=Task.Run(async()=>{
+        try{
+            using var client=await listener.AcceptTcpClientAsync(peerStop.Token);connections++;
+            await Authentication.ServerAsync(client.GetStream(),key,peerStop.Token);
+            await using var connection=new Connection(client.GetStream());
+            await connection.RunAsync(async(frame,message,token)=>{
+                if(message?.Id is not{} id)return;
+                if(failStartup&&message.Type=="audio.start"){await connection.SendAsync(frame.Channel,Message.Create("error",new{error="injected receiver failure"},replyTo:id),token);return;}
+                object body=message.Type=="hello"?new{agent="BackThread test peer",simulated=true}:message.Type=="job.query"?new{jobId="after-audio-error",state="completed",progress=1}:new{received=true};
+                await connection.SendAsync(frame.Channel,Message.Create("ok",body,replyTo:id),token);
+                if(!failStartup&&message.Type=="action.registry")await connection.SendAsync(LogicalChannel.Diagnostics,Message.Create("audio.error",new{error="injected receiver failure",lastOSStatus=-1}),token);
+            },peerStop.Token);
+        }catch(Exception)when(peerStop.IsCancellationRequested){}
+    },ct);
+    string keyPath=Path.Combine(root,"audio-error-host.key");await File.WriteAllTextAsync(keyPath,Convert.ToHexString(key),ct);
+    var host=new HostRuntime(new HostConfig{KeyFile=keyPath,Transport="localhost",DevicePort=port,ApiPort=apiPort,StreamAudio=failStartup,FixtureAudio=true});
+    using var hostStop=CancellationTokenSource.CreateLinkedTokenSource(ct);Task running=host.RunAsync(hostStop.Token);
+    try{
+        await Check.Eventually(()=>{var state=JsonSerializer.SerializeToElement(host.Status,Message.Json);return Task.FromResult(state.GetProperty("state").GetString()=="connected"&&state.GetProperty("audioError").GetString()=="injected receiver failure");});
+        Check.Equal("completed",(await host.Worker.QueryAsync("after-audio-error",ct)).Body.GetProperty("state").GetString());
+        await Task.Delay(3200,ct); // let the ordinary heartbeat use the same session too
+        Check.Equal(1,connections);Check.True(!running.IsCompleted,"Host ended after audio-only failure");
+    }finally{hostStop.Cancel();peerStop.Cancel();listener.Stop();await running;await peer;}
+    }
+});
 await Test("host.local-api-authentication-and-auto-reconnect", async () =>
 {
     await using var server = new AgentServer(0, key, Path.Combine(root, "host")) { DisconnectAfterAudioPackets = 40 }; server.Start();
@@ -236,15 +338,22 @@ if (duration > 0) await Test("soak.concurrent-audio-worker", async () =>
     using var audioStop = CancellationTokenSource.CreateLinkedTokenSource(ct); var audio = new LoopbackBridge(); var stream = audio.RunAsync(s.Connection, true, audioStop.Token);
     string file = Path.Combine(root, "soak.dat"); await File.WriteAllBytesAsync(file, RandomNumberGenerator.GetBytes(4 * 1024 * 1024), ct);
     var watch = Stopwatch.StartNew(); var process = Process.GetCurrentProcess(); var cpu = process.TotalProcessorTime; long startMemory = process.WorkingSet64; int jobs = 0; long maximumBuffer = 0;
+    var lossSamples=new List<object>();long lastSilence=0,lastDrops=0,lastGaps=0,lastSenderDrops=0;
+    JsonElement final;
+    try {
     while (watch.Elapsed.TotalSeconds < duration)
     {
         await s.Worker.UploadAsync(file, "backup.dat", ct); string id = "soak" + jobs++; await s.Worker.SubmitAsync(new(id, "sha256", "backup.dat"), ct);
         await Check.Eventually(async () => (await s.Worker.QueryAsync(id, ct)).Body.GetProperty("state").GetString() == "completed");
-        var stats = (await s.Connection.RequestAsync(LogicalChannel.Diagnostics, "audio.stats", new { }, ct)).Body; maximumBuffer = Math.Max(maximumBuffer, stats.GetProperty("bufferedBytes").GetInt64()); await Task.Delay(250, ct);
+        var stats = (await s.Connection.RequestAsync(LogicalChannel.Diagnostics, "audio.stats", new { }, ct)).Body; maximumBuffer = Math.Max(maximumBuffer, stats.GetProperty("bufferedBytes").GetInt64());
+        long silence=stats.GetProperty("silenceBytes").GetInt64(),drops=stats.GetProperty("droppedBytes").GetInt64(),gaps=stats.GetProperty("gaps").GetInt64(),senderDrops=s.Connection.DroppedAudio;
+        if(lossSamples.Count<32&&(silence!=lastSilence||drops!=lastDrops||gaps!=lastGaps||senderDrops!=lastSenderDrops))lossSamples.Add(new{elapsedSeconds=watch.Elapsed.TotalSeconds,receiver=stats.Clone(),senderDrops});
+        lastSilence=silence;lastDrops=drops;lastGaps=gaps;lastSenderDrops=senderDrops;
+        await Task.Delay(250, ct);
     }
-    audioStop.Cancel(); try { await stream; } catch (OperationCanceledException) { }
-    var final = (await s.Connection.RequestAsync(LogicalChannel.Diagnostics, "audio.stats", new { }, ct)).Body;
-    process.Refresh(); Console.WriteLine("METRIC " + JsonSerializer.Serialize(new { durationSeconds = watch.Elapsed.TotalSeconds, jobs, maximumBuffer, startMemory, endMemory = process.WorkingSet64, cpuSeconds = (process.TotalProcessorTime - cpu).TotalSeconds, senderDropped = s.Connection.DroppedAudio, receiver = final }, Message.Json));
+    final = (await s.Connection.RequestAsync(LogicalChannel.Diagnostics, "audio.stats", new { }, ct)).Body.Clone();
+    } finally { audioStop.Cancel();try{await stream;}catch(OperationCanceledException)when(audioStop.IsCancellationRequested){} }
+    process.Refresh(); Console.WriteLine("METRIC " + JsonSerializer.Serialize(new { durationSeconds = watch.Elapsed.TotalSeconds, finalStatsTakenBeforeSourceStop=true, jobs, maximumBuffer, startMemory, endMemory = process.WorkingSet64, cpuSeconds = (process.TotalProcessorTime - cpu).TotalSeconds, senderDropped = s.Connection.DroppedAudio, receiver = final,lossSamples }, Message.Json));
     Check.True(maximumBuffer <= 19200);
     Check.Equal(0L, final.GetProperty("droppedBytes").GetInt64());
     Check.Equal(0L, final.GetProperty("gaps").GetInt64());

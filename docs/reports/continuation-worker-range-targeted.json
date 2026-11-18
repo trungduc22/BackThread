@@ -1,0 +1,12 @@
+{
+  "timestampUtc": "2026-11-18T02:47:03.904179+00:00",
+  "simulated": true,
+  "results": [
+    {
+      "name": "worker.rejects-corrupt-artifact-ranges-and-recovers",
+      "passed": true,
+      "milliseconds": 349
+    }
+  ],
+  "failed": 0
+}

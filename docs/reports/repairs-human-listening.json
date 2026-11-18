@@ -1,0 +1,23 @@
+{
+  "timestampUtc": "2026-11-18T07:14:29.868925+00:00",
+  "transport": "usb",
+  "simulated": false,
+  "source": "Windows generated PCM fixture through production LoopbackBridge and native AudioQueue",
+  "automatedReport": "resumed-native-pcm.json",
+  "speakerAudibilityVerified": true,
+  "humanResponse": "Có nghe tiếng",
+  "systemVolumeChangedByAgent": false,
+  "scope": "Three-second fixture acoustically verified and normal Windows WASAPI audio heard with stutter; latest Windows transport batching patch not physically tested",
+  "previousHumanResults": [
+    "No sound",
+    "No sound"
+  ],
+  "normalWindowsMediaAudible": true,
+  "normalWindowsMediaHumanResponse": "Có nhưng bị ngắt/giật",
+  "normalHostAppGain": 1,
+  "normalPhoneSystemVolumeChangedByAgent": false,
+  "qualityAcceptancePassed": false,
+  "physicalDisconnectObserved": true,
+  "physicalDisconnectUserConfirmed": "Mình vừa rút cáp",
+  "physicalReconnectVerified": false
+}

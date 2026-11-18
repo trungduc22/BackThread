@@ -1,0 +1,186 @@
+{
+  "timestampUtc": "2026-11-18T06:07:35.4899875+00:00",
+  "simulated": false,
+  "transport": "usb",
+  "connected": true,
+  "passed": true,
+  "speakerAudibilityVerified": false,
+  "listeningCheck": "pending human confirmation after real audio output",
+  "UIKitRenderingVerified": false,
+  "physicalUnplugTested": false,
+  "checks": [
+    {
+      "name": "authenticated session",
+      "passed": true
+    },
+    {
+      "name": "wrong-key rejection",
+      "passed": true
+    },
+    {
+      "name": "unsupported frame version closes session",
+      "passed": true
+    },
+    {
+      "name": "peer simulation classification matches requested transport",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 1",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 2",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 3",
+      "passed": true
+    },
+    {
+      "name": "agent accepts unexpired event",
+      "passed": true
+    },
+    {
+      "name": "agent rejects duplicate event",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: sha256/acceptance-a2569f43cd394d289bcf3d73e000f2e2.dat",
+      "passed": true
+    },
+    {
+      "name": "whole file SHA-256",
+      "passed": true
+    },
+    {
+      "name": "artifact range contents",
+      "passed": true
+    },
+    {
+      "name": "PCM frames sent",
+      "passed": true
+    },
+    {
+      "name": "PCM bytes received",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue callbacks executed",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue status is noErr",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue running and primed",
+      "passed": true
+    },
+    {
+      "name": "built-in speaker route",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "control still responds after workload",
+      "passed": true
+    },
+    {
+      "name": "new socket authenticates after prior session closes",
+      "passed": true
+    }
+  ],
+  "measurements": {
+    "audioSource": "quiet fixture",
+    "physicalUsbDeviceCount": 1,
+    "hello": {
+      "agent": "BackThread.Agent",
+      "simulated": false,
+      "capabilities": [
+        "pcm",
+        "jobs",
+        "files",
+        "events",
+        "UIKit",
+        "direct-handoff"
+      ]
+    },
+    "memoryBefore": {
+      "virtualBytes": 4904558592,
+      "residentBytes": 11837440,
+      "physicalMemory": 1037041664
+    },
+    "agentTestFile": "acceptance-a2569f43cd394d289bcf3d73e000f2e2.dat",
+    "audio": [
+      {
+        "gaps": 0,
+        "bytes": 144000,
+        "silenceBytes": 0,
+        "outputVolume": 0.5,
+        "running": true,
+        "primed": true,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "callbacks": 77,
+        "lastOSStatus": 0,
+        "interrupted": false,
+        "droppedBytes": 0,
+        "packets": 75,
+        "bufferedBytes": 5760
+      },
+      {
+        "gaps": 0,
+        "bytes": 339840,
+        "silenceBytes": 69120,
+        "outputVolume": 0.5,
+        "running": true,
+        "primed": true,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "callbacks": 179,
+        "lastOSStatus": 0,
+        "interrupted": false,
+        "droppedBytes": 57600,
+        "packets": 177,
+        "bufferedBytes": 17280
+      },
+      {
+        "gaps": 0,
+        "bytes": 526080,
+        "silenceBytes": 69120,
+        "outputVolume": 0.5,
+        "running": true,
+        "primed": true,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "callbacks": 280,
+        "lastOSStatus": 0,
+        "interrupted": false,
+        "droppedBytes": 57600,
+        "packets": 274,
+        "bufferedBytes": 9600
+      }
+    ],
+    "senderFrames": 274,
+    "senderDroppedFrames": 0,
+    "captureDevice": null,
+    "captureError": null,
+    "memoryAfter": {
+      "virtualBytes": 4906885120,
+      "residentBytes": 12095488,
+      "physicalMemory": 1037041664
+    }
+  },
+  "error": null
+}

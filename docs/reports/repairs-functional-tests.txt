@@ -1,0 +1,26 @@
+PASS wire.fragmentation-and-json
+PASS wire.async-write-retains-packet-until-completion
+PASS config.audio-gain-keeps-system-volume-separate
+PASS wire.reject-size-version-channel-truncation
+PASS pcm.clipping-nan-and-bounded-ring
+PASS storage.path-traversal-and-reserved-names
+PASS validation.null-json-fields
+PASS storage.reserves-quota-before-reception
+PASS events.privacy-expiry-dedup-flood-bound
+PASS handoff.requires-connectivity-and-direct-resource
+PASS auth.wrong-key-rejected-and-recovery
+PASS auth.replay-rejected
+PASS wire.malformed-socket-and-reconnect
+PASS transport.audio-backpressure-is-bounded
+PASS integration.heartbeat-audio-order-and-content
+PASS integration.transfer-hash-text-download-and-failed-job
+PASS worker.rejects-corrupt-artifact-ranges-and-recovers
+PASS storage.resume-duplicate-incomplete-and-checksum
+PASS worker.cancel-low-memory-duplicate-and-restart
+PASS integration.socket-reset-reconnect-and-format-error
+PASS integration.notification-routing
+PASS acceptance.audio-window-excludes-slow-shutdown-tail
+PASS acceptance.audio-window-rejects-source-failure
+PASS host.receiver-audio-error-preserves-session
+PASS host.local-api-authentication-and-auto-reconnect
+25/25 passed; report: C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\artifacts\continuation\final-host-isolation-tests.json

@@ -1,0 +1,107 @@
+{
+  "timestampUtc": "2026-11-18T02:33:11.225351+00:00",
+  "persistentDeviceChanges": false,
+  "pairingAttempted": false,
+  "applicationTestsRun": false,
+  "trustSessionValidated": true,
+  "jailbroken": "not established",
+  "pairedCertificatePinned": true,
+  "ProductType": "iPhone7,2",
+  "ProductVersion": "12.5.8",
+  "ActivationState": "Activated",
+  "ports": {
+    "22": {
+      "usbmuxResult": 3,
+      "reachable": false
+    },
+    "44": {
+      "usbmuxResult": 0,
+      "reachable": true,
+      "sshBanner": "SSH-2.0-dropbear_2020.81"
+    },
+    "2222": {
+      "usbmuxResult": 3,
+      "reachable": false
+    },
+    "23451": {
+      "usbmuxResult": 3,
+      "reachable": false
+    }
+  },
+  "services": {
+    "com.apple.afc": {
+      "available": true,
+      "error": null
+    },
+    "com.apple.afc2": {
+      "available": false,
+      "error": "InvalidService"
+    },
+    "com.apple.mobile.installation_proxy": {
+      "available": true,
+      "error": null
+    },
+    "com.apple.syslog_relay": {
+      "available": true,
+      "error": null
+    }
+  },
+  "syslog": {
+    "bytesObserved": 36222,
+    "backThreadLines": [
+      "Nov 18 09:33:12 iPhone lsd(FrontBoardServices)[689] <Notice>: [FBSSystemService][0x5605] Sending request to open \"app.backthread.probe\"",
+      "Nov 18 09:33:12 iPhone SpringBoard(FrontBoard)[688] <Notice>: [FBSystemService][0x5605] Received request to open \"app.backthread.probe\" with url \"<private>\" from lsd:689 on behalf of uiopen:2552.",
+      "Nov 18 09:33:12 iPhone SpringBoard[688] <Notice>: Received untrusted open application request for \"app.backthread.probe\" from <FBProcess: <address>; uiopen; pid: 2552>.",
+      "        SBLayoutRolePrimary = <SBDeviceApplicationSceneEntity: <address>; ID: app.backthread.probe; layoutRole: primary>;",
+      "Nov 18 09:33:12 iPhone SpringBoard(FrontBoard)[688] <Notice>: Bootstrapping app.backthread.probe with intent foreground-interactive",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: Submitting new job for \"app.backthread.probe\" on behalf of <BKProcess: <address>; SpringBoard; com.apple.springboard; pid: 688; agency: SystemShell; visibility: foreground; task: running>",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: Submitted job with label: UIKitApplication:app.backthread.probe[0x955b][71]",
+      "Nov 18 09:33:12 iPhone containermanagerd(MobileSystemServices)[69] <Notice>: <address> server_get_process_containers: Invalid data container class for BackThreadProbe: 0",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] Adding client: <BKProcessInfoServerClient: <address>; pid: 688>",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] Setting jetsam priority to 10 [0x10000]",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] setpriority(PRIO_DARWIN_ROLE, 2553, 1): ok",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: Now tracking process <BKProcess: <address>; BackThreadProbe; app.backthread.probe; pid: 2553; agency: SystemApp; visibility: none; task: running; hostpid: 688> with host <BKProcess: <address>; SpringBoard; com.apple.springboard; pid: 688; agency: SystemShell; visibility: foreground; task: running>",
+      "Nov 18 09:33:12 iPhone SpringBoard(AssertionServices)[688] <Notice>: [app.backthread.probe] Bootstrap complete with label: UIKitApplication:app.backthread.probe[0x955b][71]",
+      "Nov 18 09:33:12 iPhone SpringBoard(FrontBoard)[688] <Notice>: Adding: <FBApplicationProcess: <address>; BackThreadProbe (app.backthread.probe); pid: 2553>",
+      "Nov 18 09:33:12 iPhone SpringBoard(FrontBoard)[688] <Notice>: [app.backthread.probe] Setting deactivation reasons to: 'systemAnimation' for reason: scene settings update - settings are eligible for deactivation reasons.",
+      "Nov 18 09:33:12 iPhone kernel(Sandbox)[0] <Error>: Sandbox: BackThreadProbe(2553) deny(1) mach-lookup cy:com.saurik.substrated",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [SpringBoard:688] Attempting to acquire assertion for BackThreadProbe:2553: <BKProcessAssertion: <address>; \"UIApplicationLaunch\" (activation:inf); id:\\M-b\\M^@\\M-&4CCEEC82B661>",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] Add assertion: <BKProcessAssertion: <address>; id: 688-<uuid>; name: UIApplicationLaunch; state: active; reason: activation; duration: infs> {",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] Activate assertion: <BKProcessAssertion: <address>; \"UIApplicationLaunch\" (activation:inf); id:\\M-b\\M^@\\M-&4CCEEC82B661>",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] New process assertion state; preventSuspend, preventThrottleDownUI, preventThrottleDownCPU, wantsForegroundResourcePriority, preventSuspendOnSleep (assertion <address> added: preventSuspend, preventThrottleDownUI, preventThrottleDownCPU, wantsForegroundResourcePriority, preventSuspendOnSleep; removed: (none))",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] Setting jetsam priority to 10 [0x10100]",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] setpriority success for resource GPU to PRIO_DARWIN_GPU_ALLOW",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] setpriority success for resource CPU to default (0)",
+      "Nov 18 09:33:12 iPhone mediaserverd(CoreMedia)[687] <Notice>: -CMSessionMgr- CMSessionMgrHandleApplicationStateChange: CMSession: Client app.backthread.probe with pid '2553' is now Foreground Running. Background entitlement: NO LongFormVideoApp: NO",
+      "Nov 18 09:33:12 iPhone SpringBoard[688] <Notice>: Application process state changed for app.backthread.probe: <SBApplicationProcessState: <address>; pid: 2553; taskState: Running; visibility: Unknown>",
+      "Nov 18 09:33:12 iPhone lsd(FrontBoardServices)[689] <Notice>: [FBSSystemService][0x5605] Request successful: <BSProcessHandle: <address>; BackThreadProbe:2553; valid: YES>",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] Port death watcher fired.",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] Ignoring assertion remove, because we are terminated or pending termination",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: Process exited: <BKProcess: <address>; BackThreadProbe; app.backthread.probe; pid: 2553; agency: SystemApp; visibility: foreground; task: none; hostpid: 688>",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] Invalidating...",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Error>: [BackThreadProbe:2553] SyscallError: setpriority(PRIO_DARWIN_ROLE, 2553, 3): No such process",
+      "Nov 18 09:33:12 iPhone SpringBoard(WiFiPicker)[688] <Notice>: WIFI PICKER [app.backthread.probe]: isProcessLaunch: 1,    isForegroundActivation: 1,     isForegroundDeactivation: 0",
+      "Nov 18 09:33:12 iPhone symptomsd(SymptomEvaluator)[128] <Notice>: 2553 app.backthread.probe: ForegroundRunning (most elevated: ForegroundRunning)",
+      "    SBApplicationStateDisplayIDKey = \"app.backthread.probe\";",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] Got exit context: <BKSProcessExitContext: <address>; reason: voluntary>",
+      "Nov 18 09:33:12 iPhone SpringBoard(FrontBoard)[688] <Notice>: <FBApplicationProcess: <address>; BackThreadProbe (app.backthread.probe); pid: 2553> assertiond says the process actually exited with context: <BKSProcessExitContext: <address>; reason: voluntary>",
+      "Nov 18 09:33:12 iPhone SpringBoard(FrontBoard)[688] <Notice>: <FBApplicationProcess: <address>; BackThreadProbe (app.backthread.probe); pid: 2553> exited voluntarily.",
+      "Nov 18 09:33:12 iPhone SpringBoard(FrontBoard)[688] <Notice>: Removing: <FBApplicationProcess: <address>; BackThreadProbe (app.backthread.probe); pid: -1>",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] Terminating because the job-submitter has disconnected.",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: Deleted job with label: UIKitApplication:app.backthread.probe[0x955b][71]",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] Deleted launchd job with label: UIKitApplication:app.backthread.probe[0x955b][71]",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] Invalidation complete.",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: Checking for deferred bootstrap request for app.backthread.probe",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] Removing client: <BKProcessInfoServerClient: <address>; pid: 688>",
+      "Nov 18 09:33:12 iPhone assertiond[71] <Notice>: [BackThreadProbe:2553] No clients remain.",
+      "Nov 18 09:33:12 iPhone SpringBoard(FrontBoard)[688] <Notice>: [app.backthread.probe] Setting deactivation reasons to: '(none)' for reason: updateAllScenesForBand - Assertion removed.",
+      "Nov 18 09:33:12 iPhone SpringBoard[688] <Notice>: Front display did change: <SBApplication: <address>; app.backthread.probe>",
+      "Nov 18 09:33:12 iPhone mediaserverd(CoreMedia)[687] <Notice>: -CMSessionMgr- CMSessionMgrHandleApplicationStateChange: CMSession: Client app.backthread.probe with pid '2553' is now Terminated. Background entitlement: NO LongFormVideoApp: NO",
+      "Nov 18 09:33:12 iPhone SpringBoard(FrontBoard)[688] <Notice>: Bootstrapping app.backthread.probe with intent foreground-interactive",
+      "Nov 18 09:33:12 iPhone SpringBoard[688] <Notice>: Process exited: <FBApplicationProcess: <address>; BackThreadProbe (app.backthread.probe); pid: -1> -> <FBApplicationProcessExitContext: <address>; exitReason: voluntary; terminationReason: (none)> {"
+    ],
+    "unrelatedLogContentStored": false
+  },
+  "standardInstallerServiceAvailable": true,
+  "deploymentValidated": false
+}

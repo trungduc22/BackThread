@@ -1,0 +1,455 @@
+{
+  "timestampUtc": "2026-11-18T06:19:58.5553062+00:00",
+  "simulated": false,
+  "transport": "usb",
+  "connected": true,
+  "passed": true,
+  "speakerAudibilityVerified": false,
+  "listeningCheck": "not established by this automated runner; record the human result separately",
+  "UIKitRenderingVerified": false,
+  "physicalUnplugTested": false,
+  "checks": [
+    {
+      "name": "authenticated session",
+      "passed": true
+    },
+    {
+      "name": "wrong-key rejection",
+      "passed": true
+    },
+    {
+      "name": "unsupported frame version closes session",
+      "passed": true
+    },
+    {
+      "name": "peer simulation classification matches requested transport",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 1",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 2",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 3",
+      "passed": true
+    },
+    {
+      "name": "agent accepts unexpired event",
+      "passed": true
+    },
+    {
+      "name": "agent rejects duplicate event",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: sha256/acceptance-9d7b8236a03e491296a1ebab9d2af392.dat",
+      "passed": true
+    },
+    {
+      "name": "whole file SHA-256",
+      "passed": true
+    },
+    {
+      "name": "artifact range contents",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "PCM frames sent",
+      "passed": true
+    },
+    {
+      "name": "PCM bytes received",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue callbacks executed",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue status is noErr",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue running and primed",
+      "passed": true
+    },
+    {
+      "name": "built-in speaker route",
+      "passed": true
+    },
+    {
+      "name": "AudioQueue reports hardware running",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "control still responds after workload",
+      "passed": true
+    },
+    {
+      "name": "new socket authenticates after prior session closes",
+      "passed": true
+    }
+  ],
+  "measurements": {
+    "audioSource": "WASAPI loopback",
+    "requestedQueueGain": 0.25,
+    "physicalUsbDeviceCount": 1,
+    "hello": {
+      "agent": "BackThread.Agent",
+      "simulated": false,
+      "capabilities": [
+        "pcm",
+        "jobs",
+        "files",
+        "events",
+        "UIKit",
+        "direct-handoff"
+      ]
+    },
+    "memoryBefore": {
+      "virtualBytes": 4905164800,
+      "residentBytes": 12111872,
+      "physicalMemory": 1037041664
+    },
+    "agentTestFile": "acceptance-9d7b8236a03e491296a1ebab9d2af392.dat",
+    "audio": [
+      {
+        "bufferedBytes": 3840,
+        "callbacks": 84,
+        "inputNonzeroSamples": 0,
+        "bytes": 92160,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 48,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 0,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 184,
+        "inputNonzeroSamples": 848,
+        "bytes": 286080,
+        "running": true,
+        "renderNonzeroSamples": 0,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 0,
+        "primed": true,
+        "silenceBytes": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 149,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 128,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 285,
+        "inputNonzeroSamples": 93846,
+        "bytes": 480000,
+        "running": true,
+        "renderNonzeroSamples": 90971,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 378,
+        "primed": true,
+        "silenceBytes": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 250,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 378,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 386,
+        "inputNonzeroSamples": 147848,
+        "bytes": 673920,
+        "running": true,
+        "renderNonzeroSamples": 147848,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 446,
+        "primed": true,
+        "silenceBytes": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 351,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 446,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 487,
+        "inputNonzeroSamples": 147848,
+        "bytes": 867840,
+        "running": true,
+        "renderNonzeroSamples": 147848,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 446,
+        "primed": true,
+        "silenceBytes": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 452,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 446,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 7680,
+        "callbacks": 601,
+        "inputNonzeroSamples": 147848,
+        "bytes": 1088640,
+        "running": true,
+        "renderNonzeroSamples": 147848,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 446,
+        "primed": true,
+        "silenceBytes": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 567,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 446,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 702,
+        "inputNonzeroSamples": 147848,
+        "bytes": 1280640,
+        "running": true,
+        "renderNonzeroSamples": 147848,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 446,
+        "primed": true,
+        "silenceBytes": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 667,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 446,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 3840,
+        "callbacks": 804,
+        "inputNonzeroSamples": 147848,
+        "bytes": 1474560,
+        "running": true,
+        "renderNonzeroSamples": 147848,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 446,
+        "primed": true,
+        "silenceBytes": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 768,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 446,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 904,
+        "inputNonzeroSamples": 147848,
+        "bytes": 1668480,
+        "running": true,
+        "renderNonzeroSamples": 147848,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 446,
+        "primed": true,
+        "silenceBytes": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 869,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 446,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 5760,
+        "callbacks": 1005,
+        "inputNonzeroSamples": 147848,
+        "bytes": 1862400,
+        "running": true,
+        "renderNonzeroSamples": 147848,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 446,
+        "primed": true,
+        "silenceBytes": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 970,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 446,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 3840,
+        "callbacks": 1120,
+        "inputNonzeroSamples": 147848,
+        "bytes": 2081280,
+        "running": true,
+        "renderNonzeroSamples": 147848,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 446,
+        "primed": true,
+        "silenceBytes": 0,
+        "hardwareSampleRate": 48000,
+        "packets": 1084,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 446,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      },
+      {
+        "bufferedBytes": 0,
+        "callbacks": 1220,
+        "inputNonzeroSamples": 147848,
+        "bytes": 2202240,
+        "running": true,
+        "renderNonzeroSamples": 147848,
+        "outputVolume": 0.5,
+        "queueRunning": 1,
+        "routeTypes": [
+          "Speaker"
+        ],
+        "renderPeak": 446,
+        "primed": true,
+        "silenceBytes": 67200,
+        "hardwareSampleRate": 48000,
+        "packets": 1147,
+        "queueGain": 0.25,
+        "interrupted": false,
+        "gaps": 0,
+        "inputPeak": 446,
+        "lastOSStatus": 0,
+        "droppedBytes": 0
+      }
+    ],
+    "memoryDuringAudio": [
+      {
+        "elapsedSeconds": 5.0433814,
+        "memory": {
+          "virtualBytes": 4905803776,
+          "residentBytes": 12242944,
+          "physicalMemory": 1037041664
+        }
+      },
+      {
+        "elapsedSeconds": 10.2253933,
+        "memory": {
+          "virtualBytes": 4905082880,
+          "residentBytes": 12124160,
+          "physicalMemory": 1037041664
+        }
+      }
+    ],
+    "audioElapsedSeconds": 12.3757895,
+    "senderFrames": 1147,
+    "senderDroppedFrames": 0,
+    "captureDevice": "Speakers / Headphones (Realtek High Definition Audio)",
+    "captureError": null,
+    "memoryAfter": {
+      "virtualBytes": 4906754048,
+      "residentBytes": 12152832,
+      "physicalMemory": 1037041664
+    }
+  },
+  "error": null
+}

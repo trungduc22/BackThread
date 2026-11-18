@@ -68,6 +68,19 @@ class NativeArtifactTests(unittest.TestCase):
         self.assertGreater(verify_adhoc(APP / 'BackThread', APP)['codePages'], 0)
         self.assertGreater(verify_adhoc(BUILD / 'BackThread.Agent')['codePages'], 0)
 
+    def test_rejects_newer_required_dyld_load_commands(self):
+        data=bytearray((BUILD/'BackThread.Agent').read_bytes())
+        offset=32
+        for _ in range(struct.unpack_from('<I',data,16)[0]):
+            command,length=struct.unpack_from('<II',data,offset)
+            if command==0x26:
+                struct.pack_into('<I',data,offset,0x80000034)
+                break
+            offset+=length
+        with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as temporary:
+            path=pathlib.Path(temporary)/'newer-dyld';path.write_bytes(data)
+            with self.assertRaisesRegex(ValueError,'legacy dyld'):macho(path)
+
     def test_rejects_corrupted_code(self):
         with tempfile.TemporaryDirectory(dir=ROOT / 'artifacts') as temporary:
             path = pathlib.Path(temporary) / 'corrupt'
@@ -102,18 +115,30 @@ class NativeArtifactTests(unittest.TestCase):
         for name, prefix, binary, target in (
             ('app.backthread.companion', './Applications/BackThread.app/', APP / 'BackThread', 'BackThread'),
             ('app.backthread.agent', './var/mobile/BackThread/bin/', BUILD / 'BackThread.Agent', 'BackThread.Agent')):
-            archive = members(BUILD / f'{name}_0.1.1_iphoneos-arm.deb')
+            version=plistlib.loads((APP/'Info.plist').read_bytes())['CFBundleShortVersionString']
+            archive = members(BUILD / f'{name}_{version}_iphoneos-arm.deb')
             self.assertEqual({'debian-binary', 'control.tar.gz', 'data.tar.gz'}, set(archive))
             self.assertEqual(b'2.0\n', archive['debian-binary'])
             with tarfile.open(fileobj=io.BytesIO(archive['data.tar.gz'])) as tar:
                 entries = tar.getmembers()
                 self.assertTrue(entries)
+                directories={e.name.rstrip('/') for e in entries if e.isdir()}
+                self.assertNotIn('./Applications',directories)
+                self.assertNotIn('./var/mobile',directories)
                 for entry in entries:
+                    if entry.isdir():
+                        own_root='./Applications/BackThread.app' if name.endswith('.companion') else './var/mobile/BackThread'
+                        self.assertTrue(entry.name.rstrip('/')==own_root or entry.name.startswith(own_root+'/'))
+                        self.assertEqual((0,0) if name.endswith('.companion') else (501,501),(entry.uid,entry.gid))
+                        if entry.name.rstrip('/')=='./var/mobile/BackThread':self.assertEqual(0o700,entry.mode)
+                        continue
                     self.assertTrue(entry.isfile())
                     self.assertTrue(entry.name.startswith(prefix))
                     self.assertNotIn('..', pathlib.PurePosixPath(entry.name).parts)
                     self.assertFalse(entry.name.endswith(('.key', '.pem')))
                     self.assertEqual(0o755 if entry.name == prefix + target else 0o644, entry.mode)
+                    parent='./'+pathlib.PurePosixPath(entry.name).parent.as_posix()
+                    self.assertIn(parent,directories,'dpkg requires an explicit app-owned parent directory')
                 self.assertEqual(binary.read_bytes(), tar.extractfile(prefix + target).read())
             with tarfile.open(fileobj=io.BytesIO(archive['control.tar.gz'])) as tar:
                 self.assertIn('Architecture: iphoneos-arm', tar.extractfile('./control').read().decode())

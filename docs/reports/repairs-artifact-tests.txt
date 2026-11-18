@@ -1,0 +1,14 @@
+test_arm64_ios12_and_public_linkage (__main__.NativeArtifactTests.test_arm64_ios12_and_public_linkage) ... ok
+test_code_and_resources_signature_hashes (__main__.NativeArtifactTests.test_code_and_resources_signature_hashes) ... ok
+test_debian_determinism_and_manifest (__main__.NativeArtifactTests.test_debian_determinism_and_manifest) ... ok
+test_debian_scope_permissions_and_embedded_executables (__main__.NativeArtifactTests.test_debian_scope_permissions_and_embedded_executables) ... ok
+test_iphone6_bundle_resources (__main__.NativeArtifactTests.test_iphone6_bundle_resources) ... ok
+test_rejects_arm64e_and_wrong_deployment (__main__.NativeArtifactTests.test_rejects_arm64e_and_wrong_deployment) ... ok
+test_rejects_corrupted_code (__main__.NativeArtifactTests.test_rejects_corrupted_code) ... ok
+test_rejects_corrupted_plist_and_launch_image (__main__.NativeArtifactTests.test_rejects_corrupted_plist_and_launch_image) ... ok
+test_rejects_newer_required_dyld_load_commands (__main__.NativeArtifactTests.test_rejects_newer_required_dyld_load_commands) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.278s
+
+OK

@@ -1,0 +1,15 @@
+test_bounded_retention_keeps_markers_separately (__main__.DeviceToolsTests.test_bounded_retention_keeps_markers_separately) ... ok
+test_existing_data_selects_upgrade (__main__.DeviceToolsTests.test_existing_data_selects_upgrade) ... ok
+test_fragmented_marker_and_unterminated_last_record (__main__.DeviceToolsTests.test_fragmented_marker_and_unterminated_last_record) ... ok
+test_invalid_utf8_does_not_break_collection (__main__.DeviceToolsTests.test_invalid_utf8_does_not_break_collection) ... ok
+test_native_nul_records_preserve_multiline_exit_context (__main__.DeviceToolsTests.test_native_nul_records_preserve_multiline_exit_context) ... ok
+test_nul_and_newline_records (__main__.DeviceToolsTests.test_nul_and_newline_records) ... ok
+test_partial_and_output_line_bounds (__main__.DeviceToolsTests.test_partial_and_output_line_bounds) ... ok
+test_private_uuid_is_redacted (__main__.DeviceToolsTests.test_private_uuid_is_redacted) ... ok
+test_unrelated_apps_are_rejected_before_a_device_call (__main__.DeviceToolsTests.test_unrelated_apps_are_rejected_before_a_device_call) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.002s
+
+OK
+

@@ -1,0 +1,41 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  BackThread.Media -> C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Media\bin\Release\net8.0-windows10.0.19041.0\BackThread.Media.dll
+  BackThread.Transport -> C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Transport\bin\Release\net8.0\BackThread.Transport.dll
+  BackThread.Audio -> C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Audio\bin\Release\net8.0-windows10.0.19041.0\BackThread.Audio.dll
+  BackThread.Worker -> C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Worker\bin\Release\net8.0\BackThread.Worker.dll
+  BackThread.Events -> C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Events\bin\Release\net8.0\BackThread.Events.dll
+  BackThread.Simulator -> C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Simulator\bin\Release\net8.0-windows10.0.19041.0\BackThread.Simulator.dll
+  BackThread.Host -> C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\src\Windows\Host\bin\Release\net8.0-windows10.0.19041.0\BackThread.Host.dll
+  BackThread.Tests -> C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\tests\BackThread.Tests\bin\Release\net8.0-windows10.0.19041.0\BackThread.Tests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:04.92
+PASS wire.fragmentation-and-json
+PASS wire.reject-size-version-channel-truncation
+PASS pcm.clipping-nan-and-bounded-ring
+PASS storage.path-traversal-and-reserved-names
+PASS validation.null-json-fields
+PASS storage.reserves-quota-before-reception
+PASS events.privacy-expiry-dedup-flood-bound
+PASS handoff.requires-connectivity-and-direct-resource
+PASS auth.wrong-key-rejected-and-recovery
+PASS auth.replay-rejected
+PASS wire.malformed-socket-and-reconnect
+PASS transport.audio-backpressure-is-bounded
+PASS integration.heartbeat-audio-order-and-content
+PASS integration.transfer-hash-text-download-and-failed-job
+PASS worker.rejects-corrupt-artifact-ranges-and-recovers
+PASS storage.resume-duplicate-incomplete-and-checksum
+PASS worker.cancel-low-memory-duplicate-and-restart
+PASS integration.socket-reset-reconnect-and-format-error
+PASS integration.notification-routing
+PASS host.local-api-authentication-and-auto-reconnect
+METRIC {"durationSeconds":120.3501122,"jobs":223,"maximumBuffer":9600,"startMemory":92618752,"endMemory":98242560,"cpuSeconds":88.46875,"senderDropped":0,"receiver":{"packets":12036,"bytes":23109120,"gaps":0,"bufferedBytes":7680,"droppedBytes":0,"silenceBytes":0,"playbackTicks":12032,"sha256":"b44c0031ed9f95befa064ed7531b2ad8ca32f51bb1227c9389859aecc7b56ee4"}}
+PASS soak.concurrent-audio-worker
+21/21 passed; report: C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\artifacts\continuation\full-regression.json
+PASS native protocol and PCM ring
+

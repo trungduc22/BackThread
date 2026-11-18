@@ -1,0 +1,12 @@
+{
+  "realWindowsCapture": true,
+  "physicalIPhoneTest": false,
+  "sampleRate": 48000,
+  "channels": 2,
+  "bits": 16,
+  "capturedBytes": 288000,
+  "nonzeroBytes": 249549,
+  "callbacks": 24,
+  "device": "Speakers / Headphones (Realtek High Definition Audio)",
+  "humanListeningVerified": false
+}

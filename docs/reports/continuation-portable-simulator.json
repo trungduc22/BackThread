@@ -1,0 +1,145 @@
+{
+  "timestampUtc": "2026-11-18T03:14:13.5548889+00:00",
+  "simulated": true,
+  "transport": "localhost",
+  "connected": true,
+  "passed": true,
+  "speakerAudibilityVerified": false,
+  "listeningCheck": "pending human confirmation after real audio output",
+  "UIKitRenderingVerified": false,
+  "physicalUnplugTested": false,
+  "checks": [
+    {
+      "name": "authenticated session",
+      "passed": true
+    },
+    {
+      "name": "wrong-key rejection",
+      "passed": true
+    },
+    {
+      "name": "unsupported frame version closes session",
+      "passed": true
+    },
+    {
+      "name": "peer simulation classification matches requested transport",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 1",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 2",
+      "passed": true
+    },
+    {
+      "name": "heartbeat 3",
+      "passed": true
+    },
+    {
+      "name": "agent accepts unexpired event",
+      "passed": true
+    },
+    {
+      "name": "agent rejects duplicate event",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "job completed: sha256/acceptance-83514492f5e543c2a953fe4761e9df80.dat",
+      "passed": true
+    },
+    {
+      "name": "whole file SHA-256",
+      "passed": true
+    },
+    {
+      "name": "artifact range contents",
+      "passed": true
+    },
+    {
+      "name": "PCM frames sent",
+      "passed": true
+    },
+    {
+      "name": "PCM bytes received",
+      "passed": true
+    },
+    {
+      "name": "job completed: diagnostic/memory",
+      "passed": true
+    },
+    {
+      "name": "control still responds after workload",
+      "passed": true
+    },
+    {
+      "name": "new socket authenticates after prior session closes",
+      "passed": true
+    }
+  ],
+  "measurements": {
+    "audioSource": "quiet fixture",
+    "hello": {
+      "agent": "BackThread.Simulator",
+      "simulated": true,
+      "capabilities": [
+        "pcm",
+        "jobs",
+        "files",
+        "events",
+        "faults"
+      ]
+    },
+    "memoryBefore": {
+      "managedBytes": 1556848,
+      "workingSetBytes": 36622336
+    },
+    "agentTestFile": "acceptance-83514492f5e543c2a953fe4761e9df80.dat",
+    "audio": [
+      {
+        "packets": 100,
+        "bytes": 192000,
+        "gaps": 0,
+        "bufferedBytes": 9600,
+        "droppedBytes": 0,
+        "silenceBytes": 0,
+        "playbackTicks": 95,
+        "sha256": "eae49c33bd1bdf702314ed5cd4e8ae632ad68ff29402b7d96dee593d77f52a8d"
+      },
+      {
+        "packets": 201,
+        "bytes": 385920,
+        "gaps": 0,
+        "bufferedBytes": 7680,
+        "droppedBytes": 0,
+        "silenceBytes": 0,
+        "playbackTicks": 197,
+        "sha256": "6981c1d2a3880e56771d6e06a831bf3368b649002bb617a4a5c0cd4d9cc972f7"
+      },
+      {
+        "packets": 299,
+        "bytes": 574080,
+        "gaps": 0,
+        "bufferedBytes": 1920,
+        "droppedBytes": 0,
+        "silenceBytes": 0,
+        "playbackTicks": 298,
+        "sha256": "63a360540ec7bc5420a9003e19ccb7234f303dcb238e501bffb3aab9ab5cddd0"
+      }
+    ],
+    "senderFrames": 299,
+    "senderDroppedFrames": 0,
+    "captureDevice": null,
+    "captureError": null,
+    "memoryAfter": {
+      "managedBytes": 1271224,
+      "workingSetBytes": 47779840
+    }
+  },
+  "error": null
+}

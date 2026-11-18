@@ -1,0 +1,17 @@
+{
+  "timestampUtc": "2026-11-18T03:14:13.8971383+00:00",
+  "simulated": false,
+  "transport": "usb",
+  "connected": false,
+  "passed": false,
+  "speakerAudibilityVerified": false,
+  "listeningCheck": "pending human confirmation after real audio output",
+  "UIKitRenderingVerified": false,
+  "physicalUnplugTested": false,
+  "checks": [],
+  "measurements": {
+    "audioSource": "off",
+    "physicalUsbDeviceCount": 1
+  },
+  "error": "IOException: USB port 23451 unavailable (usbmux result 3)"
+}

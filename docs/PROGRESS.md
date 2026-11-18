@@ -1,34 +1,38 @@
-# BackThread progress
+# BackThread progress — 0.1.2
 
-Checkpoint date: 2026-11-18 (Asia/Saigon), continued from `738a497`. **First end-to-end iPhone playback remains blocked.** This document records observed results, not intended capability.
+## Latest verified hardware checkpoint — 2026-11-18
 
-## Native iPhone integration follow-up
+**First audible Windows PCM through the iPhone speaker is now verified.** After the normal own-app Upgrade and foreground reopen, the user saw “Connected by USB”. The new three-second PCM fixture passed 27 physical protocol/audio/worker checks and the user answered “Có nghe tiếng”. Current fixture stats show Speaker, 48 kHz, gain 0.25, system volume 1, both peaks 4096, noErr, successful getters, and zero sampled gaps/overflow/underrun. This does not establish a single root cause for earlier silent attempts: app build, launch state and user-controlled system volume differed.
 
-- Audited every iOS translation unit/header, shared wire C, Makefiles and app resources for iOS 12 / A8 ARM64 compatibility. Added explicit CoreGraphics/QuartzCore linkage and repaired actual warning/API/resource assumptions.
-- Fixed connection stop/lifecycle races, fd-reuse response hazards with connection generations, bounded asynchronous upload I/O, active commit guards, fstat failure handling, UI null/type assumptions, memory-warning timer races and AudioQueue error/session handling.
-- Prepared a workspace-local Zig 0.13.0 / Clang 18.1.6 cross-build against actual iPhoneOS 12.4 headers/stubs, ad-hoc signed with apple-codesign 0.29.0. All seven translation units compile with warnings-as-errors and pass Clang analyzer with zero final diagnostics. No SDK/tool binaries are redistributed.
-- Produced baseline ARM64 / minimum iOS 12.0 UI and standalone Agent binaries, an Agent static archive, two deterministic Debian packages and a standard test IPA. Eight artifact tests pass; repeat builds yield identical hashes for all five manifest artifacts. See IOS_NATIVE_AUDIT.md, IOS_TOOLCHAIN.md and BUILD_IOS.md.
-- Established a real pinned paired lockdown TLS session to iPhone 6 (`iPhone7,2`) / iOS 12.5.8. Found Dropbear SSH on USB **44**, authenticated root with the user's provided credential, and transferred only BackThread-owned files using encrypted SSH/SCP. No password/key contents were saved in project reports or source.
-- Device root is read only; package manager absent. Standalone Agent and minimal own C probe were killed before main; kernel reports System Policy process-exec denial. Existing ldid re-signing of only the own binary did not change the result. uicache rejected the app's writable staging location. No execution-policy workaround was attempted.
-- A later read-only check reported Activated and available Installation Proxy (initially Unactivated/unavailable); no activation operation was performed. Standard paired AFC/app installation was then tested. It reached VerifyingApplication and rejected the ad-hoc signature with ApplicationVerificationFailed / `0xe8008014`. Own installer staging was removed.
-- Confirmed removal of the temporary phone transfer archives and smoke executable. Earlier Agent/app copies and a mode-0600 private key remain only under the mode-0700 `/var/mobile/BackThread` directory; no BackThread service/listener is running. These staged copies are not an installed accepted release.
-- Preserved Windows Host/simulator product sources. Corrected a test harness bug which turned zero soak seconds into one second. The corrected Release regression has zero warnings/errors, **19/19 regular managed tests plus shared C tests pass**. The initial unintended short-soak failure is recorded; no new long soak is claimed.
+Normal WASAPI media was then heard through the iPhone, with the user reporting “Có nhưng bị ngắt/giật” after normal Host app gain was restored to 1. **Continuous audio quality is not accepted yet.** The separate 90-second diagnostic run at app gain 0.25/system volume about 0.105 received/rendered nonzero PCM but had 472 sender drops, 132 gap events, 1,416,960 overflow bytes and 2,423,040 active-window silence bytes. Fifteen native RSS samples were 11,337,728–11,395,072 bytes. It passed its functional gates, not a zero-loss/acoustic quality gate.
 
-## Original checkpoint evidence retained
+A normal-Host sample measured 0.046875 CPU seconds over 3.04 wall seconds and 84,193,280 bytes RSS; total Windows CPU was reported 100%, with 3,585 MiB available and no paging in that snapshot. This is evidence of load, not proof of one cause for stutter. Its last observed sender-drop counter was zero; that does not prove native receiver/capture quality.
 
-The Windows modules implement authenticated usbmux/local sockets, WASAPI audio, GSMTC, bounded events, local integration API, resumable storage/worker jobs and tray. The protocol simulator executes real PCM/file/jobs operations. The original checkpoint passed 20 managed checks including a strict 120-second mixed-workload simulator soak: 241 four-MiB transfer/hash cycles, 12,003 PCM packets, zero reported final gaps/drop/overflow/underrun silence after priming. Earlier failed timing runs remain in PERFORMANCE.md and reports.
+The user subsequently confirmed physically unplugging the cable. USB disappearance is therefore an observed user disconnect, not an unexplained discovery failure. Hardware work is now waiting for reconnection. Latest Windows changes batch each frame into one pooled socket write and add write-wait telemetry; **their physical effect on stutter has not been tested**. No system/framework/service/jailbreak repair was performed.
 
-Actual Windows WASAPI capture/conversion and GSMTC metadata/play/pause/seek were verified at that checkpoint. Self-contained Windows Host/Tray/Simulator packages and API/SSE/archive/checksum/reconnect smoke results remain unchanged. These establish Windows/simulator behavior, not iPhone audio.
+Evidence: [human confirmations](reports/repairs-human-listening.json), [physical fixture](reports/repairs-physical-fixture.json), [90-second native profile](reports/repairs-physical-wasapi90.json), [normal Host load](reports/repairs-host-load.json). Earlier failed listening reports remain historical evidence.
 
-| Phase | Current evidence-based state |
-|---|---|
-| Research/audit | Initial requested repositories reviewed; actual native audit and build-tool provenance added |
-| USB/protocol | Real paired TLS/SSH/service checks; application protocol tested in simulation, native device handshake blocked |
-| Audio | Windows capture/bridge tested; native AudioQueue compiled/analyzed, no device callbacks or speaker output |
-| Media/UI | Windows platform tests; actual ARM64 UIKit build/package, phone launch/touch acceptance blocked |
-| Worker | Simulator jobs/files/recovery pass; standalone and embedded native implementations compile but have never executed |
-| Handoff | Existing URL boundary tests; native playback remains partial and unverified, no YouTube provider |
-| Integration | Windows/simulator preserved, 19 current regressions plus C pass; eight iOS artifact checks and seven analyzer reports clean |
-| Release | Windows outputs retained; native build/packages delivered, installed/running iPhone acceptance failed |
+2026-11-18, Asia/Saigon. Continued from 0e9f88c while preserving prior Windows/simulator behavior and repository history. Current acceptance remains incomplete.
 
-No native handshake, PCM playback, UIKit interaction, worker/file operation, app restart/reconnect, process RSS/Jetsam, audio underrun, battery/thermal or physical unplug/listening result is claimed. No firmware, activation setting, boot chain, jailbreak component, system security configuration or unrelated data was modified. No launchd daemon was installed. Resume with NEXT_STEPS.md's first-playback sequence when a normal authorized execution path is available.
+## Actual device progress before pause
+
+- Normal IPA install/Upgrade and data preservation succeeded in the existing user-prepared environment. Corrected Debian directory headers were validated by own probe installation/removal.
+- LLD 23.1.5 with original iPhoneOS 12.4 stubs produced actual C/UIKit entry and the full embedded Agent. Ordinary own-app launching resolved the invisible URL-confirmation obstacle. Standalone execution remained separately denied; no execution policy changed.
+- Physical authentication, framing rejection/recovery, heartbeat, events/dedup, new socket, one-MiB upload/SHA/range and named memory jobs passed. Nonzero Windows WASAPI audio reached native AudioQueue buffers.
+- Both human listening checks returned no sound. Physical screen was reported black. Native short-run RSS was sampled; extended stability, UI/touch and acoustic results are unverified.
+- User paused device work while independently maintaining the system. All subsequent repair work is offline; no firmware/system/jailbreak changes were made. The prior device state must be checked anew only after readiness.
+
+## Offline repairs after review
+
+- Native queue failure now reports audio.error and stops/discards that stream while preserving USB control; a failed start clears the PCM acceptance flag. Host exposes audioError without intentionally reconnecting the session.
+- Reset checks requested playback under the same lifecycle lock as Stop. Start/volume failures are retained/returned; queue getter status and presence are explicit.
+- Acceptance timing begins at actual PCM pacing. Source cancellation and sample admission share that deadline; absolute polls skip missed slots, late replies and shutdown tail are excluded. Source failure propagates; --require-nonzero can gate a known WASAPI signal. Zero-loss observations remain separate from audible/quality acceptance.
+- Windows regressions cover slow/uncancellable stats, early source termination and receiver-error/control-session isolation. Existing corrupt-artifact recovery remains tested.
+- Analyzer saves a fresh incomplete/failed report before running and marks complete only after all expected sources. Report admission has dedicated tooling tests. Explicit direct interpreter invocation avoids relying on the Windows app alias; no system Python setting changed.
+- Build documentation now requires the proven explicit LLD path and original SDK stubs. Current feature/hardware/limits/next-step documents distinguish recorded native execution from still-failing sound and runtime-unverified repairs.
+
+Current build/test hashes and counts are in reports/repairs-validation.json and associated reports. Older continuation/review reports remain dated evidence. Release artifacts are engineering checkpoints with no bundled key/SDK/toolchain. No remote push is performed.
+
+Final offline checkpoint: 25/25 functional tests, 9 artifact, 9 device-tool and 4 analyzer-tool tests passed; all ten native analyzer units clean; five native artifacts reproducible; latest portable smoke and 19-check isolated simulator acceptance passed. The corrected 120-second strict simulator audio-quality soak failed and is retained explicitly. No blanket acceptance or stutter fix is claimed.
+
+A final Host error-isolation repair also keeps control/worker alive when audio gain/start requests are rejected, not only after unsolicited audio.error. Regression exercises both cases on the same connection with a subsequent heartbeat and job query. Normal USB Host restores app gain 1 by default, without changing phone system volume.

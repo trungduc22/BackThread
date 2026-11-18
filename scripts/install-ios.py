@@ -20,6 +20,7 @@ import zipfile
 from ios_build_support import macho, verify_adhoc
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+IDENTIFIERS = {'ui':'app.backthread.companion','probe':'app.backthread.probe'}
 spec = importlib.util.spec_from_file_location('audit', ROOT / 'scripts/inspect-ios-device.py')
 audit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(audit)
@@ -127,30 +128,77 @@ def receive_plist(stream):
     return plistlib.loads(diag.exact(stream, length))
 
 
+def lookup_app(device, identifier):
+    if identifier not in IDENTIFIERS.values():
+        raise ValueError('Only BackThread applications may be queried or changed')
+    service=device.service('com.apple.mobile.installation_proxy')
+    try:
+        request=plistlib.dumps(dict(Command='Lookup',ClientOptions=dict(BundleIDs=[identifier],ReturnAttributes=['CFBundleIdentifier','CFBundleShortVersionString','CFBundleExecutable','Path','Container'])))
+        service.sendall(struct.pack('>I',len(request))+request)
+        reply=receive_plist(service)
+        if reply.get('Error'):raise RuntimeError(reply['Error'])
+        return reply.get('LookupResult',{}).get(identifier,{})
+    finally:service.close()
+
+
+def install_command(identifier, existing):
+    if identifier not in IDENTIFIERS.values():raise ValueError('Application outside BackThread scope')
+    # Upgrade preserves an existing BackThread data container; Install is only for a new app.
+    return 'Upgrade' if existing else 'Install'
+
+
+def uninstall(component):
+    identifier=IDENTIFIERS[component]
+    report=dict(bundleIdentifier=identifier,method='paired Installation Proxy Uninstall',statuses=[],uninstalled=False)
+    with PairedDevice() as device:
+        if not lookup_app(device,identifier):
+            report.update(uninstalled=True,alreadyAbsent=True)
+        else:
+            service=device.service('com.apple.mobile.installation_proxy')
+            request=plistlib.dumps(dict(Command='Uninstall',ApplicationIdentifier=identifier))
+            service.sendall(struct.pack('>I',len(request))+request)
+            service.settimeout(30)
+            for _ in range(100):
+                status=receive_plist(service);report['statuses'].append(status)
+                if status.get('Error') or status.get('Status')=='Complete':
+                    report['uninstalled']=status.get('Status')=='Complete' and not status.get('Error');break
+    output=ROOT/f'artifacts/ios-{component}-uninstall.json';output.parent.mkdir(parents=True,exist_ok=True)
+    output.write_text(json.dumps(report,indent=2));print(json.dumps(report,indent=2))
+    return 0 if report['uninstalled'] else 1
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--install', action='store_true', help='Install the built BackThread app on the one paired USB device')
+    action=parser.add_mutually_exclusive_group()
+    action.add_argument('--install', action='store_true', help='Install or upgrade BackThread on the one paired USB device')
+    action.add_argument('--uninstall',action='store_true',help='Remove only the selected BackThread app and its container through the normal installer')
+    parser.add_argument('--component', choices=('ui','probe'), default='ui')
     args = parser.parse_args()
-    app = ROOT / 'artifacts/ios-build/stage/BackThread.app'
+    if args.uninstall:raise SystemExit(uninstall(args.component))
+    app = ROOT / ('artifacts/ios-build/stage/BackThread.app' if args.component=='ui' else 'artifacts/ios-probe/stage/BackThreadProbe.app')
+    identifier=IDENTIFIERS[args.component]
     info = plistlib.loads((app / 'Info.plist').read_bytes())
-    if info['CFBundleIdentifier'] != 'app.backthread.companion':
+    if info['CFBundleIdentifier'] != identifier:
         raise ValueError('Only BackThread may be installed')
-    macho(app / 'BackThread')
-    verify_adhoc(app / 'BackThread', app)
-    ipa = ROOT / 'artifacts/ios-build/BackThread.ipa'
+    binary=app/info['CFBundleExecutable']
+    macho(binary)
+    verify_adhoc(binary, app)
+    ipa = app.parents[1] / (app.stem+'.ipa')
     with zipfile.ZipFile(ipa, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for path in sorted(app.rglob('*')):
             if path.is_file():
-                item = zipfile.ZipInfo('Payload/BackThread.app/' + path.relative_to(app).as_posix(), (1980, 1, 1, 0, 0, 0))
-                item.external_attr = (0o100755 if path.name == 'BackThread' else 0o100644) << 16
+                item = zipfile.ZipInfo('Payload/'+app.name+'/' + path.relative_to(app).as_posix(), (1980, 1, 1, 0, 0, 0))
+                item.external_attr = (0o100755 if path==binary else 0o100644) << 16
                 archive.writestr(item, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
     if not args.install:
-        print('Prepared BackThread.ipa only; pass --install for an authorized device installation.')
+        print(f'Prepared {ipa.name} only; pass --install for an authorized device installation.')
         return
     report = dict(bundleIdentifier=info['CFBundleIdentifier'], ipaSha256=hashlib.sha256(ipa.read_bytes()).hexdigest(),
                   method='paired AFC + Installation Proxy', statuses=[], installed=False, stagingRemoved=False)
     with PairedDevice() as device:
         report['pairedCertificatePinned'] = True
+        command=install_command(identifier,lookup_app(device,identifier))
+        report['command']=command
         afc = AFC(device.service('com.apple.afc'))
         remote = ('PublicStaging/BackThread-' + uuid.uuid4().hex + '.ipa').encode() + b'\0'
         created = False
@@ -167,8 +215,8 @@ def main():
             finally:
                 afc.command(20, handle)
             service = device.service('com.apple.mobile.installation_proxy')
-            request = plistlib.dumps(dict(Command='Install', PackagePath=remote[:-1].decode(),
-                                         ClientOptions=dict(CFBundleIdentifier='app.backthread.companion')))
+            request = plistlib.dumps(dict(Command=command, PackagePath=remote[:-1].decode(),
+                                         ClientOptions=dict(CFBundleIdentifier=identifier)))
             service.sendall(struct.pack('>I', len(request)) + request)
             service.settimeout(30)
             deadline = time.monotonic() + 120
@@ -190,7 +238,7 @@ def main():
                     report['stagingRemoved'] = True
                 except (OSError, ValueError, RuntimeError) as error:
                     report['cleanupError'] = str(error)
-            output = ROOT / 'artifacts/ios-audit/installation-proxy-result.json'
+            output = ROOT / ('artifacts/ios-audit/installation-proxy-result.json' if args.component=='ui' else 'artifacts/ios-probe/installation-result.json')
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(json.dumps(report, indent=2))
     raise SystemExit(0 if report['installed'] else 1)

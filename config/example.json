@@ -5,6 +5,7 @@
  "deviceSerial": null,
  "apiPort": 23452,
  "streamAudio": true,
+ "audioGain": 1,
  "fixtureAudio": false,
  "deviceHasInternet": false,
  "hideSensitive": true,

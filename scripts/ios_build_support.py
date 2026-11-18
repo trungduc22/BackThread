@@ -2,10 +2,30 @@
 import gzip
 import hashlib
 import io
+import json
 import pathlib
 import re
 import struct
 import tarfile
+
+
+def write_audit_header(image, output):
+    """Generate a diagnostic input from real undefined strong imports, never SDK stubs."""
+    metadata=macho(image);data=pathlib.Path(image).read_bytes();offset=32
+    symbols=count=strings=size=None
+    for _ in range(struct.unpack_from('<I',data,16)[0]):
+        command,length=struct.unpack_from('<II',data,offset)
+        if command==2:symbols,count,strings,size=struct.unpack_from('<4I',data,offset+8)
+        offset+=length
+    if symbols is None:raise ValueError('Image has no symbol table for loader audit')
+    names=[]
+    for index in range(count):
+        name,kind,section,description,value=struct.unpack_from('<IBBHQ',data,symbols+index*16)
+        if kind&14==0 and kind&1 and not description&0x40:
+            text=data[strings+name:strings+size].split(b'\0')[0].decode()
+            names.append(text[1:] if text.startswith('_') else text)
+    def array(name,values):return 'static const char *'+name+'[]={'+','.join(json.dumps(s) for s in values)+'};\n'
+    pathlib.Path(output).write_text(array('audit_libraries',metadata['linkedLibraries'])+array('audit_symbols',names))
 
 
 def macho(path):
@@ -23,6 +43,10 @@ def macho(path):
         command, length = struct.unpack_from('<II', data, offset)
         if length < 8 or offset + length > 32 + size:
             raise ValueError('Invalid Mach-O command')
+        if command in (0x80000033,0x80000034):
+            raise ValueError('iOS 12 requires legacy dyld bind/export metadata')
+        if command==0x80000022:
+            result['linkMetadataFormat']='legacy dyld info'
         if command == 0x32:
             platform, minimum, sdk = struct.unpack_from('<III', data, offset + 8)
             result.update(platform=platform, minimumOS=f'{minimum >> 16}.{minimum >> 8 & 255}.{minimum & 255}', sdkVersion=f'{sdk >> 16}.{sdk >> 8 & 255}.{sdk & 255}')
@@ -40,6 +64,8 @@ def macho(path):
         offset += length
     if kind == 2 and (result.get('platform') != 2 or result.get('minimumOS') != '12.0.0'):
         raise ValueError('Executable must target iOS 12.0')
+    if kind==2 and result.get('linkMetadataFormat')!='legacy dyld info':
+        raise ValueError('Missing iOS 12 legacy dyld metadata')
     return result
 
 
@@ -120,13 +146,20 @@ def verify_adhoc(path, bundle=None):
     return dict(codePages=slots,pageSize=page,sha256=hashlib.sha256(directory[:length]).hexdigest())
 
 
-def tar_gzip(entries, epoch=0):
+def tar_gzip(entries, epoch=0, directories=()):
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode='w', format=tarfile.USTAR_FORMAT) as archive:
+        for name, mode, uid, gid in sorted(directories):
+            if name.startswith('/') or '..' in pathlib.PurePosixPath(name).parts:
+                raise ValueError('Unsafe package directory')
+            item=tarfile.TarInfo(name);item.type=tarfile.DIRTYPE
+            item.uid,item.gid,item.mode,item.mtime=uid,gid,mode,epoch
+            archive.addfile(item)
         for name, content, mode in sorted(entries):
+            if name.startswith('/') or '..' in pathlib.PurePosixPath(name).parts:
+                raise ValueError('Unsafe package member')
             item = tarfile.TarInfo(name)
             item.uid = item.gid = 0
-            item.uname = item.gname = 'root'
             item.mode, item.mtime, item.size = mode, epoch, len(content)
             archive.addfile(item, io.BytesIO(content))
     return gzip.compress(buffer.getvalue(), mtime=epoch)
@@ -136,11 +169,12 @@ def debian(path, control, app, epoch=0):
     postinst = b'#!/bin/sh\nset -eu\nif [ "${1:-}" = configure ] && command -v uicache >/dev/null 2>&1; then\n uicache -p /Applications/BackThread.app || echo "Register BackThread with your existing app installer." >&2\nfi\n'
     pre_remove = b'#!/bin/sh\nset -eu\nif [ "${1:-}" = remove ] && command -v uicache >/dev/null 2>&1; then\n uicache -u /Applications/BackThread.app || true\nfi\n'
     data = [(f'./Applications/BackThread.app/{p.relative_to(app).as_posix()}', p.read_bytes(), 0o755 if p.name == 'BackThread' else 0o644) for p in app.rglob('*') if p.is_file()]
-    write_debian(path,[('./control', control, 0o644), ('./postinst', postinst, 0o755), ('./prerm', pre_remove, 0o755)],data,epoch)
+    directories=[('./Applications/BackThread.app',0o755,0,0)]+[(f'./Applications/BackThread.app/{p.relative_to(app).as_posix()}',0o755,0,0) for p in app.rglob('*') if p.is_dir()]
+    write_debian(path,[('./control', control, 0o644), ('./postinst', postinst, 0o755), ('./prerm', pre_remove, 0o755)],data,epoch,data_directories=directories)
 
 
-def write_debian(path,control_entries,data_entries,epoch=0):
-    members = [('debian-binary', b'2.0\n'), ('control.tar.gz', tar_gzip(control_entries, epoch)), ('data.tar.gz', tar_gzip(data_entries, epoch))]
+def write_debian(path,control_entries,data_entries,epoch=0,data_directories=()):
+    members = [('debian-binary', b'2.0\n'), ('control.tar.gz', tar_gzip(control_entries, epoch)), ('data.tar.gz', tar_gzip(data_entries, epoch,data_directories))]
     with path.open('wb') as output:
         output.write(b'!<arch>\n')
         for name, content in members:

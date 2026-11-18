@@ -1,0 +1,96 @@
+{
+  "compiler": "Zig 0.13.0 / Clang 18.1.6",
+  "linker": "LLD 23.1.5 (https://github.com/rust-lang/llvm-project.git 0a5579eb649d3634a9c30ac873300cc2944fa070)",
+  "tools": {
+    "compiler": {
+      "executable": "zig.exe",
+      "sha256": "2e44af5bbf7a72ef8cbdae370284687c95d65a19affa469d2ad0364d905b8e84"
+    },
+    "linker": {
+      "executable": "rust-lld.exe",
+      "sha256": "ccfc97573c98c1024136c343e6084b1943cd09dc2215573c8633a47a1a3180b6"
+    },
+    "signer": {
+      "executable": "rcodesign.exe",
+      "sha256": "4763d9e8a66a01a5cff91ad77071ec8a7032f2ebd103ba78fccddab397bb5dea"
+    }
+  },
+  "sdk": "12.4",
+  "deploymentTarget": "12.0",
+  "translationUnits": 7,
+  "warningsAsErrors": true,
+  "validationScope": "build only; device results are separate reports",
+  "nativeRuntimeTested": false,
+  "installedOnDevice": false,
+  "speakerVerified": false,
+  "components": [
+    "BackThread.Agent (embedded and standalone)",
+    "BackThread.UI"
+  ],
+  "image": {
+    "architecture": "arm64",
+    "fileType": 2,
+    "flags": 2097285,
+    "linkedLibraries": [
+      "/usr/lib/libSystem.B.dylib",
+      "/usr/lib/libobjc.A.dylib",
+      "/System/Library/Frameworks/UIKit.framework/UIKit",
+      "/System/Library/Frameworks/Foundation.framework/Foundation",
+      "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation",
+      "/System/Library/Frameworks/AVFoundation.framework/AVFoundation",
+      "/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox",
+      "/System/Library/Frameworks/MediaPlayer.framework/MediaPlayer",
+      "/System/Library/Frameworks/Security.framework/Security",
+      "/System/Library/Frameworks/ImageIO.framework/ImageIO",
+      "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics",
+      "/System/Library/Frameworks/QuartzCore.framework/QuartzCore"
+    ],
+    "signed": true,
+    "linkMetadataFormat": "legacy dyld info",
+    "platform": 2,
+    "minimumOS": "12.0.0",
+    "sdkVersion": "12.4.0"
+  },
+  "agentImage": {
+    "architecture": "arm64",
+    "fileType": 2,
+    "flags": 2097285,
+    "linkedLibraries": [
+      "/usr/lib/libSystem.B.dylib",
+      "/usr/lib/libobjc.A.dylib",
+      "/System/Library/Frameworks/Foundation.framework/Foundation",
+      "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation",
+      "/System/Library/Frameworks/AVFoundation.framework/AVFoundation",
+      "/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox",
+      "/System/Library/Frameworks/Security.framework/Security"
+    ],
+    "signed": true,
+    "linkMetadataFormat": "legacy dyld info",
+    "platform": 2,
+    "minimumOS": "12.0.0",
+    "sdkVersion": "12.4.0"
+  },
+  "sdkStubFormat": "original multi-document TBDs",
+  "artifacts": {
+    "BackThread": {
+      "bytes": 199392,
+      "sha256": "513cbbe2c16f67ee511d2b61adc88c548e8989f25f61d1075feb0696aee0d948"
+    },
+    "BackThread.Agent": {
+      "bytes": 132352,
+      "sha256": "464406629f6d7490d91ff3010422d71bb69948c87c35872208ab4b80af18fde7"
+    },
+    "libBackThread.Agent.a": {
+      "bytes": 179792,
+      "sha256": "4baab84ca02acafeb2555d9baecce8e39dd593fb40dc289e5771dd5439ddfa15"
+    },
+    "app.backthread.companion_0.1.2_iphoneos-arm.deb": {
+      "bytes": 68518,
+      "sha256": "13c84b43fd1b3018c6f59466243621c5a02edf64fd20538cca16714f688303d3"
+    },
+    "app.backthread.agent_0.1.2_iphoneos-arm.deb": {
+      "bytes": 45972,
+      "sha256": "031581b48b489641efeb6cd456f9678cce0b5bcf1fb84564cb24b5e40f1ccdbf"
+    }
+  }
+}

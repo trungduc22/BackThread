@@ -12,8 +12,11 @@
     BOOL _primed;
     BOOL _interrupted;
     BOOL _sessionActive;
+    BOOL _requested;
     OSStatus _lastStatus;
     uint64_t _callbacks;
+    uint64_t _inputNonzero,_renderNonzero;
+    int32_t _inputPeak,_renderPeak;
     float _volume;
     NSRecursiveLock *_lifecycle;
 }
@@ -21,6 +24,6 @@
 - (BOOL)start:(NSError **)error;
 - (void)receive:(NSData *)data;
 - (void)stop;
-- (void)setVolume:(float)value;
+- (BOOL)setVolume:(float)value error:(NSError **)error;
 - (NSDictionary *)statistics;
 @end

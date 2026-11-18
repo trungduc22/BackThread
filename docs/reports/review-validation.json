@@ -1,0 +1,26 @@
+{
+  "timestampUtc": "2026-11-18T06:34:51.218779+00:00",
+  "scope": "offline review only; no device access",
+  "managed": {
+    "passed": 20,
+    "total": 20,
+    "execution": "existing Release test executable",
+    "soakRerun": false
+  },
+  "nativeArtifacts": {
+    "passed": 9,
+    "total": 9
+  },
+  "deviceTools": {
+    "passed": 9,
+    "total": 9
+  },
+  "nativeAnalysis": {
+    "translationUnits": 10,
+    "diagnostics": 0,
+    "execution": "direct Clang invocation using recorded SDK and flags",
+    "pythonWrapperPassed": false
+  },
+  "sourceRepairsApplied": false,
+  "review": "REVIEW_2026-11-18.md"
+}

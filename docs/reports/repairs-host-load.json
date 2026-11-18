@@ -1,0 +1,9 @@
+{
+  "elapsedSeconds": 3.0406216,
+  "hostCpuSeconds": 0.046875,
+  "hostWorkingSetBytes": 84193280,
+  "logicalProcessors": 4,
+  "cpuTotal": 100,
+  "availableMemoryMiB": 3585,
+  "pagesPerSecond": 0
+}

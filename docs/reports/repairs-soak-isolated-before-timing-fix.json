@@ -1,0 +1,13 @@
+{
+  "timestampUtc": "2026-11-18T07:01:19.2685351+00:00",
+  "simulated": true,
+  "results": [
+    {
+      "name": "soak.concurrent-audio-worker",
+      "passed": false,
+      "milliseconds": 120346,
+      "error": "System.Exception: Expected 0, got 3840\r\n   at BackThread.Tests.Check.Equal[T](T expected, T actual) in C:\\Users\\Duc\\Documents\\Codex\\2026-11-17\\files-pasted-by-the-user-backthread\\outputs\\BackThread\\tests\\BackThread.Tests\\Support.cs:line 11\r\n   at Program.\u003C\u003Ec__DisplayClass0_0.\u003C\u003C\u003CMain\u003E$\u003Eb__25\u003Ed.MoveNext() in C:\\Users\\Duc\\Documents\\Codex\\2026-11-17\\files-pasted-by-the-user-backthread\\outputs\\BackThread\\tests\\BackThread.Tests\\Program.cs:line 330\r\n--- End of stack trace from previous location ---\r\n   at Program.\u003C\u003Ec__DisplayClass0_0.\u003C\u003C\u003CMain\u003E$\u003Eb__25\u003Ed.MoveNext() in C:\\Users\\Duc\\Documents\\Codex\\2026-11-17\\files-pasted-by-the-user-backthread\\outputs\\BackThread\\tests\\BackThread.Tests\\Program.cs:line 331\r\n--- End of stack trace from previous location ---\r\n   at Program.\u003C\u003Ec__DisplayClass0_0.\u003C\u003C\u003CMain\u003E$\u003Eb__25\u003Ed.MoveNext() in C:\\Users\\Duc\\Documents\\Codex\\2026-11-17\\files-pasted-by-the-user-backthread\\outputs\\BackThread\\tests\\BackThread.Tests\\Program.cs:line 331\r\n--- End of stack trace from previous location ---\r\n   at Program.\u003C\u003Ec__DisplayClass0_0.\u003C\u003C\u003CMain\u003E$\u003Eg__Test|0\u003Ed.MoveNext() in C:\\Users\\Duc\\Documents\\Codex\\2026-11-17\\files-pasted-by-the-user-backthread\\outputs\\BackThread\\tests\\BackThread.Tests\\Program.cs:line 27"
+    }
+  ],
+  "failed": 1
+}

@@ -12,6 +12,7 @@ import ssl
 import struct
 import tempfile
 import time
+from ios_log_support import BackThreadLogs
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('backthread_diagnostic', ROOT / 'scripts/diagnose-hardware.py')
@@ -89,12 +90,11 @@ def inspect(log_seconds=2):
             report['services'][service] = dict(available='Port' in value, error=value.get('Error'))
             if service == 'com.apple.syslog_relay' and 'Port' in value and not value.get('EnableServiceSSL') and log_seconds:
                 tunnel, status = diagnostic.mux(dict(MessageType='Connect', DeviceID=device_id, PortNumber=socket.htons(value['Port'])))
-                total, matches = 0, []
+                total, collector = 0, BackThreadLogs(nul_framed=True)
                 try:
                     if status.get('Number') == 0:
                         tunnel.settimeout(.3)
                         deadline = time.monotonic() + min(10, max(0, log_seconds))
-                        pending = b''
                         while time.monotonic() < deadline and total < 1048576:
                             try:
                                 data = tunnel.recv(8192)
@@ -103,15 +103,11 @@ def inspect(log_seconds=2):
                             if not data:
                                 break
                             total += len(data)
-                            pending += data
-                            lines = pending.split(b'\n')
-                            pending = lines.pop()[-8192:]
-                            for line in lines:
-                                if b'BackThread' in line and len(matches) < 50:
-                                    matches.append(line.decode(errors='replace')[:2048])
+                            collector.feed(data)
                 finally:
                     tunnel.close()
-                report['syslog'] = dict(bytesObserved=total, backThreadLines=matches, unrelatedLogContentStored=False)
+                collector.finish()
+                report['syslog'] = dict(bytesObserved=total, **collector.report())
         report['standardInstallerServiceAvailable'] = report['ActivationState'] == 'Activated' and report['services']['com.apple.mobile.installation_proxy']['available']
         report['deploymentValidated'] = False  # A service being reachable does not establish signing/install authorization.
     except Exception as error:

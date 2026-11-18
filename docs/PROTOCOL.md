@@ -41,7 +41,7 @@ The HMAC input is ASCII `BTH1:<role>:<serverNonce>:<clientNonce>`, where role is
 - `ping {}` → pong. Host sends every three seconds; deadline five seconds. General reads expire after twelve seconds.
 - `audio.start {sampleRate:48000,channels:2,bits:16,packetMs:10}` → `{ready:true}`. Other formats are explicitly rejected. `audio.stop {}` clears playback.
 - Audio frames contain raw PCM, complete four-byte stereo samples; typical payload is 1,920 bytes. Header timestamp starts at zero for each negotiated stream. Gaps can result from intentional bounded queue eviction.
-- `audio.stats {}` reports packet/byte/gap and ring counters. Simulator additionally reports a received PCM SHA-256. Real iOS stats do not claim to hash acoustic output.
+- `audio.stats {}` reports packet/byte/gap and ring counters. Simulator additionally reports a received PCM SHA-256. Native iOS additionally reports callbacks, lastOSStatus, running/primed/interrupted flags, routeTypes and outputVolume. These are runtime counters only when a real process responds; they do not establish acoustic output or human audibility.
 - `audio.volume {value:0..1}` controls the iOS audio queue gain. The visible native MPVolumeView controls supported device volume/routes.
 - `media.state {session:<metadata or null>}` carries source, title, artist, album, state, positionSeconds, durationSeconds, canSeek, canPlay/canPause/canNext/canPrevious and optional artworkBase64.
 - Device `media.command {command,seconds?,source?}` asks the Host to play, pause, toggle, next, previous or seek. Host returns actual API acceptance. Windows applications determine available commands.
@@ -56,7 +56,7 @@ The HMAC input is ASCII `BTH1:<role>:<serverNonce>:<clientNonce>`, where role is
 3. Receiver flushes and sends channel 5 `file.ack {transferId,offset}`. Sender permits one unacknowledged upload chunk, times out after ten seconds, and resumes with begin after reconnect.
 4. `file.commit {transferId}` verifies declared length and complete SHA-256, atomically replaces the basename destination, and returns `{name,size,sha256}`. A mismatch retains partial data and produces an error. Commit may take up to five minutes; it runs outside the network read loop.
 
-`file.list {}` returns up to 256 names/sizes. `file.read {name,offset,count,transferId}` returns a channel 6 chunk with that ID and offset, plus an ordinary success reply containing the length. Download count is 1–32,768. Zero-length data means EOF. Requests cannot read outside application storage.
+`file.list {}` returns up to 256 names/sizes. `file.read {name,offset,count,transferId}` returns a channel 6 chunk with that ID and offset, plus an ordinary success reply containing the length. Download count is 1–32,768. The Host validates the binary prefix offset, received size against the requested count, and the declared reply length against the bytes received; corrupt responses fail the request. At most four Host downloads are active. Native reads use the bounded utility I/O queue and generation-fenced frames/replies; a busy read reports an error. Zero-length data means EOF. Requests cannot read outside application storage.
 
 The stable upload ID is the first 32 lowercase hex characters of SHA-256 over UTF-8 `<storage name>:<whole-file lowercase sha256>`. A fresh completed upload may be sent again; an incomplete one resumes. There is no transactional multi-file snapshot or block-delta algorithm.
 
@@ -69,3 +69,11 @@ State is `{jobId,state,progress,result?,error?}`. States: queued, running, compl
 ## Simulator-only controls
 
 `fault.disconnect {}` deliberately closes a session. `memory.pressure {active}` pauses or resumes optional worker processing. CLI `--delay-ms` delays message processing; `--disconnect-after` closes after a specified audio packet count. These capabilities are absent from native production dispatch. Restart the simulator process with the same state directory to test persistent recovery.
+
+## Audio failure and diagnostic fields (0.1.2 repair)
+
+An unsolicited `audio.error` on Diagnostics includes a bounded error string and lastOSStatus after a running queue fails. It is advisory: framing version and authentication are unchanged. The native receiver stops that queue and discards pending PCM while keeping ping/media/jobs/files on the same session. Explicit successful audio.start re-enables PCM. Malformed framing still closes the session. audio.volume now returns error on invalid values or AudioQueue parameter failure.
+
+audio.stats adds acceptingPCM, queuePresent, queueRunningStatus and queueGainStatus beside queueRunning/gain, route/category/mode and input/render peaks/nonzero sample counts. Getter success is separate from the last queue-operation OSStatus. These fields describe APIs and buffers, not acoustic output. Host /v1/status exposes the last unsolicited receiver failure as audioError; a new authenticated Host session clears it.
+
+Windows frame encoding is unchanged, but header and payload are now written together using one bounded pooled buffer retained until WriteAsync completes. Host reports audioWriteMaximumMilliseconds/audioSlowWrites (>=50ms): wall time awaiting audio writes, which includes local scheduling and is not an isolated USB latency measurement. A byte-exact native-compatible golden header and delayed-write ownership regression cover this path. Physical stutter improvement from this Windows change remains unverified after the user unplugged the phone.
