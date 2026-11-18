@@ -1,0 +1,18 @@
+{
+  "timestampUtc": "2026-11-18T12:35:03.1918657+00:00",
+  "simulated": false,
+  "transport": "usb",
+  "connected": false,
+  "passed": false,
+  "speakerAudibilityVerified": false,
+  "listeningCheck": "not established by this automated runner; record the human result separately",
+  "UIKitRenderingVerified": false,
+  "physicalUnplugTested": false,
+  "checks": [],
+  "measurements": {
+    "audioSource": "off",
+    "requestedQueueGain": 0.08,
+    "physicalUsbDeviceCount": 0
+  },
+  "error": "IOException: Exactly one physical USB device is required"
+}

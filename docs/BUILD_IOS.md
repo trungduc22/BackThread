@@ -42,6 +42,20 @@ The `.deb` architecture label `iphoneos-arm` follows rootful iOS package convent
 
 Repeat the build with the same inputs and `SOURCE_DATE_EPOCH` and compare `artifacts` in the two manifests. Two consecutive builds were byte-identical for all five recorded artifacts. This is a toolchain-specific reproducibility check, not a runtime test.
 
+
+### Selecting a fresh output directory
+
+When building with `build-ios.py --out artifacts/resume-build/ios`, select that same directory for checks and IPA preparation:
+
+```powershell
+$env:BACKTHREAD_IOS_BUILD_DIR='artifacts/resume-build/ios'
+python tests/ios_build_test.py
+Remove-Item Env:BACKTHREAD_IOS_BUILD_DIR
+python scripts/install-ios.py --build-dir artifacts/resume-build/ios
+```
+
+The last command prepares the selected IPA only. `--install` remains the explicit device-install action. Both selectors reject output outside this repository's artifacts subtree. Default paths still work. This prevents accidentally validating or preparing an older default build after compiling into a separate directory.
+
 ## Existing Theos/macOS route (not executed here)
 
 The checked-in Makefiles also target rootful ARM64 / minimum iOS 12.0. An existing compatible Theos setup, supplied SDK and signing configuration are required. No Theos or Xcode installation was available in this session, so this route is unverified.
