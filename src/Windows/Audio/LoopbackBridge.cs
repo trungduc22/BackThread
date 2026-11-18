@@ -14,6 +14,10 @@ public sealed class LoopbackBridge
     public string? LastError { get; private set; }
     public long FramesSent { get; private set; }
     private long lastCapture;
+    private long maximumLatenessMs,lateFrames,pacingResets;
+    public long PacingMaximumLatenessMilliseconds=>Interlocked.Read(ref maximumLatenessMs);
+    public long PacingLateFrames=>Interlocked.Read(ref lateFrames);
+    public long PacingResets=>Interlocked.Read(ref pacingResets);
     /// <summary>WASAPI shared-mode PCM conversion is requested from the Windows audio engine.</summary>
     public async Task RunAsync(Connection connection, bool fixture, CancellationToken ct, Action? pacingStarted = null)
     {
@@ -43,10 +47,18 @@ public sealed class LoopbackBridge
             if (delayMs >= 1.0 && ct.WaitHandle.WaitOne((int)delayMs)) ct.ThrowIfCancellationRequested();
 
             elapsedMs = Stopwatch.GetElapsedTime(epoch).TotalMilliseconds;
+            long lateness = Math.Max(0L, (long)(elapsedMs - nextMs));
+            long old = Interlocked.Read(ref maximumLatenessMs);
+            while (lateness > old) { long observed = Interlocked.CompareExchange(ref maximumLatenessMs, lateness, old); if (observed == old) break; old = observed; }
+            if (lateness >= 10) Interlocked.Increment(ref lateFrames);
+
             // After a severe stall (> 120ms), skip missed timeline slots without clearing fresh capture samples;
             // the circular Ring already bounds capture age by dropping oldest data.
             if (elapsedMs - nextMs > 120.0)
+            {
+                Interlocked.Increment(ref pacingResets);
                 nextMs = elapsedMs;
+            }
 
             int burst = 0;
             do

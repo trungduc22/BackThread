@@ -1,0 +1,50 @@
+{
+  "durationSeconds": 120.7869318,
+  "finalStatsTakenBeforeSourceStop": true,
+  "jobs": 176,
+  "maximumBuffer": 19200,
+  "startMemory": 39235584,
+  "endMemory": 52277248,
+  "cpuSeconds": 80.046875,
+  "senderDropped": 0,
+  "sender": {
+    "queueMaximumMilliseconds": 40.526,
+    "writeMaximumMilliseconds": 2.71,
+    "slowWrites": 0,
+    "pacingMaximumLatenessMilliseconds": 34,
+    "pacingLateFrames": 19,
+    "pacingResets": 0,
+    "captureDroppedBytes": 0,
+    "captureSilenceBytes": 0
+  },
+  "receiver": {
+    "packets": 12076,
+    "bytes": 23185920,
+    "gaps": 0,
+    "bufferedBytes": 17280,
+    "droppedBytes": 0,
+    "silenceBytes": 9600,
+    "playbackTicks": 12072,
+    "maximumArrivalGapMilliseconds": 99.787,
+    "handlerMaximumMilliseconds": 26.303,
+    "sha256": "6fc1579a0d6a1eb901765988fba9f22fbc2fd239038415a3a32a7e73124b07bf"
+  },
+  "lossSamples": [
+    {
+      "elapsedSeconds": 28.11725,
+      "receiver": {
+        "packets": 2810,
+        "bytes": 5395200,
+        "gaps": 0,
+        "bufferedBytes": 19200,
+        "droppedBytes": 0,
+        "silenceBytes": 9600,
+        "playbackTicks": 2805,
+        "maximumArrivalGapMilliseconds": 99.787,
+        "handlerMaximumMilliseconds": 26.303,
+        "sha256": "6568cda527f42ba52cd68e9e8c1e1e816bdb26e46996f27e367c15b3b7262670"
+      },
+      "senderDrops": 0
+    }
+  ]
+}

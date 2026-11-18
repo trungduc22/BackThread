@@ -19,12 +19,14 @@ public sealed class Connection : IAsyncDisposable
     private readonly CancellationTokenSource lifetime = new();
     private readonly Task writer;
     private long dropped;
-    private long audioWriteMaximumUs, audioSlowWrites, audioQueueResidenceMaxUs;
+    private long audioWriteMaximumUs, audioSlowWrites, audioQueueResidenceMaxUs, handlerMaximumUs;
     private long lastReceive = Environment.TickCount64;
     public long DroppedAudio => Interlocked.Read(ref dropped);
     public double AudioWriteMaximumMilliseconds => Interlocked.Read(ref audioWriteMaximumUs) / 1000d;
     public long AudioSlowWrites => Interlocked.Read(ref audioSlowWrites);
     public double AudioQueueResidenceMaximumMilliseconds => Interlocked.Read(ref audioQueueResidenceMaxUs) / 1000d;
+    public double AudioQueueMaximumMilliseconds => AudioQueueResidenceMaximumMilliseconds;
+    public double HandlerMaximumMilliseconds => Interlocked.Read(ref handlerMaximumUs) / 1000d;
     public TimeSpan ReceiveAge => TimeSpan.FromMilliseconds(Environment.TickCount64 - Interlocked.Read(ref lastReceive));
     public Connection(Stream stream)
     {
@@ -101,7 +103,9 @@ public sealed class Connection : IAsyncDisposable
                 Message? message = frame.Channel is LogicalChannel.Audio or LogicalChannel.Files ? null : Message.Decode(frame.Payload);
                 if (message?.ReplyTo is { } id && pending.TryGetValue(id, out var p)) { p.TrySetResult(message); continue; }
                 if (message?.Type == "ping") { await SendAsync(LogicalChannel.Control, Message.Create("pong", replyTo: message.Id), linked.Token); continue; }
+                long started=Stopwatch.GetTimestamp();
                 await handler(frame, message, linked.Token);
+                UpdateMax(ref handlerMaximumUs, Stopwatch.GetElapsedTime(started).Ticks / 10);
             }
         }
         finally

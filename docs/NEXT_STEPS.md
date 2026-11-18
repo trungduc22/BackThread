@@ -1,6 +1,6 @@
 # Next Steps — Physical Windows 10 & iPhone 6 Acceptance Checklist
 
-All software engineering milestones, unit/integration suites (`36/36`), simulator zero-loss soak (`30.15s`), C11 tests, static analysis (`22/22`), ARM64 cross-builds (`BackThread.ipa`), self-contained `win-x64` release bundle, and documentation are complete in the repository. The remaining steps require physical Windows 10 desktop hardware and a Lightning-connected iPhone 6 (iOS 12.5.8).
+All software engineering milestones, unit/integration suites, simulator zero-loss soak, C11 tests, static analysis, ARM64 cross-builds (`BackThread.ipa`), self-contained `win-x64` release bundle, and documentation are updated in the repository. Note that `6b986ce` / `6c2fb35` recorded a continuous 60-second WASAPI listening run on hardware (`Có tiếng, nghe liền mạch`; `17,416` unlocalized capture zero-fill bytes) prior to the full `0.2.0` + post-UI2 feature continuation. The remaining steps require physical Windows 10 desktop hardware and a Lightning-connected iPhone 6 (iOS 12.5.8).
 
 1. **Verify Device Readiness & Upgrade Only BackThread App**:
    - Connect iPhone 6 over Lightning USB and confirm Apple Mobile Device Service sees the paired UDID (`python scripts/diagnose-hardware.py`).

@@ -1,6 +1,8 @@
 # Performance Evidence — 0.2.0
 
-## Phase 9 Zero-Loss Live PCM Simulator Soak (2026-11-18)
+## Phase 9 Zero-Loss Live PCM Simulator Soak & Resumed 60s Physical Baseline (2026-11-18)
+
+Prior `6b986ce` / `6c2fb35` measurements captured a bounded 60-second ordinary WASAPI physical playback run (`Có tiếng, nghe liền mạch`, `6,000` frames, `0` sampled receiver gaps/overflow/silence/sender drops, RSS `12.48–12.57 MiB`, app gain `0.25`, `17,416` unlocalized Windows capture zero-fill bytes, and `9,600` silence bytes on the pre-Phase-9 120s simulator soak [`resume-soak-file-io-metrics.json`](reports/resume-soak-file-io-metrics.json)). See [`resume-physical-wasapi60.json`](reports/resume-physical-wasapi60.json) and [`resume-human-listening.json`](reports/resume-human-listening.json).
 
 Prior `0.1.2` simulator measurements ([`repairs-soak-final-metrics.json`](reports/repairs-soak-final-metrics.json)) failed the strict zero-loss gate during heavy Channel 6 worker load (`118` sender drops, `20` gap events, `5,760` overflow bytes, `243,840` silence bytes over `120.33s` / `98` 4-MiB jobs).
 

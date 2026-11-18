@@ -1,0 +1,78 @@
+{
+  "durationSeconds": 120.3073405,
+  "finalStatsTakenBeforeSourceStop": true,
+  "jobs": 187,
+  "maximumBuffer": 19200,
+  "startMemory": 39006208,
+  "endMemory": 49033216,
+  "cpuSeconds": 79.21875,
+  "senderDropped": 0,
+  "receiver": {
+    "packets": 12028,
+    "bytes": 23093760,
+    "gaps": 0,
+    "bufferedBytes": 17280,
+    "droppedBytes": 23040,
+    "silenceBytes": 32640,
+    "playbackTicks": 12024,
+    "sha256": "f252cfc26569e05a90a7811d0c84128a3d0120c1a942d4f1fcabf55c43f45e14"
+  },
+  "lossSamples": [
+    {
+      "elapsedSeconds": 12.8696141,
+      "receiver": {
+        "packets": 1285,
+        "bytes": 2467200,
+        "gaps": 0,
+        "bufferedBytes": 11520,
+        "droppedBytes": 0,
+        "silenceBytes": 1920,
+        "playbackTicks": 1280,
+        "sha256": "019b2aca7d01affde5e147e861b1f11c06becaaf00d497d1afc4ce4488421042"
+      },
+      "senderDrops": 0
+    },
+    {
+      "elapsedSeconds": 39.0525522,
+      "receiver": {
+        "packets": 3903,
+        "bytes": 7493760,
+        "gaps": 0,
+        "bufferedBytes": 17280,
+        "droppedBytes": 3840,
+        "silenceBytes": 13440,
+        "playbackTicks": 3899,
+        "sha256": "b637ddc9585d18851a8992643b5748fce61f533f94aa7ec116e0af0ddadb6875"
+      },
+      "senderDrops": 0
+    },
+    {
+      "elapsedSeconds": 50.4743233,
+      "receiver": {
+        "packets": 5045,
+        "bytes": 9686400,
+        "gaps": 0,
+        "bufferedBytes": 17280,
+        "droppedBytes": 21120,
+        "silenceBytes": 30720,
+        "playbackTicks": 5041,
+        "sha256": "2d92b4595bed85f48ecb50ed48fafb11b798f15b53ab6bbf7a266955b0434a29"
+      },
+      "senderDrops": 0
+    },
+    {
+      "elapsedSeconds": 59.7759395,
+      "receiver": {
+        "packets": 5975,
+        "bytes": 11472000,
+        "gaps": 0,
+        "bufferedBytes": 17280,
+        "droppedBytes": 23040,
+        "silenceBytes": 32640,
+        "playbackTicks": 5971,
+        "sha256": "7cdd139ae06ca092c4a1ddb17189ad78905892986a545aef5a94935520aabad2"
+      },
+      "senderDrops": 0
+    }
+  ]
+}

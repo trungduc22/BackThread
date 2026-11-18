@@ -1,0 +1,11 @@
+{
+  "recordedDate": "2026-11-18",
+  "timezone": "Asia/Saigon",
+  "automatedEvidence": "resume-physical-wasapi60.json",
+  "userReply": "Có tiếng, nghe liền mạch",
+  "question": "Bài đo âm thanh đang chạy: bạn giữ nhạc/video trên PC. Lúc này iPhone có phát tiếng không, và có còn giật không?",
+  "scope": "User confirmation during a 60-second ordinary Windows WASAPI stream; no acoustic latency or long-duration certification",
+  "phoneSystemVolumeChangedByBackThread": false,
+  "physicalWindowsCode": "307e167 plus the transport/audio/Host diagnostics now committed in 6c2fb355423afab5919c90fc0fd2dcde5fb2545d",
+  "nativeCodeChanged": false
+}

@@ -2,6 +2,7 @@
 import hashlib
 import io
 import json
+import os
 import pathlib
 import plistlib
 import shutil
@@ -15,7 +16,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from ios_build_support import macho, verify_adhoc, write_debian
 
-BUILD = ROOT / 'artifacts/ios-build'
+BUILD = (ROOT / os.environ.get('BACKTHREAD_IOS_BUILD_DIR', 'artifacts/ios-build')).resolve()
+if not BUILD.is_relative_to(ROOT / 'artifacts') or BUILD == ROOT / 'artifacts':
+    raise ValueError('Select a build directory under this repository artifacts directory')
 APP = BUILD / 'stage/BackThread.app'
 
 

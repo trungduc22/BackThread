@@ -1,8 +1,17 @@
 # BACKTHREAD — BÀN GIAO CHO ANTIGRAVITY
 
+## Cập nhật sau bàn giao — 2026-11-18 buổi tối
+
+Codex đã fetch lại GitHub: chưa có commit Antigravity mới, chỉ có master307e167. Tiếp tục đầy đủ lịch sử đó tại `6c2fb35`. Build sạch, 28/28 functional. File I/O simulator đã tách khỏi reader bằng hàng đợi serial hai slot; có telemetry source/queue/write/receiver. Soak120s mới: FAIL; xem `reports/resume-validation.json`, không dùng kết quả cũ thay cho kết quả này.
+
+**Máy thật:** WASAPI60s, 32 checks pass, sampled receiver loss0; người dùng nghe và xác nhận “Có tiếng, nghe liền mạch”. RSS10 samples khoảng12.48–12.57MiB. Capture Windows vẫn có17,416 zero-fill bytes chưa khoanh vùng; chưa đạt nghiệm thu30phút hoặc mọi điều kiện tải. Không cài lại native app vì native source không đổi. Không đụng system. Xem mục mới đầu FEATURE_STATUS/HARDWARE_TEST_RESULTS/NEXT_STEPS trước khi đọc ngữ cảnh cũ bên dưới.
+
+
 Ngày 2026-11-18, Asia/Saigon. Người dùng sắp hết quota và yêu cầu lưu ngữ cảnh để tiếp tục bằng Antigravity.
 
 **Mở repository hiện có, không khởi tạo lại dự án.** File này là ngữ cảnh bàn giao, không chứa SDK, runtime, credentials hay toàn bộ source. Nếu Antigravity ở cùng máy, mở repo dưới đây. Nếu chuyển máy, cần thêm source snapshot được chỉ ra.
+
+Bản portable mới: `artifacts/resume-build/Windows/`. Host mới đang chạy qua `artifacts/ios-private/resume-ready-host.json`, WASAPI thường, app gain0.25; không đổi volume hệ thống. Gói người dùng: `../BackThread-Resume-6c2fb35/`, có Windows/iOS/Source ZIP và SHA256. Đọc RELEASE.json để biết commit chính xác.
 
 ## 1. Yêu cầu mới của người dùng
 
@@ -36,7 +45,7 @@ Workdir mọi command:
 
 `C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread`
 
-Checkpoint mã nguồn mới nhất: **79750c242dd3fb34323e41a7d7f4509e78cf9515**. HEAD sau đó có thể thêm commit tài liệu bàn giao GitHub.
+Checkpoint implementation mới nhất: **6c2fb355423afab5919c90fc0fd2dcde5fb2545d**. Các mục bên dưới mô tả thêm lịch sử trước lần build buổi tối; ưu tiên cập nhật đầu file.
 
 - `9e69033`: real iPhone integration/audio evidence, native recovery, sửa phép đo, báo cáo.
 - `363c821`: chuẩn hóa cuối file log; bộ ZIP checkpoint đã tạo ở commit này.
@@ -252,4 +261,4 @@ Các yêu cầu dịch vụ thay đổi; recheck khi triển khai. App/SDK compi
 
 ---
 
-**Bắt đầu:** repo local mục3; HEAD79750c2; 26 functional pass; loa thật và Windows audio đã nghe được nhưng còn giật; dedicated writer vừa publish chưa nghiệm thu; yêu cầu mới là independent providers + PCM fallback trên iOS12. Không đụng system.
+**Bắt đầu:** repo local mục3, implementation6c2fb35; 28 functional pass; WASAPI60s đã được nghe liền mạch, sampled receiver loss0; simulator soak120s vẫn FAIL với9,600 silence bytes. Chưa có nghiệm thu30phút. Yêu cầu independent providers + PCM fallback còn dang dở trên iOS12. Không đụng system.

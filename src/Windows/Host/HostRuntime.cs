@@ -85,10 +85,17 @@ public sealed class HostRuntime : IDisposable
                     device = audio?.DeviceName,
                     captureError = audio?.LastError,
                     audioFrames = audio?.FramesSent ?? 0,
+                    captureBufferedBytes = audio?.Ring.Count ?? 0,
+                    captureDroppedBytes = audio?.Ring.DroppedBytes ?? 0,
+                    captureSilenceBytes = audio?.Ring.SilenceBytes ?? 0,
                     audioDroppedFrames = connection?.DroppedAudio ?? 0,
                     audioWriteMaximumMilliseconds = connection?.AudioWriteMaximumMilliseconds ?? 0,
                     audioSlowWrites = connection?.AudioSlowWrites ?? 0,
+                    audioQueueMaximumMilliseconds = connection?.AudioQueueMaximumMilliseconds ?? 0,
                     audioQueueResidenceMaximumMilliseconds = connection?.AudioQueueResidenceMaximumMilliseconds ?? 0,
+                    audioPacingMaximumLatenessMilliseconds = audio?.PacingMaximumLatenessMilliseconds ?? 0,
+                    audioPacingLateFrames = audio?.PacingLateFrames ?? 0,
+                    audioPacingResets = audio?.PacingResets ?? 0,
                     deviceHasInternet = config.DeviceHasInternet,
                     mediaOwner = m.Owner.ToString(),
                     playbackMode = m.Mode.ToString(),
@@ -105,7 +112,6 @@ public sealed class HostRuntime : IDisposable
         lock (stateGate) { state = value; lastError = error; }
         Log?.Invoke(value + (error.Length == 0 ? "" : ": " + error));
     }
-
     public RemoteWorker Worker => worker ?? throw new IOException("Agent is not connected");
 
     private void SignalAudioPolicyChange()

@@ -21,6 +21,9 @@ public sealed class AgentServer : IAsyncDisposable
     public JobScheduler Jobs { get; }
     public int Port => ((IPEndPoint)listener.LocalEndpoint).Port;
     public int DelayMs { get; set; }
+    public int FileIoDelayMs { get; set; }
+    private int fileOperationsInFlight;
+    public int FileOperationsInFlight=>Volatile.Read(ref fileOperationsInFlight);
     public int DisconnectAfterAudioPackets { get; set; }
     public int AuthenticatedConnections { get; private set; }
     public bool SimulateHandoffShouldFail { get; set; }
@@ -66,27 +69,53 @@ public sealed class AgentServer : IAsyncDisposable
                 using var session = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
                 var ring = new PcmRing(); using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
                 bool audioOn = false; long packets = 0, bytes = 0, gaps = 0; uint previous = 0; long framesRead = 0, playbackEpoch = 0;
+                long lastArrival=0,maximumArrivalGapUs=0;
                 var pendingTasks = new List<Task>();
-                var fileAppendQueue = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(8) { FullMode = BoundedChannelFullMode.Wait, SingleReader = true, SingleWriter = true });
-                var fileWorker = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await foreach (var chunk in fileAppendQueue.Reader.ReadAllAsync(session.Token))
-                        {
-                            var ack = await storage.AppendAsync(chunk, session.Token);
-                            await c.SendAsync(LogicalChannel.Jobs, Message.Create("file.ack", new { transferId = ack.Id, offset = ack.Offset }), session.Token);
-                        }
-                    }
-                    catch (OperationCanceledException) when (session.IsCancellationRequested) { }
-                    catch (Exception) when (!session.IsCancellationRequested) { session.Cancel(); }
-                }, CancellationToken.None);
-
                 // Simulated Mode B buffered stream state
                 string? bufStreamId = null; long bufGen = 0, bufTotal = 0, bufReceived = 0;
                 using var bufHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
                 var bufCompletion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
+                using var fileSlots=new SemaphoreSlim(2,2);
+                var fileWork=Channel.CreateBounded<(Func<Task> Run,Message? Request,LogicalChannel Channel)>(2);
+                void QueueFileOperation(Func<Task> operation,Message? request=null,LogicalChannel channel=LogicalChannel.Files)
+                {
+                    // Match the native serial, two-slot file queue. Disk latency must not
+                    // hold the PCM/control reader; the acknowledgement provides backpressure.
+                    if(!fileSlots.Wait(0))throw new IOException("File I/O queue is busy");
+                    if(!fileWork.Writer.TryWrite((operation,request,channel)))
+                    {
+                        fileSlots.Release();throw new IOException("File I/O queue is closed");
+                    }
+                }
+                var fileIo=Task.Run(async()=>
+                {
+                    try
+                    {
+                        await foreach(var operation in fileWork.Reader.ReadAllAsync(session.Token))
+                        {
+                            int delay=FileIoDelayMs;
+                            Interlocked.Increment(ref fileOperationsInFlight);
+                            try
+                            {
+                                if(delay>0)await Task.Delay(delay,session.Token);
+                                await operation.Run();
+                            }
+                            catch(Exception ex)when(!session.IsCancellationRequested)
+                            {
+                                if(operation.Request is not null)
+                                    await c.SendAsync(operation.Channel,Message.Create("error",new{error=ex.Message},replyTo:operation.Request.Id),session.Token);
+                                else {Log?.Invoke("File I/O failed: "+ex.Message);session.Cancel();}
+                            }
+                            finally
+                            {
+                                Interlocked.Decrement(ref fileOperationsInFlight);fileSlots.Release();
+                            }
+                        }
+                    }
+                    catch(Exception)when(session.IsCancellationRequested) { }
+                    catch(Exception ex){Log?.Invoke("File worker failed: "+ex.Message);session.Cancel();}
+                });
                 void JobChanged(JobState s)
                 {
                     lock (pendingTasks) { pendingTasks.RemoveAll(t => t.IsCompleted); if (pendingTasks.Count < 16) pendingTasks.Add(SafeSendAsync("job.progress", s)); }
@@ -119,6 +148,9 @@ public sealed class AgentServer : IAsyncDisposable
                         if (frame.Channel == LogicalChannel.Audio)
                         {
                             if (!audioOn || frame.Payload.Length % 4 != 0) throw new InvalidDataException("Invalid PCM stream");
+                            long arrived=Stopwatch.GetTimestamp();
+                            if(lastArrival!=0)maximumArrivalGapUs=Math.Max(maximumArrivalGapUs,Stopwatch.GetElapsedTime(lastArrival,arrived).Ticks/10);
+                            lastArrival=arrived;
                             if (previous != 0 && frame.Sequence != previous + 1) gaps++;
                             previous = frame.Sequence; hash.AppendData(frame.Payload); ring.Write(frame.Payload);
                             Interlocked.CompareExchange(ref playbackEpoch, Stopwatch.GetTimestamp(), 0);
@@ -145,7 +177,11 @@ public sealed class AgentServer : IAsyncDisposable
                                     return;
                                 }
                             }
-                            await fileAppendQueue.Writer.WriteAsync(frame.Payload, ct);
+                            QueueFileOperation(async()=>
+                            {
+                                var ack=await storage.AppendAsync(frame.Payload,session.Token);
+                                await c.SendAsync(LogicalChannel.Jobs,Message.Create("file.ack",new{transferId=ack.Id,offset=ack.Offset}),session.Token);
+                            });
                             return;
                         }
                         if (message is null) return;
@@ -160,13 +196,13 @@ public sealed class AgentServer : IAsyncDisposable
                                     break;
                                 case "audio.start":
                                     if (b.GetProperty("sampleRate").GetInt32() != 48000 || b.GetProperty("channels").GetInt32() != 2 || b.GetProperty("bits").GetInt32() != 16) throw new InvalidDataException("Only 48 kHz stereo PCM16 supported");
-                                    Volatile.Write(ref audioOn, false); ring.Clear(); hash.GetHashAndReset(); packets = bytes = gaps = 0; previous = 0; Interlocked.Exchange(ref playbackEpoch, 0); Volatile.Write(ref audioOn, true); await Reply(new { ready = true }); break;
+                                    Volatile.Write(ref audioOn, false); ring.Clear(); hash.GetHashAndReset(); packets = bytes = gaps = 0; lastArrival=maximumArrivalGapUs=0; previous = 0; Interlocked.Exchange(ref playbackEpoch, 0); Volatile.Write(ref audioOn, true); await Reply(new { ready = true }); break;
                                 case "audio.stop": audioOn = false; ring.Clear(); await Reply(new { stopped = true }); break;
-                                case "audio.stats": await Reply(new { packets, bytes, gaps, bufferedBytes = ring.Count, droppedBytes = ring.DroppedBytes, silenceBytes = ring.SilenceBytes, playbackTicks = framesRead, sha256 = Convert.ToHexString(hash.GetCurrentHash()).ToLowerInvariant() }); break;
+                                case "audio.stats": await Reply(new { packets, bytes, gaps, bufferedBytes = ring.Count, droppedBytes = ring.DroppedBytes, silenceBytes = ring.SilenceBytes, playbackTicks = framesRead, maximumArrivalGapMilliseconds=maximumArrivalGapUs/1000d,handlerMaximumMilliseconds=c.HandlerMaximumMilliseconds, sha256 = Convert.ToHexString(hash.GetCurrentHash()).ToLowerInvariant() }); break;
                                 case "job.submit": await Reply(Jobs.Submit(b.Deserialize<JobSpec>(Message.Json) ?? throw new InvalidDataException())); break;
                                 case "job.query": await Reply(Jobs.Query(b.GetProperty("jobId").GetString()!) ?? throw new FileNotFoundException("Unknown job")); break;
                                 case "job.cancel": await Reply(new { cancelled = Jobs.Cancel(b.GetProperty("jobId").GetString()!) }); break;
-                                case "file.begin": await Reply(new { offset = await storage.BeginAsync(b.Deserialize<TransferSpec>(Message.Json) ?? throw new InvalidDataException(), ct) }); break;
+                                case "file.begin": QueueFileOperation(async()=>await Reply(new{offset=await storage.BeginAsync(b.Deserialize<TransferSpec>(Message.Json)??throw new InvalidDataException(),session.Token)}),message,frame.Channel);break;
                                 case "file.commit":
                                     lock (pendingTasks)
                                     {
@@ -185,12 +221,13 @@ public sealed class AgentServer : IAsyncDisposable
                                     if (id.Length != 32 || !id.All(Uri.IsHexDigit)) throw new InvalidDataException("Invalid download ID");
                                     long offset = b.GetProperty("offset").GetInt64(); int count = b.GetProperty("count").GetInt32();
                                     if (offset < 0 || count is < 1 or > 32768) throw new InvalidDataException("Invalid read range");
-                                    await using (var file = File.OpenRead(storage.Resolve(name)))
+                                    QueueFileOperation(async()=>
                                     {
+                                        await using var file=File.OpenRead(storage.Resolve(name));
                                         if (offset > file.Length) throw new InvalidDataException("Read beyond file");
-                                        file.Position = offset; byte[] data = new byte[Math.Min(count, file.Length - offset)]; await file.ReadExactlyAsync(data, ct);
-                                        await c.SendFrameAsync(LogicalChannel.Files, Storage.Chunk(id, offset, data), 0, ct); await Reply(new { length = data.Length });
-                                    }
+                                        file.Position = offset; byte[] data = new byte[Math.Min(count, file.Length - offset)]; await file.ReadExactlyAsync(data, session.Token);
+                                        await c.SendFrameAsync(LogicalChannel.Files, Storage.Chunk(id, offset, data), 0, session.Token); await Reply(new { length = data.Length });
+                                    },message,frame.Channel);
                                     break;
                                 case "event.publish":
                                     var accepted = events.Accept(b.Deserialize<CompanionEvent>(Message.Json) ?? throw new InvalidDataException()); await Reply(new { accepted = accepted != null }); break;
@@ -339,10 +376,9 @@ public sealed class AgentServer : IAsyncDisposable
                 }
                 finally
                 {
-                    Jobs.Changed -= JobChanged; fileAppendQueue.Writer.TryComplete(); session.Cancel(); await playback;
-                    try { await fileWorker; } catch (OperationCanceledException) { }
+                    Jobs.Changed -= JobChanged; fileWork.Writer.TryComplete(); session.Cancel(); await playback; await fileIo;
                     Task[] remaining; lock (pendingTasks) remaining = pendingTasks.ToArray();
-                    try { await Task.WhenAll(remaining); } catch (OperationCanceledException) { }
+                    try { await Task.WhenAll(remaining); } catch (Exception) when (session.IsCancellationRequested) { }
                 }
             }
             catch (Exception ex) when (!stop.IsCancellationRequested) { Log?.Invoke(ex.GetType().Name + ": " + ex.Message); }

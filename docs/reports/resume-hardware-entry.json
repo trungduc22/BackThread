@@ -1,0 +1,24 @@
+{
+  "usbServiceAvailable": true,
+  "devices": [
+    {
+      "deviceId": 38,
+      "connection": "USB",
+      "trustSessionValidated": false,
+      "hardwareApplicationTests": "not run",
+      "localPairRecordPresent": true,
+      "62078": {
+        "usbmuxResult": 0
+      },
+      "ProductType": "iPhone7,2",
+      "ProductVersion": "12.5.8",
+      "DeviceClass": "iPhone",
+      "22": {
+        "usbmuxResult": 3
+      },
+      "23451": {
+        "usbmuxResult": 3
+      }
+    }
+  ]
+}

@@ -1,6 +1,8 @@
 # BackThread Progress — 0.2.0 Continuation
 
-## Prior Verified Hardware Checkpoint (`0.1.2` / `307e167`, 2026-11-18)
+## Prior Verified Hardware Checkpoints (`0.1.2` `307e167` & `6b986ce`, 2026-11-18)
+
+- **Resumed 60s Physical WASAPI Run (`6b986ce` / `6c2fb35`)**: `32/32` functional checks, `6,000` PCM frames heard continuously (`Có tiếng, nghe liền mạch`) with `0` sampled native receiver gaps/overflow/silence/sender drops, RSS `12.48–12.57 MiB`, app gain `0.25`, `17,416` unlocalized capture zero-fill bytes ([`resume-physical-wasapi60.json`](reports/resume-physical-wasapi60.json)).
 
 - Physical iPhone 6 (`ARM64`, iOS 12.5.8) over Apple `usbmux`: authenticated USB, embedded Agent execution, 1 MiB uploads/SHA/range jobs, first audible speaker fixture (`Có nghe tiếng`), and stuttered normal WASAPI media (`repairs-physical-wasapi90.json`, 472 sender drops, 132 gaps, 1,416,960 overflow B, 2,423,040 silence B) were captured prior to user USB unplug.
 
