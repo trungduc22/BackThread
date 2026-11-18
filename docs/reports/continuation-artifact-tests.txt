@@ -12,4 +12,3 @@ test_rejects_newer_required_dyld_load_commands (__main__.NativeArtifactTests.tes
 Ran 9 tests in 0.115s
 
 OK
-

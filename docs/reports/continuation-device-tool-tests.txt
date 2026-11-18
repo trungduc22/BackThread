@@ -12,4 +12,3 @@ test_unrelated_apps_are_rejected_before_a_device_call (__main__.DeviceToolsTests
 Ran 9 tests in 0.002s
 
 OK
-

@@ -38,4 +38,3 @@ METRIC {"durationSeconds":120.3501122,"jobs":223,"maximumBuffer":9600,"startMemo
 PASS soak.concurrent-audio-worker
 21/21 passed; report: C:\Users\Duc\Documents\Codex\2026-11-17\files-pasted-by-the-user-backthread\outputs\BackThread\artifacts\continuation\full-regression.json
 PASS native protocol and PCM ring
-
