@@ -51,3 +51,9 @@ internal sealed class DelayedWriteStream(Task gate) : MemoryStream
         Entered.TrySetResult();await gate.WaitAsync(ct);await base.WriteAsync(data,ct);
     }
 }
+internal sealed class PausedSynchronizationContext : SynchronizationContext
+{
+    private readonly System.Collections.Concurrent.ConcurrentQueue<(SendOrPostCallback Callback,object? State)> posted=new();
+    public override void Post(SendOrPostCallback callback,object? state)=>posted.Enqueue((callback,state));
+    public void Release(){while(posted.TryDequeue(out var item))ThreadPool.QueueUserWorkItem(_=>item.Callback(item.State));}
+}

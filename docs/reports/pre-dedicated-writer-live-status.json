@@ -1,0 +1,13 @@
+{
+  "state": "connected",
+  "lastError": "",
+  "audioError": "",
+  "transport": "usb",
+  "simulated": false,
+  "device": "Speakers / Headphones (Realtek High Definition Audio)",
+  "captureError": null,
+  "audioFrames": 11269,
+  "audioDroppedFrames": 741,
+  "audioWriteMaximumMilliseconds": 33.727,
+  "audioSlowWrites": 0
+}

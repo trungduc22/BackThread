@@ -1,0 +1,137 @@
+{
+  "timestampUtc": "2026-11-18T08:00:29.5856244+00:00",
+  "simulated": true,
+  "results": [
+    {
+      "name": "wire.fragmentation-and-json",
+      "passed": true,
+      "milliseconds": 770
+    },
+    {
+      "name": "wire.async-write-retains-packet-until-completion",
+      "passed": true,
+      "milliseconds": 99
+    },
+    {
+      "name": "wire.network-writer-continues-with-paused-caller",
+      "passed": true,
+      "milliseconds": 157
+    },
+    {
+      "name": "config.audio-gain-keeps-system-volume-separate",
+      "passed": true,
+      "milliseconds": 891
+    },
+    {
+      "name": "wire.reject-size-version-channel-truncation",
+      "passed": true,
+      "milliseconds": 18
+    },
+    {
+      "name": "pcm.clipping-nan-and-bounded-ring",
+      "passed": true,
+      "milliseconds": 297
+    },
+    {
+      "name": "storage.path-traversal-and-reserved-names",
+      "passed": true,
+      "milliseconds": 463
+    },
+    {
+      "name": "validation.null-json-fields",
+      "passed": true,
+      "milliseconds": 208
+    },
+    {
+      "name": "storage.reserves-quota-before-reception",
+      "passed": true,
+      "milliseconds": 100
+    },
+    {
+      "name": "events.privacy-expiry-dedup-flood-bound",
+      "passed": true,
+      "milliseconds": 44
+    },
+    {
+      "name": "handoff.requires-connectivity-and-direct-resource",
+      "passed": true,
+      "milliseconds": 275
+    },
+    {
+      "name": "auth.wrong-key-rejected-and-recovery",
+      "passed": true,
+      "milliseconds": 545
+    },
+    {
+      "name": "auth.replay-rejected",
+      "passed": true,
+      "milliseconds": 172
+    },
+    {
+      "name": "wire.malformed-socket-and-reconnect",
+      "passed": true,
+      "milliseconds": 147
+    },
+    {
+      "name": "transport.audio-backpressure-is-bounded",
+      "passed": true,
+      "milliseconds": 12
+    },
+    {
+      "name": "integration.heartbeat-audio-order-and-content",
+      "passed": true,
+      "milliseconds": 2325
+    },
+    {
+      "name": "integration.transfer-hash-text-download-and-failed-job",
+      "passed": true,
+      "milliseconds": 614
+    },
+    {
+      "name": "worker.rejects-corrupt-artifact-ranges-and-recovers",
+      "passed": true,
+      "milliseconds": 67
+    },
+    {
+      "name": "storage.resume-duplicate-incomplete-and-checksum",
+      "passed": true,
+      "milliseconds": 151
+    },
+    {
+      "name": "worker.cancel-low-memory-duplicate-and-restart",
+      "passed": true,
+      "milliseconds": 133
+    },
+    {
+      "name": "integration.socket-reset-reconnect-and-format-error",
+      "passed": true,
+      "milliseconds": 39
+    },
+    {
+      "name": "integration.notification-routing",
+      "passed": true,
+      "milliseconds": 54
+    },
+    {
+      "name": "acceptance.audio-window-excludes-slow-shutdown-tail",
+      "passed": true,
+      "milliseconds": 1034
+    },
+    {
+      "name": "acceptance.audio-window-rejects-source-failure",
+      "passed": true,
+      "milliseconds": 811
+    },
+    {
+      "name": "host.receiver-audio-error-preserves-session",
+      "passed": true,
+      "milliseconds": 7611
+    },
+    {
+      "name": "host.local-api-authentication-and-auto-reconnect",
+      "passed": true,
+      "milliseconds": 1057
+    }
+  ],
+  "failed": 0
+}

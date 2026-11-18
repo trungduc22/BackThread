@@ -63,14 +63,23 @@ public static class Wire
     }
     public static async ValueTask WriteAsync(Stream stream, Frame frame, CancellationToken ct)
     {
+        byte[] packet=Packet(frame,out int length);
+        try {await stream.WriteAsync(packet.AsMemory(0,length),ct);}
+        finally {ArrayPool<byte>.Shared.Return(packet,clearArray:true);}
+    }
+    public static void Write(Stream stream,Frame frame)
+    {
+        byte[] packet=Packet(frame,out int length);
+        try {stream.Write(packet,0,length);}
+        finally {ArrayPool<byte>.Shared.Return(packet,clearArray:true);}
+    }
+    private static byte[] Packet(Frame frame,out int length)
+    {
         if(frame.Payload.Length>Limit(frame.Channel))throw new InvalidDataException("Frame too large");
-        int length=HeaderSize+frame.Payload.Length;
+        length=HeaderSize+frame.Payload.Length;
         byte[] packet=ArrayPool<byte>.Shared.Rent(length);
-        try {
-            WriteHeader(packet.AsSpan(0,HeaderSize),frame);
-            frame.Payload.CopyTo(packet,HeaderSize);
-            // One socket write avoids yielding between a tiny header and its PCM payload.
-            await stream.WriteAsync(packet.AsMemory(0,length),ct);
-        } finally {ArrayPool<byte>.Shared.Return(packet,clearArray:true);}
+        WriteHeader(packet.AsSpan(0,HeaderSize),frame);
+        frame.Payload.CopyTo(packet,HeaderSize);
+        return packet;
     }
 }

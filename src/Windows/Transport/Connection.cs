@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
 using System.Diagnostics;
+using System.Net.Sockets;
 
 namespace BackThread.Transport;
 
@@ -27,7 +28,14 @@ public sealed class Connection : IAsyncDisposable
     {
         this.stream = stream;
         audio = Channel.CreateBounded<Frame>(new BoundedChannelOptions(6) { FullMode = BoundedChannelFullMode.DropOldest }, _ => Interlocked.Increment(ref dropped));
-        writer = WriteLoopAsync();
+        if(stream is NetworkStream network)
+        {
+            network.WriteTimeout=3000;
+            // Native socket writes have a bounded OS timeout. A dedicated writer avoids
+            // resuming every 10ms PCM packet on a busy UI/thread-pool scheduler.
+            writer=Task.Factory.StartNew(WriteNetworkLoop,CancellationToken.None,TaskCreationOptions.LongRunning,TaskScheduler.Default);
+        }
+        else writer = WriteLoopAsync();
     }
     public async ValueTask SendAsync(LogicalChannel channel, Message message, CancellationToken ct)
         => await SendFrameAsync(channel, message.Encode(), 0, ct);
@@ -90,7 +98,7 @@ public sealed class Connection : IAsyncDisposable
                     using var timeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); timeout.CancelAfter(TimeSpan.FromSeconds(3));
                     long started=Stopwatch.GetTimestamp();
                     await Wire.WriteAsync(stream, f, timeout.Token);
-                    if(f.Channel==LogicalChannel.Audio){long elapsed=Stopwatch.GetElapsedTime(started).Ticks/10;long old=Interlocked.Read(ref audioWriteMaximumUs);while(elapsed>old){long observed=Interlocked.CompareExchange(ref audioWriteMaximumUs,elapsed,old);if(observed==old)break;old=observed;}if(elapsed>=50000)Interlocked.Increment(ref audioSlowWrites);}
+                    RecordWrite(f,started);
                 }
             }
         }
@@ -100,6 +108,28 @@ public sealed class Connection : IAsyncDisposable
             lifetime.Cancel(); stream.Dispose();
             foreach (var p in pending.Values) p.TrySetException(ex);
         }
+    }
+    private void RecordWrite(Frame frame,long started)
+    {
+        if(frame.Channel!=LogicalChannel.Audio)return;
+        long elapsed=Stopwatch.GetElapsedTime(started).Ticks/10,old=Interlocked.Read(ref audioWriteMaximumUs);
+        while(elapsed>old){long observed=Interlocked.CompareExchange(ref audioWriteMaximumUs,elapsed,old);if(observed==old)break;old=observed;}
+        if(elapsed>=50000)Interlocked.Increment(ref audioSlowWrites);
+    }
+    private void WriteNetworkLoop()
+    {
+        Thread.CurrentThread.Name="BackThread socket writer";
+        Thread.CurrentThread.Priority=ThreadPriority.AboveNormal;
+        try {
+            while(true){
+                ready.Wait(lifetime.Token);
+                while(control.Reader.TryRead(out var frame)||audio.Reader.TryRead(out frame)||bulk.Reader.TryRead(out frame)){
+                    lifetime.Token.ThrowIfCancellationRequested();
+                    long started=Stopwatch.GetTimestamp();Wire.Write(stream,frame);RecordWrite(frame,started);
+                }
+            }
+        }catch(Exception)when(lifetime.IsCancellationRequested){}
+        catch(Exception ex){lifetime.Cancel();stream.Dispose();foreach(var pendingRequest in pending.Values)pendingRequest.TrySetException(ex);}
     }
     public async ValueTask DisposeAsync()
     {

@@ -47,6 +47,28 @@ await Test("wire.async-write-retains-packet-until-completion", async () =>
     Check.True(one.Payload.SequenceEqual(a.Payload));Check.True(two.Payload.SequenceEqual(b.Payload));
     Check.Equal(a.Sequence,one.Sequence);Check.Equal(b.TimestampUs,two.TimestampUs);
 });
+await Test("wire.network-writer-continues-with-paused-caller", async()=>
+{
+    var completed=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var thread=new Thread(()=>{
+        var context=new PausedSynchronizationContext();Connection? connection=null;
+        var listener=new TcpListener(IPAddress.Loopback,0);listener.Start();
+        try{
+            using var client=new TcpClient{NoDelay=true};client.Connect(IPAddress.Loopback,((IPEndPoint)listener.LocalEndpoint).Port);
+            using var peer=listener.AcceptTcpClient();peer.ReceiveTimeout=1000;
+            SynchronizationContext.SetSynchronizationContext(context);
+            connection=new Connection(client.GetStream());
+            connection.SendFrameAsync(LogicalChannel.Audio,new byte[1920],0,ct).GetAwaiter().GetResult();
+            byte[] received=new byte[24+1920];peer.GetStream().ReadExactly(received);
+            Check.Equal((byte)'B',received[4]);Check.Equal(1920u,BinaryPrimitives.ReadUInt32LittleEndian(received));
+            completed.TrySetResult();
+        }catch(Exception ex){completed.TrySetException(ex);}
+        finally{
+            SynchronizationContext.SetSynchronizationContext(null);context.Release();
+            if(connection!=null)connection.DisposeAsync().AsTask().GetAwaiter().GetResult();listener.Stop();
+        }
+    }){IsBackground=true};thread.Start();await completed.Task.WaitAsync(ct);thread.Join();
+});
 await Test("config.audio-gain-keeps-system-volume-separate", async()=>
 {
     string path=Path.Combine(root,"gain.json");await File.WriteAllTextAsync(path,"{}",ct);Check.Equal(1f,HostConfig.Load(path).AudioGain);
