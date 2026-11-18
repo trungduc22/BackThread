@@ -23,6 +23,7 @@ internal sealed class Session : IAsyncDisposable
     private readonly Task reader;
     public Connection Connection { get; }
     public RemoteWorker Worker { get; }
+    public Func<Frame, Message?, CancellationToken, ValueTask>? OnMessage { get; set; }
     public static async Task<Session> Open(int port, byte[] key, CancellationToken ct)
     {
         var tcp = new TcpClient { NoDelay = true }; await tcp.ConnectAsync(IPAddress.Loopback, port, ct);
@@ -31,7 +32,11 @@ internal sealed class Session : IAsyncDisposable
     private Session(TcpClient tcp)
     {
         this.tcp = tcp; Connection = new(tcp.GetStream()); Worker = new(Connection);
-        reader = Connection.RunAsync((f, m, _) => { Worker.Receive(f, m); return ValueTask.CompletedTask; }, stop.Token);
+        reader = Connection.RunAsync(async (f, m, token) =>
+        {
+            Worker.Receive(f, m);
+            if (OnMessage != null) await OnMessage(f, m, token);
+        }, stop.Token);
     }
     public async ValueTask DisposeAsync()
     {

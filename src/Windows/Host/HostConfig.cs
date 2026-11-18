@@ -17,13 +17,28 @@ public sealed record HostConfig
     public bool DeviceHasInternet { get; init; }
     public bool HideSensitive { get; init; } = true;
     public bool CollectWindowsNotifications { get; init; }
+    public bool AllowExperimentalYouTubeEmbed { get; init; }
+    public string DefaultQualityCap { get; init; } = "auto";
+    public bool KeepScreenAwakeDuringVideo { get; init; } = true;
+    public bool PauseWindowsOnConfirmedHandoff { get; init; } = true;
+    public bool PauseMediaOnCriticalNotification { get; init; }
+    public string? SpotifyClientId { get; init; }
+    public string SpotifyRedirectUri { get; init; } = "http://127.0.0.1:23452/v1/spotify/callback";
+    public string? SpotifyTokenPath { get; init; }
+    public string[] HighNotificationSources { get; init; } = [];
+    public string[] CriticalNotificationSources { get; init; } = [];
     public string[] BlockedSources { get; init; } = [];
     public AuthorizedAction[] Actions { get; init; } = [new("media.toggle", "Play / Pause", "media.toggle")];
+
     public static HostConfig Load(string path)
     {
         var c = JsonSerializer.Deserialize<HostConfig>(File.ReadAllText(path), Message.Json) ?? throw new InvalidDataException("Invalid configuration");
-        if (c.Transport is not ("usb" or "localhost") || c.DevicePort is < 1024 or > 65535 || c.ApiPort is < 1024 or > 65535 || c.ApiPort == c.DevicePort || c.Actions.Length > 32) throw new InvalidDataException("Invalid endpoint or actions");
-        if(!float.IsFinite(c.AudioGain)||c.AudioGain<0||c.AudioGain>1)throw new InvalidDataException("audioGain must be between 0 and 1");
+        if (c.Transport is not ("usb" or "localhost") || c.DevicePort is < 1024 or > 65535 || c.ApiPort is < 1024 or > 65535 || c.ApiPort == c.DevicePort || c.Actions.Length > 32)
+            throw new InvalidDataException("Invalid endpoint or actions");
+        if (!float.IsFinite(c.AudioGain) || c.AudioGain < 0 || c.AudioGain > 1)
+            throw new InvalidDataException("audioGain must be between 0 and 1");
+        if (c.DefaultQualityCap is not ("auto" or "720p" or "480p" or "audio-only"))
+            throw new InvalidDataException("defaultQualityCap must be auto, 720p, 480p, or audio-only");
         return c;
     }
 }

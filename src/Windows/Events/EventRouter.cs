@@ -1,6 +1,19 @@
 namespace BackThread.Events;
 
-public sealed record CompanionEvent(string Id, string Source, string Title, string Body, int Priority, DateTimeOffset ExpiresUtc, bool Sensitive = false);
+public sealed record CompanionEvent(
+    string Id,
+    string Source,
+    string Title,
+    string Body,
+    int Priority,
+    DateTimeOffset ExpiresUtc,
+    bool Sensitive = false,
+    string? AppName = null,
+    string? Category = null,
+    string? IconBase64 = null,
+    DateTimeOffset? CreatedUtc = null,
+    bool? FullscreenEligible = null);
+
 public sealed class EventRouter
 {
     private readonly Queue<CompanionEvent> history = new();
@@ -10,10 +23,22 @@ public sealed class EventRouter
     private int inWindow;
     public bool HideSensitive { get; set; } = true;
     public HashSet<string> BlockedSources { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public CompanionEvent? Accept(CompanionEvent e, DateTimeOffset? now = null)
     {
         var time = now ?? DateTimeOffset.UtcNow;
-        if (e.Id is not { Length: > 0 and <= 64 } || e.Source is not { Length: > 0 and <= 128 } || e.Title is null || e.Title.Length > 256 || e.Body is null || e.Body.Length > 2048 || e.Priority is < 0 or > 3 || e.ExpiresUtc <= time || e.ExpiresUtc > time.AddDays(1)) return null;
+        if (e.Id is not { Length: > 0 and <= 64 }
+            || e.Source is not { Length: > 0 and <= 128 }
+            || e.Title is null || e.Title.Length > 256
+            || e.Body is null || e.Body.Length > 2048
+            || e.Priority is < 0 or > 3
+            || e.ExpiresUtc <= time
+            || e.ExpiresUtc > time.AddDays(1)
+            || e.AppName?.Length > 128
+            || e.Category?.Length > 64
+            || e.IconBase64?.Length > 24000)
+            return null;
+
         lock (gate)
         {
             if (BlockedSources.Contains(e.Source)) return null;
@@ -23,10 +48,29 @@ public sealed class EventRouter
             if (++inWindow > 10) return null;
             if (seen.Count >= 256) seen.Remove(seen.Keys.First());
             seen[e.Id] = e.ExpiresUtc;
-            if (HideSensitive && e.Sensitive) e = e with { Title = "Private notification", Body = "Open the source application on Windows" };
-            history.Enqueue(e); while (history.Count > 64) history.Dequeue();
+            e = e with
+            {
+                CreatedUtc = e.CreatedUtc ?? time,
+                FullscreenEligible = e.FullscreenEligible ?? (e.Priority >= 3)
+            };
+            if (HideSensitive && e.Sensitive)
+            {
+                e = e with
+                {
+                    Title = "Private notification",
+                    Body = "Open the source application on Windows",
+                    Category = null,
+                    IconBase64 = null
+                };
+            }
+            history.Enqueue(e);
+            while (history.Count > 64) history.Dequeue();
             return e;
         }
     }
-    public CompanionEvent[] History() { lock (gate) return history.Where(e => e.ExpiresUtc > DateTimeOffset.UtcNow).ToArray(); }
+
+    public CompanionEvent[] History()
+    {
+        lock (gate) return history.Where(e => e.ExpiresUtc > DateTimeOffset.UtcNow).ToArray();
+    }
 }

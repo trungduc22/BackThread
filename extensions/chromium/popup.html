@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>BackThread External PiP</title>
+  <style>
+    :root { color-scheme: dark; --bg: #0f1217; --card: #171c24; --accent: #58d1c2; --text: #eef2f6; --muted: #8b95a5; --warn: #f0b35e; }
+    body { margin: 0; padding: 14px; width: 340px; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, Segoe UI, sans-serif; font-size: 13px; }
+    h1 { margin: 0 0 10px; font-size: 15px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+    .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(88, 209, 194, 0.15); color: var(--accent); }
+    .card { background: var(--card); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+    .url { word-break: break-all; font-size: 12px; color: var(--muted); max-height: 44px; overflow: hidden; }
+    .title { font-weight: 600; margin-bottom: 4px; }
+    .reason { font-size: 12px; margin-top: 6px; color: var(--warn); }
+    .row { display: flex; gap: 8px; margin-top: 8px; }
+    button { flex: 1; padding: 8px 10px; border: 0; border-radius: 8px; background: #262e3a; color: var(--text); font-weight: 600; cursor: pointer; }
+    button.primary { background: var(--accent); color: #071917; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    select { width: 100%; margin-top: 8px; padding: 7px; border-radius: 8px; border: 1px solid #2b3544; background: #10141a; color: var(--text); }
+    .status { font-size: 12px; color: var(--muted); white-space: pre-wrap; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <h1><span>BackThread PiP</span><span id="hostBadge" class="badge">Checking…</span></h1>
+  <div class="card">
+    <div id="tabTitle" class="title">Active tab</div>
+    <div id="tabUrl" class="url">Inspecting…</div>
+    <div id="capReason" class="reason"></div>
+  </div>
+  <div class="card">
+    <label for="mode">Playback Mode</label>
+    <select id="mode">
+      <option value="Auto">Auto (Prefer Independent iPhone PiP)</option>
+      <option value="DirectInternet">Mode A · Direct Internet Video/Audio</option>
+      <option value="RemoteControl">Mode D · Windows Control + Live PCM</option>
+      <option value="LivePcm">Mode C · Live Windows PCM Only</option>
+    </select>
+    <div class="row">
+      <button id="sendBtn" class="primary">Send to iPhone</button>
+      <button id="returnBtn">Return to PC</button>
+    </div>
+    <div id="status" class="status"></div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

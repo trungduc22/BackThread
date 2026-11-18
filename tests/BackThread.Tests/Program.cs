@@ -262,6 +262,8 @@ await Test("integration.notification-routing", async () =>
     var events = (await s.Connection.RequestAsync(LogicalChannel.Notifications, "event.history", new { }, ct)).Body.GetProperty("events"); Check.Equal("Private notification", events[0].GetProperty("title").GetString());
 });
 
+await HybridMediaTests.RunAllAsync(Test, root, key, ct);
+
 await Test("acceptance.audio-window-excludes-slow-shutdown-tail", async () =>
 {
     int reads=0;bool sourceActive=false;Task? lateReply=null;var watch=Stopwatch.StartNew();

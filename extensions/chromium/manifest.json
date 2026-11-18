@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "BackThread — External PiP",
+  "version": "0.2.0",
+  "description": "Send supported active browser media URLs to BackThread External PiP on your USB-connected iPhone via authenticated Native Messaging.",
+  "permissions": [
+    "activeTab",
+    "nativeMessaging"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Send to BackThread iPhone"
+  }
+}

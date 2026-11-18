@@ -8,26 +8,28 @@ namespace BackThread.Transport;
 /// <summary>One reader and one writer. Bulk is backpressured; audio discards old frames to bound latency.</summary>
 public sealed class Connection : IAsyncDisposable
 {
+    private readonly record struct QueuedFrame(Frame Frame, long EnqueuedTimestamp);
     private readonly Stream stream;
-    private readonly Channel<Frame> control = Channel.CreateBounded<Frame>(new BoundedChannelOptions(32) { FullMode = BoundedChannelFullMode.Wait });
-    private readonly Channel<Frame> audio;
-    private readonly Channel<Frame> bulk = Channel.CreateBounded<Frame>(new BoundedChannelOptions(2) { FullMode = BoundedChannelFullMode.Wait });
+    private readonly Channel<QueuedFrame> control = Channel.CreateBounded<QueuedFrame>(new BoundedChannelOptions(32) { FullMode = BoundedChannelFullMode.Wait });
+    private readonly Channel<QueuedFrame> audio;
+    private readonly Channel<QueuedFrame> bulk = Channel.CreateBounded<QueuedFrame>(new BoundedChannelOptions(2) { FullMode = BoundedChannelFullMode.Wait });
     private readonly SemaphoreSlim ready = new(0);
     private readonly ConcurrentDictionary<string, TaskCompletionSource<Message>> pending = new();
     private readonly uint[] sequences = new uint[8];
     private readonly CancellationTokenSource lifetime = new();
     private readonly Task writer;
     private long dropped;
-    private long audioWriteMaximumUs,audioSlowWrites;
+    private long audioWriteMaximumUs, audioSlowWrites, audioQueueResidenceMaxUs;
     private long lastReceive = Environment.TickCount64;
     public long DroppedAudio => Interlocked.Read(ref dropped);
-    public double AudioWriteMaximumMilliseconds=>Interlocked.Read(ref audioWriteMaximumUs)/1000d;
-    public long AudioSlowWrites=>Interlocked.Read(ref audioSlowWrites);
+    public double AudioWriteMaximumMilliseconds => Interlocked.Read(ref audioWriteMaximumUs) / 1000d;
+    public long AudioSlowWrites => Interlocked.Read(ref audioSlowWrites);
+    public double AudioQueueResidenceMaximumMilliseconds => Interlocked.Read(ref audioQueueResidenceMaxUs) / 1000d;
     public TimeSpan ReceiveAge => TimeSpan.FromMilliseconds(Environment.TickCount64 - Interlocked.Read(ref lastReceive));
     public Connection(Stream stream)
     {
         this.stream = stream;
-        audio = Channel.CreateBounded<Frame>(new BoundedChannelOptions(6) { FullMode = BoundedChannelFullMode.DropOldest }, _ => Interlocked.Increment(ref dropped));
+        audio = Channel.CreateBounded<QueuedFrame>(new BoundedChannelOptions(6) { FullMode = BoundedChannelFullMode.DropOldest }, _ => Interlocked.Increment(ref dropped));
         if(stream is NetworkStream network)
         {
             network.WriteTimeout=3000;
@@ -45,10 +47,10 @@ public sealed class Connection : IAsyncDisposable
         lifetime.Token.ThrowIfCancellationRequested();
         uint seq;
         lock (sequences) seq = ++sequences[(int)channel];
-        var f = new Frame(channel, seq, timestampUs, payload);
+        var qf = new QueuedFrame(new Frame(channel, seq, timestampUs, payload), Stopwatch.GetTimestamp());
         var queue = channel == LogicalChannel.Audio ? audio : channel == LogicalChannel.Files ? bulk : control;
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, lifetime.Token);
-        await queue.Writer.WriteAsync(f, linked.Token);
+        await queue.Writer.WriteAsync(qf, linked.Token);
         // A coalescing wake-up avoids an unbounded semaphore count when audio is dropped.
         if (ready.CurrentCount == 0) { try { ready.Release(); } catch (SemaphoreFullException) { } }
     }
@@ -93,12 +95,12 @@ public sealed class Connection : IAsyncDisposable
             while (true)
             {
                 await ready.WaitAsync(lifetime.Token);
-                while (control.Reader.TryRead(out var f) || audio.Reader.TryRead(out f) || bulk.Reader.TryRead(out f))
+                while (control.Reader.TryRead(out var qf) || audio.Reader.TryRead(out qf) || bulk.Reader.TryRead(out qf))
                 {
                     using var timeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); timeout.CancelAfter(TimeSpan.FromSeconds(3));
-                    long started=Stopwatch.GetTimestamp();
-                    await Wire.WriteAsync(stream, f, timeout.Token);
-                    RecordWrite(f,started);
+                    long started = Stopwatch.GetTimestamp();
+                    await Wire.WriteAsync(stream, qf.Frame, timeout.Token);
+                    RecordWrite(qf, started);
                 }
             }
         }
@@ -109,12 +111,24 @@ public sealed class Connection : IAsyncDisposable
             foreach (var p in pending.Values) p.TrySetException(ex);
         }
     }
-    private void RecordWrite(Frame frame,long started)
+    private static void UpdateMax(ref long location, long candidate)
     {
-        if(frame.Channel!=LogicalChannel.Audio)return;
-        long elapsed=Stopwatch.GetElapsedTime(started).Ticks/10,old=Interlocked.Read(ref audioWriteMaximumUs);
-        while(elapsed>old){long observed=Interlocked.CompareExchange(ref audioWriteMaximumUs,elapsed,old);if(observed==old)break;old=observed;}
-        if(elapsed>=50000)Interlocked.Increment(ref audioSlowWrites);
+        long old = Interlocked.Read(ref location);
+        while (candidate > old)
+        {
+            long observed = Interlocked.CompareExchange(ref location, candidate, old);
+            if (observed == old) break;
+            old = observed;
+        }
+    }
+    private void RecordWrite(QueuedFrame qf, long started)
+    {
+        if (qf.Frame.Channel != LogicalChannel.Audio) return;
+        long residenceUs = Math.Max(0, (started - qf.EnqueuedTimestamp) * 1_000_000L / Stopwatch.Frequency);
+        UpdateMax(ref audioQueueResidenceMaxUs, residenceUs);
+        long elapsed = Stopwatch.GetElapsedTime(started).Ticks / 10;
+        UpdateMax(ref audioWriteMaximumUs, elapsed);
+        if (elapsed >= 50000) Interlocked.Increment(ref audioSlowWrites);
     }
     private void WriteNetworkLoop()
     {
@@ -123,9 +137,9 @@ public sealed class Connection : IAsyncDisposable
         try {
             while(true){
                 ready.Wait(lifetime.Token);
-                while(control.Reader.TryRead(out var frame)||audio.Reader.TryRead(out frame)||bulk.Reader.TryRead(out frame)){
+                while(control.Reader.TryRead(out var qf)||audio.Reader.TryRead(out qf)||bulk.Reader.TryRead(out qf)){
                     lifetime.Token.ThrowIfCancellationRequested();
-                    long started=Stopwatch.GetTimestamp();Wire.Write(stream,frame);RecordWrite(frame,started);
+                    long started=Stopwatch.GetTimestamp();Wire.Write(stream,qf.Frame);RecordWrite(qf,started);
                 }
             }
         }catch(Exception)when(lifetime.IsCancellationRequested){}
