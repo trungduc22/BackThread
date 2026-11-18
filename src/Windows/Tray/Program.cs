@@ -11,6 +11,12 @@ internal static class Program
         ApplicationConfiguration.Initialize();
         if(args.Length==2&&args[0]=="--apps-ui"){Application.Run(new AppsForm(new AppCatalog(args[1])));return;}
         string config = args.Length == 1 ? Path.GetFullPath(args[0]) : Path.Combine(AppContext.BaseDirectory, "config", "local.json");
+        if(args.Length==0&&NotificationAccess.HasPackageIdentity())
+        {
+            string remembered=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"BackThread","connection-path.txt");
+            if(File.Exists(remembered)&&File.Exists(File.ReadAllText(remembered)))config=File.ReadAllText(remembered);
+            if(!File.Exists(config)){using var choose=new OpenFileDialog{Title="Chọn cấu hình kết nối BackThread đang dùng",Filter="BackThread connection (*.json)|*.json",CheckFileExists=true};if(choose.ShowDialog()!=DialogResult.OK)return;config=choose.FileName;Directory.CreateDirectory(Path.GetDirectoryName(remembered)!);File.WriteAllText(remembered,config);}
+        }
         try { Application.Run(new TrayContext(config)); }
         catch (Exception ex) { MessageBox.Show(ex.Message, "BackThread", MessageBoxButtons.OK, MessageBoxIcon.Error); }
     }
@@ -33,7 +39,7 @@ internal sealed class TrayContext : ApplicationContext
         var menu = new ContextMenuStrip();
         menu.Items.Add("Pinned Windows apps…",null,(_,_)=>new AppsForm(runtime.Apps).ShowDialog());
         menu.Items.Add("Temporary Wi-Fi…",null,(_,_)=>new WifiForm(runtime).ShowDialog());
-        menu.Items.Add("Enable Windows notifications for this run…",null,async(_,_)=>{try{var permission=await NotificationAccess.RequestFromUiAsync();if(permission.Status=="Allowed")runtime.EnableNotificationCollection();MessageBox.Show(permission.Status+Environment.NewLine+permission.Reason,"BackThread notification access");}catch(Exception ex){MessageBox.Show(ex.Message,"BackThread notification access");}});
+        menu.Items.Add("Windows notifications…",null,(_,_)=>{try{using var setup=new NotificationSetupForm(runtime);setup.ShowDialog();}catch(Exception ex){MessageBox.Show(ex.Message,"BackThread notification access");}});
         menu.Items.Add("Connection and diagnostics", null, (_, _) => { string text; lock (logs) text = string.Join(Environment.NewLine, logs); MessageBox.Show(JsonSerializer.Serialize(runtime.Status) + Environment.NewLine + text, "BackThread diagnostics"); });
         menu.Items.Add("Open configuration", null, (_, _) => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("notepad.exe") { ArgumentList = { config }, UseShellExecute = false }));
         menu.Items.Add("Exit", null, async (_, _) => { stop.Cancel(); try { await hostTask; } catch (Exception) { } ExitThread(); });

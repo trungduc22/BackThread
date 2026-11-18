@@ -1,22 +1,24 @@
 #import "BTClockView.h"
 #import "BTTheme.h"
+#import <AVFoundation/AVFoundation.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <sys/socket.h>
+@interface BTBatteryBadge : UIView
+@property(nonatomic) float level;
+@property(nonatomic) BOOL charging;
+@end
+@implementation BTBatteryBadge
+- (void)drawRect:(CGRect)rect{(void)rect;CGRect body=CGRectMake(1,2,36,18);UIBezierPath *outline=[UIBezierPath bezierPathWithRoundedRect:body cornerRadius:6];[[UIColor colorWithWhite:1 alpha:.2] setFill];[outline fill];[BTForeground() setStroke];outline.lineWidth=.7;[outline stroke];[[BTForeground() colorWithAlphaComponent:.65] setFill];[[UIBezierPath bezierPathWithRoundedRect:CGRectMake(38,8,2,6) cornerRadius:1] fill];if(self.level>=0){CGContextRef c=UIGraphicsGetCurrentContext();CGContextSaveGState(c);[outline addClip];UIColor *color=self.charging?BTAccent():NSProcessInfo.processInfo.lowPowerModeEnabled?[UIColor colorWithRed:1 green:.79 blue:.25 alpha:1]:self.level<=.2?[UIColor colorWithRed:1 green:.3 blue:.3 alpha:1]:BTForeground();[color setFill];UIRectFill(CGRectMake(1,2,36*MAX(0,MIN(1,self.level)),18));CGContextRestoreGState(c);}NSString *value=self.level<0?@"—":[NSString stringWithFormat:@"%.0f",self.level*100];UIColor *ink=self.level>=.5?[UIColor colorWithWhite:.08 alpha:1]:BTForeground();NSDictionary *attrs=@{NSFontAttributeName:[UIFont monospacedDigitSystemFontOfSize:12 weight:UIFontWeightBold],NSForegroundColorAttributeName:ink};CGSize size=[value sizeWithAttributes:attrs];[value drawAtPoint:CGPointMake(19-size.width/2,11-size.height/2) withAttributes:attrs];}
+@end
 @implementation BTClockView {
-    UILabel *_time,*_battery;NSDateFormatter *_format;NSTimer *_timer;BOOL _wasMonitoring;
+    UILabel *_time,*_network,*_route;BTBatteryBadge *_badge;NSDateFormatter *_format;NSTimer *_timer;BOOL _wasMonitoring;NSUInteger _ticks;
 }
-- (instancetype)initWithFrame:(CGRect)frame {
-    if((self=[super initWithFrame:frame])){
-        self.userInteractionEnabled=NO;_format=[NSDateFormatter new];_format.dateFormat=@"HH:mm:ss";
-        _time=BTLabel(18,UIFontWeightMedium);_time.font=[UIFont monospacedDigitSystemFontOfSize:18 weight:UIFontWeightMedium];_time.textAlignment=NSTextAlignmentRight;_time.numberOfLines=1;[self addSubview:_time];
-        _battery=BTLabel(10,UIFontWeightRegular);_battery.textColor=BTMuted();_battery.textAlignment=NSTextAlignmentRight;_battery.numberOfLines=1;[self addSubview:_battery];
-        _wasMonitoring=UIDevice.currentDevice.batteryMonitoringEnabled;UIDevice.currentDevice.batteryMonitoringEnabled=YES;
-        [self refresh];
-    }return self;
-}
-- (void)layoutSubviews{[super layoutSubviews];_time.frame=CGRectMake(0,0,self.bounds.size.width,25);_battery.frame=CGRectMake(0,26,self.bounds.size.width,14);}
-- (void)didMoveToWindow{[super didMoveToWindow];[_timer invalidate];_timer=nil;if(self.window){[self refresh];__weak typeof(self) weak=self;_timer=[NSTimer scheduledTimerWithTimeInterval:1 repeats:YES block:^(NSTimer *timer){(void)timer;[weak refresh];}];}}
-- (void)refresh{
-    _format.timeZone=NSTimeZone.localTimeZone;_time.text=[_format stringFromDate:NSDate.date];float level=UIDevice.currentDevice.batteryLevel;UIDeviceBatteryState state=UIDevice.currentDevice.batteryState;
-    _battery.text=level<0?@"iPhone battery unavailable":[NSString stringWithFormat:@"iPhone %.0f%%%@",level*100,state==UIDeviceBatteryStateCharging?@" · Charging":state==UIDeviceBatteryStateFull?@" · Full":@""];
-}
-- (void)dealloc{[_timer invalidate];UIDevice.currentDevice.batteryMonitoringEnabled=_wasMonitoring;}
+- (instancetype)initWithFrame:(CGRect)frame{if((self=[super initWithFrame:frame])){self.userInteractionEnabled=NO;_format=[NSDateFormatter new];_format.dateFormat=@"HH:mm:ss";_time=BTLabel(18,UIFontWeightMedium);_time.font=[UIFont monospacedDigitSystemFontOfSize:18 weight:UIFontWeightMedium];_time.numberOfLines=1;[self addSubview:_time];_badge=[BTBatteryBadge new];_badge.backgroundColor=UIColor.clearColor;_badge.isAccessibilityElement=YES;[self addSubview:_badge];_network=BTLabel(9,UIFontWeightMedium);_network.textColor=BTMuted();_network.numberOfLines=1;[self addSubview:_network];_route=BTLabel(10,UIFontWeightMedium);_route.textColor=BTMuted();_route.textAlignment=NSTextAlignmentRight;_route.numberOfLines=1;[self addSubview:_route];_wasMonitoring=UIDevice.currentDevice.batteryMonitoringEnabled;UIDevice.currentDevice.batteryMonitoringEnabled=YES;[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(routeChanged:) name:AVAudioSessionRouteChangeNotification object:nil];[self refresh];[self refreshRoutes];}return self;}
+- (void)layoutSubviews{[super layoutSubviews];CGFloat w=self.bounds.size.width;_time.frame=CGRectMake(0,0,w-44,25);_badge.frame=CGRectMake(w-42,1,42,22);_network.frame=CGRectMake(0,27,45,14);_route.frame=CGRectMake(47,27,w-47,14);}
+- (void)didMoveToWindow{[super didMoveToWindow];[_timer invalidate];_timer=nil;if(self.window){[self refresh];[self refreshRoutes];__weak typeof(self) weak=self;_timer=[NSTimer scheduledTimerWithTimeInterval:1 repeats:YES block:^(NSTimer *timer){(void)timer;[weak refresh];}];}}
+- (void)refresh{_format.timeZone=NSTimeZone.localTimeZone;_time.text=[_format stringFromDate:NSDate.date];_badge.level=UIDevice.currentDevice.batteryLevel;UIDeviceBatteryState state=UIDevice.currentDevice.batteryState;_badge.charging=state==UIDeviceBatteryStateCharging||state==UIDeviceBatteryStateFull;_badge.accessibilityLabel=_badge.level<0?@"iPhone battery unavailable":[NSString stringWithFormat:@"iPhone battery %.0f percent%@",_badge.level*100,_badge.charging?@", charging":@""];[_badge setNeedsDisplay];if(++_ticks%5==0)[self refreshRoutes];}
+- (void)routeChanged:(NSNotification *)notice{(void)notice;__weak typeof(self) weak=self;dispatch_async(dispatch_get_main_queue(),^{[weak refreshRoutes];});}
+- (void)refreshRoutes{BOOL wifi=NO;struct ifaddrs *addresses=NULL;if(getifaddrs(&addresses)==0){for(struct ifaddrs *a=addresses;a;a=a->ifa_next){if(a->ifa_addr&&strcmp(a->ifa_name,"en0")==0&&(a->ifa_flags&IFF_UP)&&(a->ifa_addr->sa_family==AF_INET||a->ifa_addr->sa_family==AF_INET6))wifi=YES;}freeifaddrs(addresses);}_network.text=wifi?@"Wi-Fi":@"Wi-Fi —";_network.accessibilityLabel=wifi?@"Wi-Fi interface has an IP address; internet reachability not tested":@"Wi-Fi address unavailable";NSString *route=@"BT —";for(AVAudioSessionPortDescription *port in AVAudioSession.sharedInstance.currentRoute.outputs){if([@[AVAudioSessionPortBluetoothA2DP,AVAudioSessionPortBluetoothHFP,AVAudioSessionPortBluetoothLE,AVAudioSessionPortHeadphones] containsObject:port.portType]){route=port.portName.length?port.portName:@"Headphones";break;}}_route.text=route;_route.accessibilityLabel=[route isEqual:@"BT —"]?@"No Bluetooth audio route reported; Bluetooth radio state is unknown":route;}
+- (void)dealloc{[[NSNotificationCenter defaultCenter] removeObserver:self];[_timer invalidate];UIDevice.currentDevice.batteryMonitoringEnabled=_wasMonitoring;}
 @end

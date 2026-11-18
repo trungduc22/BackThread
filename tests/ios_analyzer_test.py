@@ -1,6 +1,7 @@
 """Test analyzer report admission, never substitute these fixtures for Clang results."""
 import importlib.util
 import json
+import os
 import pathlib
 import plistlib
 import sys
@@ -39,6 +40,21 @@ class AnalyzerReportTests(unittest.TestCase):
     def test_missing_report_is_not_clean(self):
         report=self.run_case(lambda *a,**k:types.SimpleNamespace(returncode=0))
         self.assertTrue(report['complete']);self.assertFalse(report['passed'])
+
+    @unittest.skipUnless(os.name=='nt','Windows sharing violations only')
+    def test_transient_report_lock_is_retried(self):
+        original=pathlib.Path.replace
+        blocked=False
+        def replace(path,target):
+            nonlocal blocked
+            if path.name=='results.json.tmp' and not blocked:
+                blocked=True
+                error=PermissionError('injected sharing violation');error.winerror=32
+                raise error
+            return original(path,target)
+        with patch.object(pathlib.Path,'replace',replace):
+            report=self.run_case(self.clean)
+        self.assertTrue(blocked and report['complete'] and report['passed'])
 
     def test_crash_replaces_old_clean_report_with_incomplete(self):
         calls=0

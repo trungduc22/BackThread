@@ -1,0 +1,19 @@
+Analyzing one.c
+Analyzing two.c
+2 translation units analyzed; clean=True
+Analyzing one.c
+Analyzing two.c
+Analyzing one.c
+Analyzing two.c
+2 translation units analyzed; clean=False
+Analyzing one.c
+Analyzing two.c
+2 translation units analyzed; clean=False
+Analyzing one.c
+Analyzing two.c
+.......................
+2 translation units analyzed; clean=True
+----------------------------------------------------------------------
+Ran 23 tests in 0.460s
+
+OK

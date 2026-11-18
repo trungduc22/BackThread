@@ -18,5 +18,9 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Native interaction tests did not compile' }
   & ./artifacts/native-ui-tests.exe
   if ($LASTEXITCODE -ne 0) { throw 'Native interaction tests failed' }
+  & $Gcc -std=c11 -Wall -Wextra -Werror tests/native/palette_test.c -o artifacts/native-palette-tests.exe
+  if ($LASTEXITCODE -ne 0) { throw 'Palette tests did not compile' }
+  & ./artifacts/native-palette-tests.exe
+  if ($LASTEXITCODE -ne 0) { throw 'Palette tests failed' }
  } else { Write-Warning 'GCC unavailable; native core tests were not run.' }
 } finally { Remove-Item Env:BACKTHREAD_SOAK_SECONDS -ErrorAction SilentlyContinue; Pop-Location }

@@ -1,5 +1,19 @@
 # Next steps — 0.1.2
 
+## Build8 — status, artwork and real Windows notifications, 2026-11-19
+
+Native: custom rounded battery badge with percentage inside and charging/low-power/low-battery colors; clock retained; Wi-Fi interface/address status and current headphone/Bluetooth audio route name. No private APIs, SSID entitlement workaround or Bluetooth scanning. BT dash means no reported Bluetooth audio route, not radio off; Wi-Fi address presence is not proof of Internet access.
+
+Artwork now uses a bounded32×32 RGBA sample and512-bin color histogram. Main and distinct secondary actual colors form a gradient. On track/source/artist change it stays brighter2s then fades3s to darker values of those same hues. Solid artwork correctly keeps one hue; missing/transparent artwork has a neutral fallback. Reduce Motion disables the fade. No per-second artwork processing or live blur. Palette edge cases pass native C tests.
+
+The in-app banner is now neutral translucent charcoal, rounded, with source/title/body and swipe/close dismissal. It remains nonmodal for every priority. Build8 ARM64/iOS12 links14 production units, analyzer17units clean;23Python (including9artifact and transient-lock regression),33managed,27shared interaction cases and palette tests pass. Windows report saves now retry only bounded transient sharing/permission errors; permanent failures still propagate.
+
+Windows fix: real self-contained MSIX declares package identity/userNotificationListener, with a foreground setup/test form. Manifest namespaces from the upstream packaging template were repaired and actual MakeAppx validation/signature verification passed. First CurrentUser trust attempt failed0x800B0109 and was rolled back. User explicitly authorized LocalMachine TrustedPeople; exact certificate315BABA9786C508E87D63D5F7547D5F0712268D7 was added there, package0.2.0.8 installed, and packaged Host activated with the existing private config. No TrustedRoot, DeveloperMode, execution-policy or WindowsApps ACL change. Development private signing PFX was deleted. Public certificate expires2026-12-18; production/stable update signing remains separate work.
+
+Final runtime is packaged Tray (PID in artifacts/ui2-build8/packaged-tray.pid), USB connected, existing key/config, streamAudio=false, collection opt-in=true, Windows permission Allowed. Old portable Host was stopped by exact PID/path. A genuine owned Windows toast was collected, and its exact win-ID was visible in the foreground iPhone banner; captured own native view SHA verified. Content stayed masked per existing privacy settings. This is real OS-to-phone delivery, not direct API event injection. Only owned test-event metadata was recorded.
+
+The phone was still running its currently installed client during this delivery proof; build8 clock/battery/palette/banner styling has NOT been installed or visually accepted on hardware. User handles IPA installation because Installation Proxy is unavailable. Prior strict audio-soak failure, physical Wi-Fi limitation and pending three-way output routing remain unchanged.
+
 ## UI2 preservation build 7 — 2026-11-19
 
 Fetched origin/master at9c5fdac, including774bf8d and the alternate hybrid-media/Phase9 history. It diverges from136d1ae and is not a fast-forward: it uses a different UIKit architecture and does not contain the Apps/drawer/temporary-TLS implementation from the verified local UI2 checkpoint. Remote history is retained; it has not been reset or merged wholesale. This build continues136d1ae to preserve the user's preferred layout. New upstream media/telemetry/audio-routing features have NOT been integrated into this build.

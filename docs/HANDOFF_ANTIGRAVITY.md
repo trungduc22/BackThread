@@ -1,3 +1,7 @@
+# Latest continuation: build8
+
+Read docs/BUILD8_NOTES.md first. Windows package0.2.0.8 is installed with user-approved machine TrustedPeople signing trust; notification collection is enabled, OS permission Allowed, genuine toast-to-phone banner verified on the current phone client. Build8 IPA adds battery/route styling and dual artwork colors; its new visuals are not physically accepted yet. Prior pending/blocked notification assessments below are historical.
+
 # Current continuation: 2026-11-19
 
 User resumed Codex to preserve the original UI. Read docs/CONTINUATION_2026-11-19.md before the historical handoff below. Build7 adds clock/iPhone battery/inline phone volume/top-only banners on the local UI2 foundation. Remote9c5fdac has a divergent architecture and remains unmerged; no upstream work was deleted. Build7 has no fresh device acceptance.

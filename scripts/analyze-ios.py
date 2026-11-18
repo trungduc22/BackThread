@@ -7,6 +7,7 @@ import plistlib
 import subprocess
 import datetime
 import uuid
+import time
 from ios_build_support import write_audit_header
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -26,7 +27,15 @@ def main():
     report=dict(runId=uuid.uuid4().hex,startedUtc=datetime.datetime.now(datetime.timezone.utc).isoformat(),expectedTranslationUnits=len(SOURCES),complete=False,passed=False,currentSource=None,results=[])
     def save():
         temporary=out/'results.json.tmp'
-        temporary.write_text(json.dumps(report,indent=2),encoding='utf-8');temporary.replace(out/'results.json')
+        temporary.write_text(json.dumps(report,indent=2),encoding='utf-8')
+        for attempt in range(6):
+            try:
+                temporary.replace(out/'results.json')
+                return
+            except PermissionError as error:
+                if os.name!='nt' or getattr(error,'winerror',None) not in (5,32) or attempt==5:
+                    raise
+                time.sleep(.01*(2**attempt))
     # Invalidate any old clean report before invoking a compiler or reading build inputs.
     save()
     write_audit_header(ROOT/'artifacts/ios-build/stage/BackThread.app/BackThread',out/'audit-symbols.h')

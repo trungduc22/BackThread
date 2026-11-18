@@ -1,0 +1,172 @@
+{
+  "timestampUtc": "2026-11-18T17:44:38.5952795+00:00",
+  "simulated": true,
+  "results": [
+    {
+      "name": "wire.fragmentation-and-json",
+      "passed": true,
+      "milliseconds": 626
+    },
+    {
+      "name": "wire.async-write-retains-packet-until-completion",
+      "passed": true,
+      "milliseconds": 241
+    },
+    {
+      "name": "wire.network-writer-continues-with-paused-caller",
+      "passed": true,
+      "milliseconds": 200
+    },
+    {
+      "name": "transport.audio-queue-wait-includes-blocked-writer",
+      "passed": true,
+      "milliseconds": 136
+    },
+    {
+      "name": "config.audio-gain-keeps-system-volume-separate",
+      "passed": true,
+      "milliseconds": 615
+    },
+    {
+      "name": "wire.reject-size-version-channel-truncation",
+      "passed": true,
+      "milliseconds": 7
+    },
+    {
+      "name": "pcm.clipping-nan-and-bounded-ring",
+      "passed": true,
+      "milliseconds": 187
+    },
+    {
+      "name": "storage.path-traversal-and-reserved-names",
+      "passed": true,
+      "milliseconds": 302
+    },
+    {
+      "name": "validation.null-json-fields",
+      "passed": true,
+      "milliseconds": 123
+    },
+    {
+      "name": "storage.reserves-quota-before-reception",
+      "passed": true,
+      "milliseconds": 120
+    },
+    {
+      "name": "events.privacy-expiry-dedup-flood-bound",
+      "passed": true,
+      "milliseconds": 21
+    },
+    {
+      "name": "handoff.requires-connectivity-and-direct-resource",
+      "passed": true,
+      "milliseconds": 194
+    },
+    {
+      "name": "auth.wrong-key-rejected-and-recovery",
+      "passed": true,
+      "milliseconds": 388
+    },
+    {
+      "name": "auth.replay-rejected",
+      "passed": true,
+      "milliseconds": 149
+    },
+    {
+      "name": "wire.malformed-socket-and-reconnect",
+      "passed": true,
+      "milliseconds": 124
+    },
+    {
+      "name": "transport.audio-backpressure-is-bounded",
+      "passed": true,
+      "milliseconds": 36
+    },
+    {
+      "name": "simulator.slow-file-io-keeps-control-responsive",
+      "passed": true,
+      "milliseconds": 3294
+    },
+    {
+      "name": "integration.heartbeat-audio-order-and-content",
+      "passed": true,
+      "milliseconds": 1868
+    },
+    {
+      "name": "integration.transfer-hash-text-download-and-failed-job",
+      "passed": true,
+      "milliseconds": 627
+    },
+    {
+      "name": "worker.rejects-corrupt-artifact-ranges-and-recovers",
+      "passed": true,
+      "milliseconds": 45
+    },
+    {
+      "name": "storage.resume-duplicate-incomplete-and-checksum",
+      "passed": true,
+      "milliseconds": 89
+    },
+    {
+      "name": "worker.cancel-low-memory-duplicate-and-restart",
+      "passed": true,
+      "milliseconds": 67
+    },
+    {
+      "name": "integration.socket-reset-reconnect-and-format-error",
+      "passed": true,
+      "milliseconds": 72
+    },
+    {
+      "name": "integration.notification-routing",
+      "passed": true,
+      "milliseconds": 51
+    },
+    {
+      "name": "acceptance.audio-window-excludes-slow-shutdown-tail",
+      "passed": true,
+      "milliseconds": 1033
+    },
+    {
+      "name": "acceptance.audio-window-rejects-source-failure",
+      "passed": true,
+      "milliseconds": 767
+    },
+    {
+      "name": "host.receiver-audio-error-preserves-session",
+      "passed": true,
+      "milliseconds": 7745
+    },
+    {
+      "name": "host.local-api-authentication-and-auto-reconnect",
+      "passed": true,
+      "milliseconds": 785
+    },
+    {
+      "name": "apps.id-only-launch-fixed-arguments-and-feedback",
+      "passed": true,
+      "milliseconds": 277
+    },
+    {
+      "name": "apps.invalid-paths-order-icons-and-corrupt-catalog",
+      "passed": true,
+      "milliseconds": 11
+    },
+    {
+      "name": "wifi.explicit-bind-disable-and-expiry",
+      "passed": true,
+      "milliseconds": 3307
+    },
+    {
+      "name": "wifi.tls-pin-hmac-framing-and-single-session",
+      "passed": true,
+      "milliseconds": 584
+    },
+    {
+      "name": "wifi.rejects-wrong-pin-session-and-key",
+      "passed": true,
+      "milliseconds": 579
+    }
+  ],
+  "failed": 0
+}

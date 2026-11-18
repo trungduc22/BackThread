@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-19",
+  "version": "0.2.0",
+  "nativeBundleBuild": "8",
+  "nativeCompilationPassed": true,
+  "nativeAnalyzerCleanUnits": 17,
+  "pythonPassed": 23,
+  "managedPassed": 33,
+  "sharedInteractionCases": 27,
+  "paletteTestsPassed": true,
+  "windowsMsixInstalled": "0.2.0.8",
+  "windowsMachineTrustedPeopleAuthorizedAndInstalled": true,
+  "windowsTrustedRootChanged": false,
+  "developerModeChanged": false,
+  "executionPolicyChanged": false,
+  "notificationPermission": "Allowed",
+  "collectionEnabled": true,
+  "genuineWindowsToastVisibleOnPhysicalIPhone": true,
+  "build8VisualDeviceAcceptance": false,
+  "privatePfxDeleted": true
+}

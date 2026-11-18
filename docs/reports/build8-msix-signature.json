@@ -1,0 +1,7 @@
+{
+  "windowsNotificationsVerified": false,
+  "signer": "CN=BackThreadLocalDev",
+  "cryptographicSignatureVerified": true,
+  "trustInstalled": false,
+  "thumbprint": "315BABA9786C508E87D63D5F7547D5F0712268D7"
+}

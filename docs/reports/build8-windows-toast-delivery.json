@@ -1,0 +1,16 @@
+{
+  "packagedPermission": {
+    "supported": true,
+    "status": "Allowed",
+    "reason": "Permission granted; collection still requires opt-in"
+  },
+  "collectionEnabled": true,
+  "physicalUsb": true,
+  "windowsToastApiSetting": "Enabled",
+  "phoneVisualVerified": true,
+  "onlyOwnTestEventRecorded": true,
+  "ownWindowsEventsCaptured": 2,
+  "ownEventId": "win-8924-1795024723",
+  "nativeBuild": "currently installed client, not asserted to be build8",
+  "fullscreen": 0
+}
