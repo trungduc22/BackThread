@@ -1,5 +1,9 @@
 # Next steps — 0.1.2
 
+## PhoneBox and NativeShellKit
+
+Resume the [Antigravity continuation](PHONEBOX_CONTINUATION.md) from its recovered source once available. HiberDesk and BackThread remain separately launched applications.
+
 ## Audio follow-up
 
 Instrument the same PCM sequence on the writer and receiver around an underrun. The soak still fails despite confirmed isolation from job journal I/O. Preserve the current app until the user authorizes installation. See [results and verification commands](AUDIO_JOURNAL_FOLLOWUP.md).
