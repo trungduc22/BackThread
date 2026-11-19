@@ -142,6 +142,25 @@ public sealed class HostRuntime : IDisposable
         }
     }
 
+    internal object HiberDeskStatus()
+    {
+        lock (stateGate)
+            return new
+            {
+                state,
+                lastError,
+                audioError,
+                transport = config.Transport,
+                simulated = config.Transport == "localhost",
+                spotifyConnected = Spotify.IsAuthenticated,
+                notificationAccess = collector.GetAccessStatus(),
+                audioFrames = audio?.FramesSent ?? 0,
+                audioDroppedFrames = connection?.DroppedAudio ?? 0,
+                captureDroppedBytes = audio?.Ring.DroppedBytes ?? 0,
+                audioPacingMaximumLatenessMilliseconds = audio?.PacingMaximumLatenessMilliseconds ?? 0
+            };
+    }
+
     private void SetState(string value, string error = "")
     {
         lock (stateGate) { state = value; lastError = error; }
@@ -205,14 +224,21 @@ public sealed class HostRuntime : IDisposable
 
     public async Task RunAsync(CancellationToken ct)
     {
+        using var hostLease = HostInstanceLease.Acquire(config);
         foreach (string source in config.BlockedSources) events.BlockedSources.Add(source);
         try { await media.InitializeAsync(); } catch (Exception ex) { Log?.Invoke("Media unavailable: " + ex.Message); }
         var api = new LocalApi(this, config.ApiPort, key);
         var apiTask = api.RunAsync(ct); int attempt = 0;
         try
         {
+            await Task.WhenAny(api.Ready, apiTask);
             while (!ct.IsCancellationRequested)
             {
+                if (apiTask.IsCompleted)
+                {
+                    await apiTask;
+                    break;
+                }
                 using var session = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 try
                 {
@@ -681,6 +707,27 @@ public sealed class HostRuntime : IDisposable
     }
 
     public CompanionEvent[] History() => events.History();
+
+    internal async Task<object> PublishForHiberDeskAsync(CompanionEvent notification, CancellationToken ct)
+    {
+        var device = connection ?? throw new IOException("Agent is not connected");
+        var accepted = events.Accept(notification with { FullscreenEligible = false });
+        if (accepted is null)
+            return new { routerAccepted = false, deviceAcknowledged = false, deviceAccepted = (bool?)null };
+
+        try
+        {
+            var reply = await device.RequestAsync(LogicalChannel.Notifications, "event.publish", accepted, ct);
+            bool? deviceAccepted = reply.Body.ValueKind == JsonValueKind.Object
+                && reply.Body.TryGetProperty("accepted", out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+                ? value.GetBoolean() : null;
+            return new { routerAccepted = true, deviceAcknowledged = true, deviceAccepted };
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested && ex is IOException or TimeoutException or OperationCanceledException)
+        {
+            return new { routerAccepted = true, deviceAcknowledged = false, deviceAccepted = (bool?)null };
+        }
+    }
 
     public Task<object> HandoffAsync(string url, CancellationToken ct) =>
         SubmitMediaTaskAsync(new MediaSubmissionRequest(Url: url, Mode: PlaybackMode.Auto, QualityCap: config.DefaultQualityCap, KeepScreenAwake: config.KeepScreenAwakeDuringVideo, AutoPauseWindowsOnConfirm: config.PauseWindowsOnConfirmedHandoff), ct);

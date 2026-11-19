@@ -4,6 +4,7 @@
   "devicePort": 23451,
   "deviceSerial": null,
   "apiPort": 23452,
+  "enableHiberDeskBridge": false,
   "streamAudio": true,
   "audioOutputMode": "Both",
   "audioGain": 1,

@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
+using System.IO.Pipes;
 using System.Net;
+using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
@@ -350,6 +352,68 @@ await Test("host.receiver-audio-error-preserves-session", async () =>
         await Task.Delay(3200,ct); // let the ordinary heartbeat use the same session too
         Check.Equal(1,connections);Check.True(!running.IsCompleted,"Host ended after audio-only failure");
     }finally{hostStop.Cancel();peerStop.Cancel();listener.Stop();await running;await peer;}
+    }
+});
+await Test("host.hiberdesk-pipe-authentication-and-single-owner", async () =>
+{
+    if (!OperatingSystem.IsWindows())
+        return;
+    var reservation = new TcpListener(IPAddress.Loopback, 0);
+    reservation.Start();
+    var apiPort = ((IPEndPoint)reservation.LocalEndpoint).Port;
+    reservation.Stop();
+    var keyPath = Path.Combine(root, "hiberdesk.key");
+    await File.WriteAllTextAsync(keyPath, Convert.ToHexString(key), ct);
+    var config = new HostConfig { KeyFile = keyPath, Transport = "localhost", ApiPort = apiPort, EnableHiberDeskBridge = true, StreamAudio = false };
+    using var host = new HostRuntime(config);
+    using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+    using var handler = new SocketsHttpHandler
+    {
+        UseProxy = false,
+        ConnectCallback = async (_, token) =>
+        {
+            var pipe = new NamedPipeClientStream(".", HiberDeskApi.PipeName(apiPort), PipeDirection.InOut,
+                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+            try { await pipe.ConnectAsync(token); return pipe; }
+            catch { pipe.Dispose(); throw; }
+        }
+    };
+    using var client = new HttpClient(handler) { BaseAddress = new Uri("http://127.0.0.1/"), Timeout = TimeSpan.FromSeconds(5) };
+    var run = host.RunAsync(stop.Token);
+    try
+    {
+        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Bearer " + Convert.ToHexString(key).ToLowerInvariant());
+        using var usbBearer = await client.GetAsync("v1/status", ct);
+        Check.Equal(HttpStatusCode.Unauthorized, usbBearer.StatusCode);
+
+        client.DefaultRequestHeaders.Remove("Authorization");
+        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Bearer " + HiberDeskApi.Bearer(key));
+        using var status = await client.GetAsync("v1/status", ct);
+        Check.Equal(HttpStatusCode.OK, status.StatusCode);
+        Check.Equal("1", status.Headers.GetValues("X-BackThread-Bridge").Single());
+        using var unlisted = await client.PostAsync("v1/archives", null, ct);
+        Check.Equal(HttpStatusCode.Forbidden, unlisted.StatusCode);
+        using var inspected = await client.PostAsJsonAsync("v1/media/capabilities", new { filePath = Path.Combine(root, "missing.mp4") }, ct);
+        Check.Equal(HttpStatusCode.OK, inspected.StatusCode);
+        using var capabilities = JsonDocument.Parse(await inspected.Content.ReadAsStringAsync(ct));
+        Check.True(capabilities.RootElement.TryGetProperty("capabilities", out _));
+
+        using var tcp = new HttpClient();
+        tcp.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Bearer " + HiberDeskApi.Bearer(key));
+        using var pipeBearerOnTcp = await tcp.GetAsync($"http://127.0.0.1:{apiPort}/v1/status", ct);
+        Check.Equal(HttpStatusCode.Unauthorized, pipeBearerOnTcp.StatusCode);
+
+        using var duplicate = new HostRuntime(config);
+        await Check.Throws<IOException>(() => duplicate.RunAsync(ct));
+        using var stream = await client.GetAsync("v1/media/events", HttpCompletionOption.ResponseHeadersRead, ct);
+        Check.Equal("text/event-stream", stream.Content.Headers.ContentType?.MediaType);
+        using var reader = new StreamReader(await stream.Content.ReadAsStreamAsync(ct));
+        Check.Equal(": connected", await reader.ReadLineAsync(ct));
+    }
+    finally
+    {
+        stop.Cancel();
+        await run;
     }
 });
 await Test("host.local-api-authentication-and-auto-reconnect", async () =>

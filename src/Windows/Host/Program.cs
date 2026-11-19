@@ -29,7 +29,9 @@ try
     if (args.Contains("--media-probe")) { var media = new MediaSessions(); await media.InitializeAsync(); var s = await media.SnapshotAsync(); Console.WriteLine(JsonSerializer.Serialize(new { apiAvailable = true, activeSession = s != null, source = s?.Source, playbackState = s?.State, hasArtwork = s?.ArtworkBase64 != null }, Message.Json)); return 0; }
     if (args.Contains("--audio-probe")) { using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(15)); Console.WriteLine(JsonSerializer.Serialize(await LoopbackDiagnostics.ProbeAsync(limit.Token), Message.Json)); return 0; }
     if (args.Contains("--media-self-test")) { using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(15)); Console.WriteLine(JsonSerializer.Serialize(await MediaDiagnostics.ProbeAsync(limit.Token), Message.Json)); return 0; }
-    using var runtime = new HostRuntime(HostConfig.Load(Value("--config") ?? "config/local.json")); runtime.Log += s => Console.WriteLine(DateTimeOffset.Now.ToString("O") + " " + s);
+    var config = HostConfig.Load(Value("--config") ?? "config/local.json");
+    if (args.Contains("--hiberdesk")) config = config with { EnableHiberDeskBridge = true };
+    using var runtime = new HostRuntime(config); runtime.Log += s => Console.WriteLine(DateTimeOffset.Now.ToString("O") + " " + s);
     await runtime.RunAsync(stop.Token); return 0;
 }
 catch (Exception ex) { Console.Error.WriteLine(ex.GetType().Name + ": " + ex.Message); return 1; }

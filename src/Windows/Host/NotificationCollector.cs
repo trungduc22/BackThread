@@ -121,6 +121,8 @@ public sealed class NotificationCollector
 
                 string source = n.AppInfo?.AppUserModelId ?? "windows.notification";
                 string appName = n.AppInfo?.DisplayInfo.DisplayName ?? source;
+                if (config?.EnableHiberDeskBridge == true && HiberDeskApi.OwnsWindowsNotification(source, appName))
+                    continue;
                 string? iconB64 = await TryReadBoundedLogoAsync(n.AppInfo, ct);
                 var e = BuildCompanionEvent(n.Id, source, appName, text, n.CreationTime, config, iconB64);
                 await publish(e, ct);

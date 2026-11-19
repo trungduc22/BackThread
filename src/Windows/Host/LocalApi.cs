@@ -21,32 +21,42 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
     private WebApplication? app;
     private readonly SemaphoreSlim capacity = new(8, 8);
     private readonly SemaphoreSlim subscriptions = new(4, 4);
+    private readonly TaskCompletionSource ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    internal Task Ready => ready.Task;
     public void Stop() => app?.Lifetime.StopApplication();
 
     public async Task RunAsync(CancellationToken ct)
     {
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { Args = [], ApplicationName = typeof(LocalApi).Assembly.FullName });
         builder.Logging.ClearProviders();
+        bool useHiberDeskPipe = OperatingSystem.IsWindows() && host.Config.EnableHiberDeskBridge;
+        if (useHiberDeskPipe)
+            builder.WebHost.UseNamedPipes(options => options.CurrentUserOnly = true);
         builder.WebHost.ConfigureKestrel(o =>
         {
             o.Listen(IPAddress.Loopback, port, l => l.Protocols = HttpProtocols.Http1);
+            if (useHiberDeskPipe)
+                o.ListenNamedPipe(HiberDeskApi.PipeName(port), l => l.Protocols = HttpProtocols.Http1);
             o.Limits.MaxRequestBodySize = 65536;
             o.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(5);
             o.Limits.MaxConcurrentConnections = 16;
         });
         await using var application = builder.Build(); app = application;
         string bearer = Convert.ToHexString(key).ToLowerInvariant();
+        string? hiberDeskBearer = useHiberDeskPipe ? HiberDeskApi.Bearer(key) : null;
         application.Use(async (context, next) =>
         {
+            // The pipe transport has no IP endpoint. The only other listener is IPv4 loopback.
+            bool isHiberDesk = useHiberDeskPipe && context.Connection.LocalIpAddress is null;
             // Browser OAuth redirect callback for Spotify PKCE validates CSRF state directly
             // and never exposes Host state or accepts arbitrary cross-origin Origin requests.
-            bool isSpotifyCallback = HttpMethods.IsGet(context.Request.Method)
+            bool isSpotifyCallback = !isHiberDesk && HttpMethods.IsGet(context.Request.Method)
                 && string.Equals(context.Request.Path.Value, "/v1/spotify/callback", StringComparison.Ordinal);
 
             if (!isSpotifyCallback)
             {
                 string actual = context.Request.Headers.Authorization.ToString();
-                string expected = "Bearer " + bearer;
+                string expected = "Bearer " + (isHiberDesk ? hiberDeskBearer : bearer);
                 if (context.Request.Headers.ContainsKey("Origin")
                     || actual.Length != expected.Length
                     || !CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(actual), Encoding.ASCII.GetBytes(expected)))
@@ -54,6 +64,11 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
                     context.Response.StatusCode = 401;
                     return;
                 }
+            }
+            if (isHiberDesk)
+            {
+                context.Response.Headers[HiberDeskApi.VersionHeader] = HiberDeskApi.Version;
+                if (!HiberDeskApi.Allows(context.Request)) { context.Response.StatusCode = 403; return; }
             }
             if (!await capacity.WaitAsync(0, context.RequestAborted)) { context.Response.StatusCode = 429; return; }
             try { await next(context); }
@@ -76,7 +91,8 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
             finally { capacity.Release(); }
         });
 
-        application.MapGet("/v1/status", () => host.Status);
+        application.MapGet("/v1/status", (HttpContext c) => useHiberDeskPipe && c.Connection.LocalIpAddress is null
+            ? host.HiberDeskStatus() : host.Status);
         application.MapGet("/v1/telemetry", () => host.LatestTelemetry);
         application.MapGet("/v1/audio/state", () => host.CurrentAudioControlState());
         application.MapPost("/v1/audio/mode", async (HttpContext c) =>
@@ -94,7 +110,13 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
         application.MapDelete("/v1/jobs/{id}", async (string id, HttpContext c) => (await host.Worker.CancelAsync(id, c.RequestAborted)).Body);
         application.MapPost("/v1/archives", async (HttpContext c) => { var b = await Body<ArchiveRequest>(c); return (await host.Worker.UploadAsync(b.Path, b.Name, c.RequestAborted)).Body; });
         application.MapGet("/v1/artifacts/{name}", async (string name, long? offset, int? count, HttpContext c) => Results.Bytes(await host.Worker.ReadArtifactAsync(name, offset ?? 0, count ?? 32768, c.RequestAborted), "application/octet-stream"));
-        application.MapPost("/v1/events", async (HttpContext c) => await host.PublishAsync(await Body<CompanionEvent>(c), c.RequestAborted));
+        application.MapPost("/v1/events", async (HttpContext c) =>
+        {
+            var notification = await Body<CompanionEvent>(c);
+            return useHiberDeskPipe && c.Connection.LocalIpAddress is null
+                ? await host.PublishForHiberDeskAsync(notification, c.RequestAborted)
+                : await host.PublishAsync(notification, c.RequestAborted);
+        });
         application.MapGet("/v1/events", () => host.History());
         application.MapGet("/v1/notifications/status", () => new { status = host.NotificationAccessStatus() });
         application.MapGet("/v1/notifications/diagnostics", () => host.NotificationDiagnostics());
@@ -105,8 +127,16 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
         // Hybrid MediaRouter & External PiP endpoints
         application.MapGet("/v1/media/status", () => host.Router.CurrentState);
         application.MapGet("/v1/media/session", () => host.Router.CurrentState);
-        application.MapPost("/v1/media/capabilities", async (HttpContext c) => await host.InspectCapabilitiesAsync(await Body<MediaSubmissionRequest>(c), c.RequestAborted));
-        application.MapPost("/v1/media/submit", async (HttpContext c) => await host.SubmitMediaAsync(await Body<MediaSubmissionRequest>(c), c.RequestAborted));
+        application.MapPost("/v1/media/capabilities", async (HttpContext c) =>
+        {
+            var request = await Body<MediaSubmissionRequest>(c);
+            return await host.InspectCapabilitiesAsync(request, c.RequestAborted);
+        });
+        application.MapPost("/v1/media/submit", async (HttpContext c) =>
+        {
+            var request = await Body<MediaSubmissionRequest>(c);
+            return await host.SubmitMediaAsync(request, c.RequestAborted);
+        });
         application.MapPost("/v1/media/cancel", async (HttpContext c) =>
         {
             var b = await OptionalBody<ReasonRequest>(c);
@@ -178,8 +208,14 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
             return Results.Content("<html><body style='font-family:sans-serif;background:#111;color:#eee'><h3>Spotify connected to BackThread.</h3><p>You may close this tab and return to BackThread.</p></body></html>", "text/html");
         });
         application.MapPost("/v1/spotify/disconnect", () => { host.Spotify.Disconnect(); return Results.Ok(new { connected = false }); });
-        application.MapGet("/v1/spotify/devices", async (HttpContext c) => new { devices = await host.Spotify.GetDevicesAsync(c.RequestAborted) });
-        application.MapGet("/v1/spotify/playlists", async (HttpContext c) => new { playlists = await host.Spotify.GetPlaylistsAsync(20, c.RequestAborted) });
+        application.MapGet("/v1/spotify/devices", async (HttpContext c) =>
+        {
+            return new { devices = await host.Spotify.GetDevicesAsync(c.RequestAborted) };
+        });
+        application.MapGet("/v1/spotify/playlists", async (HttpContext c) =>
+        {
+            return new { playlists = await host.Spotify.GetPlaylistsAsync(20, c.RequestAborted) };
+        });
         application.MapPost("/v1/spotify/play", async (HttpContext c) =>
         {
             var b = await OptionalBody<SpotifyPlayRequest>(c);
@@ -209,6 +245,7 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
         });
 
         await application.StartAsync(ct);
+        ready.TrySetResult();
         try { await application.WaitForShutdownAsync(ct); } finally { await application.StopAsync(CancellationToken.None); app = null; }
     }
 
