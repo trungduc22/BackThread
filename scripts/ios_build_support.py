@@ -28,7 +28,7 @@ def write_audit_header(image, output):
     pathlib.Path(output).write_text(array('audit_libraries',metadata['linkedLibraries'])+array('audit_symbols',names))
 
 
-def macho(path):
+def macho(path, profile='ios12-universal'):
     data = pathlib.Path(path).read_bytes()
     if len(data) < 32 or struct.unpack_from('<I', data)[0] != 0xfeedfacf:
         raise ValueError('Expected a thin 64-bit Mach-O')
@@ -43,10 +43,12 @@ def macho(path):
         command, length = struct.unpack_from('<II', data, offset)
         if length < 8 or offset + length > 32 + size:
             raise ValueError('Invalid Mach-O command')
-        if command in (0x80000033,0x80000034):
-            raise ValueError('iOS 12 requires legacy dyld bind/export metadata')
-        if command==0x80000022:
-            result['linkMetadataFormat']='legacy dyld info'
+        if command in (0x80000033, 0x80000034):
+            if profile == 'ios12-universal':
+                raise ValueError('iOS 12 requires legacy dyld bind/export metadata')
+            result['linkMetadataFormat'] = 'chained fixups'
+        if command == 0x80000022:
+            result['linkMetadataFormat'] = 'legacy dyld info'
         if command == 0x32:
             platform, minimum, sdk = struct.unpack_from('<III', data, offset + 8)
             result.update(platform=platform, minimumOS=f'{minimum >> 16}.{minimum >> 8 & 255}.{minimum & 255}', sdkVersion=f'{sdk >> 16}.{sdk >> 8 & 255}.{sdk & 255}')
@@ -62,10 +64,21 @@ def macho(path):
                 raise ValueError('Invalid code signature range')
             result['signed'] = struct.unpack_from('>I', data, start)[0] == 0xfade0cc0
         offset += length
-    if kind == 2 and (result.get('platform') != 2 or result.get('minimumOS') != '12.0.0'):
-        raise ValueError('Executable must target iOS 12.0')
-    if kind==2 and result.get('linkMetadataFormat')!='legacy dyld info':
-        raise ValueError('Missing iOS 12 legacy dyld metadata')
+    if kind == 2:
+        if result.get('platform') != 2:
+            raise ValueError('Executable must target iOS platform')
+        if profile == 'ios12-universal':
+            if result.get('minimumOS') != '12.0.0':
+                raise ValueError('Executable must target iOS 12.0')
+            if result.get('linkMetadataFormat') != 'legacy dyld info':
+                raise ValueError('Missing iOS 12 legacy dyld metadata')
+        elif profile == 'ios15':
+            if result.get('minimumOS') not in ('12.0.0', '15.0.0'):
+                raise ValueError('Executable must target iOS 12.0 or 15.0 for ios15 profile')
+            if result.get('linkMetadataFormat') not in ('chained fixups', 'legacy dyld info'):
+                raise ValueError('Missing dyld link metadata')
+        else:
+            raise ValueError(f'Unknown profile: {profile}')
     return result
 
 
@@ -171,6 +184,16 @@ def debian(path, control, app, epoch=0):
     data = [(f'./Applications/BackThread.app/{p.relative_to(app).as_posix()}', p.read_bytes(), 0o755 if p.name == 'BackThread' else 0o644) for p in app.rglob('*') if p.is_file()]
     directories=[('./Applications/BackThread.app',0o755,0,0)]+[(f'./Applications/BackThread.app/{p.relative_to(app).as_posix()}',0o755,0,0) for p in app.rglob('*') if p.is_dir()]
     write_debian(path,[('./control', control, 0o644), ('./postinst', postinst, 0o755), ('./prerm', pre_remove, 0o755)],data,epoch,data_directories=directories)
+
+
+def debian_rootless(path, control, app, epoch=0):
+    """Build a rootless (Dopamine / PaleRa1n iOS 15+) iphoneos-arm64 .deb installing under /var/jb/Applications."""
+    rootless_control = control.replace(b'Architecture: iphoneos-arm\n', b'Architecture: iphoneos-arm64\n')
+    postinst = b'#!/bin/sh\nset -eu\nif [ "${1:-}" = configure ] && [ -x /var/jb/usr/bin/uicache ]; then\n /var/jb/usr/bin/uicache -p /var/jb/Applications/BackThread.app || true\nfi\n'
+    pre_remove = b'#!/bin/sh\nset -eu\nif [ "${1:-}" = remove ] && [ -x /var/jb/usr/bin/uicache ]; then\n /var/jb/usr/bin/uicache -u /var/jb/Applications/BackThread.app || true\nfi\n'
+    data = [(f'./var/jb/Applications/BackThread.app/{p.relative_to(app).as_posix()}', p.read_bytes(), 0o755 if p.name == 'BackThread' else 0o644) for p in app.rglob('*') if p.is_file()]
+    directories = [('./var/jb', 0o755, 0, 0), ('./var/jb/Applications', 0o755, 0, 0), ('./var/jb/Applications/BackThread.app', 0o755, 0, 0)] + [(f'./var/jb/Applications/BackThread.app/{p.relative_to(app).as_posix()}', 0o755, 0, 0) for p in app.rglob('*') if p.is_dir()]
+    write_debian(path, [('./control', rootless_control, 0o644), ('./postinst', postinst, 0o755), ('./prerm', pre_remove, 0o755)], data, epoch, data_directories=directories)
 
 
 def write_debian(path,control_entries,data_entries,epoch=0,data_directories=()):

@@ -4,6 +4,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface BTSettingsView : UIView
 @property(nonatomic, copy, nullable) void (^onPairTapped)(void);
+@property(nonatomic, copy, nullable) void (^onScanQrTapped)(void);
 @property(nonatomic, copy, nullable) void (^onEvictCacheTapped)(void);
 @property(nonatomic, copy, nullable) void (^onClearHistoryTapped)(void);
 

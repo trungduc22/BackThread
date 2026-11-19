@@ -17,12 +17,17 @@
 
         UIView *pairCard = [BTTheme cardView];
         UILabel *pairTitle = [BTTheme labelWithSize:14 weight:UIFontWeightBold color:[BTTheme textPrimary]];
-        pairTitle.text = @"Host Pairing & Security (USB)";
+        pairTitle.text = @"Host Pairing & Security (USB + Pinned Wi-Fi TLS)";
         UILabel *pairHint = [BTTheme labelWithSize:12 weight:UIFontWeightRegular color:[BTTheme textSecondary]];
         pairHint.numberOfLines = 2;
-        pairHint.text = @"Key is stored in Library/BackThread/session.key with NSFileProtectionCompleteUntilFirstUserAuthentication (0600).";
-        UIButton *pairBtn = [BTTheme primaryButtonWithTitle:@"Pair / Update 64-Hex Session Key" target:self action:@selector(pairTapped)];
-        UIStackView *pairStack = [[UIStackView alloc] initWithArrangedSubviews:@[pairTitle, pairHint, pairBtn]];
+        pairHint.text = @"Scan the PC QR code for pinned TLS Wi-Fi pairing or paste a 64-hex key (hot-reloaded immediately, 0600 protected).";
+        UIButton *qrBtn = [BTTheme primaryButtonWithTitle:@"Scan Wi-Fi QR Code" target:self action:@selector(scanQrTapped)];
+        UIButton *pairBtn = [BTTheme pillButtonWithTitle:@"Paste 64-Hex Key" target:self action:@selector(pairTapped)];
+        UIStackView *pairRow = [[UIStackView alloc] initWithArrangedSubviews:@[qrBtn, pairBtn]];
+        pairRow.axis = UILayoutConstraintAxisHorizontal;
+        pairRow.spacing = 8;
+        pairRow.distribution = UIStackViewDistributionFillEqually;
+        UIStackView *pairStack = [[UIStackView alloc] initWithArrangedSubviews:@[pairTitle, pairHint, pairRow]];
         pairStack.axis = UILayoutConstraintAxisVertical;
         pairStack.spacing = 6;
         pairStack.translatesAutoresizingMaskIntoConstraints = NO;
@@ -86,6 +91,7 @@
 }
 
 - (void)pairTapped { if (self.onPairTapped) self.onPairTapped(); }
+- (void)scanQrTapped { if (self.onScanQrTapped) self.onScanQrTapped(); }
 - (void)evictTapped {
     _cacheFeedbackLabel.text = @"Buffered media cache evicted (LRU reset)";
     if (self.onEvictCacheTapped) self.onEvictCacheTapped();
@@ -99,11 +105,13 @@
                                pcmStats:(NSDictionary *)pcmStats
                           sessionStatus:(NSDictionary *)sessionStatus {
     NSUInteger buffered = [pcmStats[@"bufferedBytes"] unsignedIntegerValue] / 4;
+    NSUInteger capacity = [pcmStats[@"ringCapacityBytes"] unsignedIntegerValue] / 4;
+    if (capacity == 0) capacity = 4800;
     NSUInteger drop = [pcmStats[@"droppedBytes"] unsignedIntegerValue];
     NSUInteger sil = [pcmStats[@"silenceBytes"] unsignedIntegerValue];
-    _diagLabel.text = [NSString stringWithFormat:@"Host: %@ · PCM Buffer: %lu / 4800 fr · Drop %lu B · Gap %lu B",
+    _diagLabel.text = [NSString stringWithFormat:@"Host: %@ · PCM Buffer: %lu / %lu fr · Drop %lu B · Gap %lu B",
                        connection.length ? connection : @"Disconnected",
-                       (unsigned long)buffered, (unsigned long)drop, (unsigned long)sil];
+                       (unsigned long)buffered, (unsigned long)capacity, (unsigned long)drop, (unsigned long)sil];
 
     BOOL pcmActive = [sessionStatus[@"pcmReceiverActive"] boolValue];
     BOOL indActive = [sessionStatus[@"independentMediaActive"] boolValue];

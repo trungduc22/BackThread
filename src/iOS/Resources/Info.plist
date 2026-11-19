@@ -5,8 +5,8 @@
  <key>CFBundleExecutable</key><string>BackThread</string>
  <key>CFBundleName</key><string>BackThread</string>
  <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>app.backthread.companion</string><key>CFBundleURLSchemes</key><array><string>backthread</string></array></dict></array>
- <key>CFBundleVersion</key><string>6</string>
- <key>CFBundleShortVersionString</key><string>0.2.0</string>
+ <key>CFBundleVersion</key><string>7</string>
+ <key>CFBundleShortVersionString</key><string>0.3.0</string>
  <key>CFBundlePackageType</key><string>APPL</string>
  <key>MinimumOSVersion</key><string>12.0</string>
  <key>LSRequiresIPhoneOS</key><true/>
@@ -14,8 +14,15 @@
  <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string><string>UIInterfaceOrientationPortrait</string></array>
  <key>UIDeviceFamily</key><array><integer>1</integer></array>
  <key>UIRequiresFullScreen</key><true/>
+ <key>UIUserInterfaceStyle</key><string>Dark</string>
  <key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string></array>
  <key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
+ <key>NSLocalNetworkUsageDescription</key><string>BackThread discovers and connects to your paired Windows PC over your local Wi-Fi network with pinned TLS encryption.</string>
+ <key>NSBonjourServices</key><array><string>_backthread._tcp</string></array>
+ <key>NSCameraUsageDescription</key><string>BackThread uses the camera only to scan the Wi-Fi pairing QR code shown on your Windows PC.</string>
+ <key>NSSpeechRecognitionUsageDescription</key><string>BackThread can run on-device speech transcription jobs offloaded from your paired Windows PC.</string>
+ <key>NSMicrophoneUsageDescription</key><string>Optional audio session access for on-device speech recognition jobs.</string>
+ <key>UILaunchScreen</key><dict/>
  <key>UILaunchImages</key><array><dict>
   <key>UILaunchImageName</key><string>LaunchLandscape</string>
   <key>UILaunchImageMinimumOSVersion</key><string>8.0</string>

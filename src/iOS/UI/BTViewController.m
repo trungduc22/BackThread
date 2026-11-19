@@ -13,6 +13,120 @@
 #import "../Media/BTDirectMediaPlayer.h"
 #import "../Media/BTBufferedMediaEngine.h"
 #import "../Media/BTYouTubeEmbedController.h"
+#import "../Transport/BTWifiClient.h"
+#import <AVFoundation/AVFoundation.h>
+
+@interface BTQrScannerViewController : UIViewController <AVCaptureMetadataOutputObjectsDelegate>
+@property(nonatomic, copy) void (^onCodeScanned)(NSString *value);
+@end
+
+@implementation BTQrScannerViewController {
+    AVCaptureSession *_session;
+    AVCaptureVideoPreviewLayer *_previewLayer;
+    BOOL _delivered;
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.view.backgroundColor = [BTTheme canvasColor];
+
+    UILabel *hint = [BTTheme labelWithSize:14 weight:UIFontWeightSemibold color:[BTTheme textPrimary]];
+    hint.text = @"Point camera at the BackThread PC pairing QR code";
+    hint.textAlignment = NSTextAlignmentCenter;
+    hint.numberOfLines = 2;
+    hint.translatesAutoresizingMaskIntoConstraints = NO;
+
+    UIButton *cancelBtn = [BTTheme pillButtonWithTitle:@"Cancel" target:self action:@selector(cancelTapped)];
+    cancelBtn.translatesAutoresizingMaskIntoConstraints = NO;
+
+    [self.view addSubview:hint];
+    [self.view addSubview:cancelBtn];
+    [NSLayoutConstraint activateConstraints:@[
+        [hint.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:16],
+        [hint.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor constant:16],
+        [hint.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor constant:-16],
+        [cancelBtn.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-20],
+        [cancelBtn.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor]
+    ]];
+
+    AVCaptureDevice *device = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
+    if (!device) {
+        hint.text = @"Camera unavailable on this device";
+        return;
+    }
+    NSError *err = nil;
+    AVCaptureDeviceInput *input = [AVCaptureDeviceInput deviceInputWithDevice:device error:&err];
+    if (!input) {
+        hint.text = err.localizedDescription ?: @"Cannot access camera";
+        return;
+    }
+
+    _session = [AVCaptureSession new];
+    if ([_session canAddInput:input]) [_session addInput:input];
+    AVCaptureMetadataOutput *output = [AVCaptureMetadataOutput new];
+    if ([_session canAddOutput:output]) {
+        [_session addOutput:output];
+        [output setMetadataObjectsDelegate:self queue:dispatch_get_main_queue()];
+        if ([output.availableMetadataObjectTypes containsObject:AVMetadataObjectTypeQRCode]) {
+            output.metadataObjectTypes = @[AVMetadataObjectTypeQRCode];
+        }
+    }
+
+    _previewLayer = [AVCaptureVideoPreviewLayer layerWithSession:_session];
+    _previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+    _previewLayer.frame = self.view.bounds;
+    [self.view.layer insertSublayer:_previewLayer atIndex:0];
+}
+
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    _previewLayer.frame = self.view.bounds;
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    if (_session && !_session.running) {
+        AVCaptureSession *session = _session;
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            [session startRunning];
+        });
+    }
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    if (_session.running) {
+        AVCaptureSession *session = _session;
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            [session stopRunning];
+        });
+    }
+}
+
+- (void)cancelTapped {
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)captureOutput:(AVCaptureOutput *)output didOutputMetadataObjects:(NSArray<__kindof AVMetadataObject *> *)metadataObjects fromConnection:(AVCaptureConnection *)connection {
+    (void)output; (void)connection;
+    if (_delivered) return;
+    for (AVMetadataObject *obj in metadataObjects) {
+        if ([obj isKindOfClass:AVMetadataMachineReadableCodeObject.class]) {
+            NSString *val = ((AVMetadataMachineReadableCodeObject *)obj).stringValue;
+            if (val.length && [[val lowercaseString] hasPrefix:@"backthread://pair"]) {
+                _delivered = YES;
+                [_session stopRunning];
+                void (^cb)(NSString *) = self.onCodeScanned;
+                [self dismissViewControllerAnimated:YES completion:^{
+                    if (cb) cb(val);
+                }];
+                return;
+            }
+        }
+    }
+}
+
+@end
 
 typedef NS_ENUM(NSInteger, BTWorkspaceMode) {
     BTWorkspaceHub = 0,
@@ -70,6 +184,7 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     BOOL _autoEnteredVideoForSession;
     NSString *_autoEnteredSessionId;
     NSTimer *_telemetryPollTimer;
+    NSUInteger _healthTickCounter;
 }
 
 - (void)dealloc {
@@ -115,11 +230,12 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = [BTTheme canvasColor];
+    [UIDevice currentDevice].batteryMonitoringEnabled = YES;
     _events = [NSMutableArray new];
     _actions = @[];
     _latestHostMediaState = @{};
     _latestPlayerSnapshot = @{@"independentActive": @NO};
-    _connectionText = @"Waiting for USB host";
+    _connectionText = @"Waiting for USB or Wi-Fi host";
     _focusPolicy = @"Auto";
     _workspaceMode = BTWorkspaceMedia;
 
@@ -137,6 +253,10 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     _telemetryPollTimer = [NSTimer scheduledTimerWithTimeInterval:2.0 repeats:YES block:^(NSTimer *timer) {
         (void)timer;
         [weakSelf refreshAuxiliaryDiagnostics];
+        BTViewController *strong = weakSelf;
+        if (strong && (++strong->_healthTickCounter % 15 == 0)) {
+            [strong reportPhoneHealth];
+        }
     }];
 }
 
@@ -166,8 +286,20 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
 
     _modeSegment = [[UISegmentedControl alloc] initWithItems:@[@"Hub", @"Media", @"PiP", @"Actions", @"Jobs", @"History", @"Setup"]];
     _modeSegment.selectedSegmentIndex = 1;
-    _modeSegment.tintColor = [BTTheme accentTeal];
-    [_modeSegment setTitleTextAttributes:@{NSFontAttributeName: [UIFont systemFontOfSize:11 weight:UIFontWeightSemibold]} forState:UIControlStateNormal];
+    if (@available(iOS 13.0, *)) {
+        _modeSegment.selectedSegmentTintColor = [BTTheme accentTeal];
+        [_modeSegment setTitleTextAttributes:@{
+            NSFontAttributeName: [UIFont systemFontOfSize:11 weight:UIFontWeightSemibold],
+            NSForegroundColorAttributeName: [BTTheme textPrimary]
+        } forState:UIControlStateNormal];
+        [_modeSegment setTitleTextAttributes:@{
+            NSFontAttributeName: [UIFont systemFontOfSize:11 weight:UIFontWeightBold],
+            NSForegroundColorAttributeName: [BTTheme canvasColor]
+        } forState:UIControlStateSelected];
+    } else {
+        _modeSegment.tintColor = [BTTheme accentTeal];
+        [_modeSegment setTitleTextAttributes:@{NSFontAttributeName: [UIFont systemFontOfSize:11 weight:UIFontWeightSemibold]} forState:UIControlStateNormal];
+    }
     [_modeSegment addTarget:self action:@selector(segmentChanged) forControlEvents:UIControlEventValueChanged];
     [_modeSegment setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
 
@@ -254,6 +386,7 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
 
     _settingsView = [BTSettingsView new];
     _settingsView.onPairTapped = ^{ [weakSelf pair]; };
+    _settingsView.onScanQrTapped = ^{ [weakSelf scanQrCode]; };
     _settingsView.onEvictCacheTapped = ^{
         BTViewController *strong = weakSelf;
         BTDirectMediaPlayer *p = strong ? strong->_directPlayer : nil;
@@ -358,6 +491,11 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     return _workspaceMode == BTWorkspaceVideoFocus || _workspaceMode == BTWorkspaceAmbient;
 }
 
+- (UIRectEdge)preferredScreenEdgesDeferringSystemGestures {
+    if (_notificationOverlay.fullscreenActive) return UIRectEdgeNone;
+    return (_workspaceMode == BTWorkspaceVideoFocus || _workspaceMode == BTWorkspaceAmbient) ? UIRectEdgeBottom : UIRectEdgeNone;
+}
+
 - (void)segmentChanged {
     switch (_modeSegment.selectedSegmentIndex) {
         case 0: [self switchWorkspaceMode:BTWorkspaceHub]; break;
@@ -387,15 +525,16 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     _settingsView.hidden = (mode != BTWorkspaceSettings);
 
     NSInteger seg = UISegmentedControlNoSegment;
+    NSString *tabName = @"now";
     switch (mode) {
-        case BTWorkspaceHub: seg = 0; break;
-        case BTWorkspaceMedia: seg = 1; break;
-        case BTWorkspaceVideoFocus:
-        case BTWorkspaceAmbient: seg = 2; break;
-        case BTWorkspaceActions: seg = 3; break;
-        case BTWorkspaceWorker: seg = 4; break;
-        case BTWorkspaceHistory: seg = 5; break;
-        case BTWorkspaceSettings: seg = 6; break;
+        case BTWorkspaceHub: seg = 0; tabName = @"hub"; break;
+        case BTWorkspaceMedia: seg = 1; tabName = @"now"; break;
+        case BTWorkspaceVideoFocus: seg = 2; tabName = @"video"; break;
+        case BTWorkspaceAmbient: seg = 2; tabName = @"ambient"; break;
+        case BTWorkspaceActions: seg = 3; tabName = @"actions"; break;
+        case BTWorkspaceWorker: seg = 4; tabName = @"worker"; break;
+        case BTWorkspaceHistory: seg = 5; tabName = @"history"; break;
+        case BTWorkspaceSettings: seg = 6; tabName = @"settings"; break;
     }
     _modeSegment.selectedSegmentIndex = seg;
 
@@ -428,7 +567,10 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
     [self setNeedsStatusBarAppearanceUpdate];
     if (@available(iOS 11.0, *)) {
         [self setNeedsUpdateOfHomeIndicatorAutoHidden];
+        [self setNeedsUpdateOfScreenEdgesDeferringSystemGestures];
     }
+
+    [self.agent sendViewportTab:tabName awake:YES dimmed:(mode == BTWorkspaceAmbient)];
 }
 
 - (void)handlePlayPause {
@@ -591,21 +733,54 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
 
     if ([type isEqualToString:@"connection"]) {
         NSString *state = BTSafeStr(body[@"state"], @"");
-        _usbConnected = [state hasPrefix:@"Connected"];
-        [_directPlayer setUsbConnected:_usbConnected];
+        NSString *route = BTSafeStr(body[@"route"], @"");
+        BOOL connected = [state hasPrefix:@"Connected"];
+        _usbConnected = connected;
+        [_directPlayer setUsbConnected:connected];
 
-        if (_usbConnected) {
-            _statusDot.backgroundColor = [BTTheme accentGreen];
-            _connectionText = @"USB Connected";
+        if (connected) {
+            BOOL isWifi = [route isEqualToString:@"Wi-Fi"] || [state containsString:@"Wi-Fi"];
+            _statusDot.backgroundColor = isWifi ? [BTTheme accentTeal] : [BTTheme accentGreen];
+            _connectionText = isWifi ? (state.length ? state : @"Wi-Fi TLS Connected") : @"USB Connected";
+            [self reportPhoneHealth];
         } else if (_directPlayer.independentActive || _embedController != nil) {
             _statusDot.backgroundColor = [BTTheme accentTeal];
-            _connectionText = @"Wi-Fi Independent · USB Away";
+            _connectionText = @"Wi-Fi Independent · Host Away";
         } else {
             _statusDot.backgroundColor = [BTTheme accentAmber];
-            _connectionText = state.length ? state : @"Waiting for USB host";
+            _connectionText = state.length ? state : @"Waiting for USB or Wi-Fi host";
         }
         _connectionLabel.text = _connectionText;
         [self refreshAuxiliaryDiagnostics];
+    } else if ([type isEqualToString:@"transport.wifi.provision"]) {
+        NSString *pcName = BTSafeStr(body[@"pcName"], @"Windows PC");
+        NSString *code = BTSafeStr(body[@"checkCode"], @"");
+        [_quickActionsView showFeedbackText:[NSString stringWithFormat:@"Wi-Fi failover ready for %@ (%@)", pcName, code]];
+    } else if ([type isEqualToString:@"rule.action"]) {
+        NSString *action = BTSafeStr(body[@"action"], @"");
+        NSString *target = BTSafeStr(body[@"target"], @"");
+        if ([action isEqualToString:@"goto"]) {
+            if ([target isEqualToString:@"hub"]) [self switchWorkspaceMode:BTWorkspaceHub];
+            else if ([target isEqualToString:@"media"] || [target isEqualToString:@"now"]) [self switchWorkspaceMode:BTWorkspaceMedia];
+            else if ([target isEqualToString:@"pip"] || [target isEqualToString:@"video"]) [self switchWorkspaceMode:BTWorkspaceVideoFocus];
+            else if ([target isEqualToString:@"ambient"]) [self switchWorkspaceMode:BTWorkspaceAmbient];
+            else if ([target isEqualToString:@"actions"]) [self switchWorkspaceMode:BTWorkspaceActions];
+            else if ([target isEqualToString:@"worker"] || [target isEqualToString:@"jobs"]) [self switchWorkspaceMode:BTWorkspaceWorker];
+            else if ([target isEqualToString:@"history"]) [self switchWorkspaceMode:BTWorkspaceHistory];
+            else if ([target isEqualToString:@"settings"]) [self switchWorkspaceMode:BTWorkspaceSettings];
+        } else if ([action isEqualToString:@"ambient"]) {
+            [self switchWorkspaceMode:BTWorkspaceAmbient];
+        }
+    } else if ([type isEqualToString:@"offload.pip.suggest"]) {
+        NSString *reason = BTSafeStr(body[@"reason"], @"High PC load detected — External PiP on iPhone can save PC CPU/GPU.");
+        NSDictionary *hintEvent = @{
+            @"id": [[[NSUUID UUID] UUIDString] lowercaseString],
+            @"title": @"Smart Offload Suggestion",
+            @"body": reason,
+            @"source": @"BackThread Offload",
+            @"priority": @1
+        };
+        [_notificationOverlay presentNotification:hintEvent expiresInterval:8.0];
     } else if ([type isEqualToString:@"media.state"]) {
         _latestHostMediaState = body ?: @{};
         [self refreshMediaUI];
@@ -766,9 +941,81 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
                                      sessionStatus:sessionStatus];
 }
 
+- (void)reportPhoneHealth {
+    float level = [UIDevice currentDevice].batteryLevel;
+    if (level < 0) return;
+    int pct = (int)llroundf(level * 100.0f);
+    UIDeviceBatteryState st = [UIDevice currentDevice].batteryState;
+    BOOL charging = (st == UIDeviceBatteryStateCharging || st == UIDeviceBatteryStateFull);
+    [self.agent sendPhoneHealthWithBatteryLevel:pct charging:charging];
+}
+
+- (void)scanQrCode {
+    AVAuthorizationStatus status = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
+    if (status == AVAuthorizationStatusNotDetermined) {
+        __weak typeof(self) weakSelf = self;
+        [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                BTViewController *strong = weakSelf;
+                if (!strong) return;
+                if (granted) [strong presentQrScanner];
+                else strong->_connectionLabel.text = @"Camera permission denied for QR scan";
+            });
+        }];
+        return;
+    }
+    if (status != AVAuthorizationStatusAuthorized) {
+        _connectionLabel.text = @"Enable Camera access in Settings to scan QR";
+        return;
+    }
+    [self presentQrScanner];
+}
+
+- (void)presentQrScanner {
+    BTQrScannerViewController *scanner = [BTQrScannerViewController new];
+    scanner.modalPresentationStyle = UIModalPresentationFullScreen;
+    __weak typeof(self) weakSelf = self;
+    scanner.onCodeScanned = ^(NSString *value) {
+        NSURL *url = [NSURL URLWithString:value];
+        if (url) [weakSelf handlePairingURL:url];
+    };
+    [self presentViewController:scanner animated:YES completion:nil];
+}
+
+- (void)handlePairingURL:(NSURL *)url {
+    if (!self.isViewLoaded) [self loadViewIfNeeded];
+    BTPairingProposal *proposal = [BTPairingProposal parseURI:url];
+    if (!proposal) {
+        _connectionLabel.text = @"Invalid BackThread QR code";
+        return;
+    }
+    NSString *msg = [NSString stringWithFormat:@"Pair with %@ over pinned TLS Wi-Fi?\n\nVerify check code matches your PC:\n%@", proposal.pcName, proposal.checkCode];
+    UIAlertController *confirm = [UIAlertController alertControllerWithTitle:@"Confirm Wi-Fi Pairing"
+                                                                     message:msg
+                                                              preferredStyle:UIAlertControllerStyleAlert];
+    [confirm addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    __weak typeof(self) weakSelf = self;
+    [confirm addAction:[UIAlertAction actionWithTitle:@"Confirm & Pair" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        (void)a;
+        BTViewController *strong = weakSelf;
+        if (!strong) return;
+        strong->_connectionLabel.text = [NSString stringWithFormat:@"Pairing with %@...", proposal.pcName];
+        [strong.agent claimPairingURI:url completion:^(BOOL ok, NSString *message) {
+            BTViewController *inner = weakSelf;
+            if (!inner) return;
+            inner->_connectionLabel.text = message ?: (ok ? @"Paired" : @"Pairing failed");
+            if (ok) {
+                inner->_statusDot.backgroundColor = [BTTheme accentTeal];
+            }
+            [inner refreshAuxiliaryDiagnostics];
+        }];
+    }]];
+    [self presentViewController:confirm animated:YES completion:nil];
+}
+
 - (void)pair {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Provision host key"
-                                                                   message:@"Paste the 64-character session key created by BackThread.Host. Save it, then close and reopen this app to use the key."
+                                                                   message:@"Paste the 64-character session key created by BackThread.Host. It activates immediately without restarting."
                                                             preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *f) {
         f.secureTextEntry = YES;
@@ -783,7 +1030,7 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
         BTViewController *strong = weakSelf;
         UIAlertController *strongAlert = weakAlert;
         if (!strong || !strongAlert) return;
-        NSString *key = strongAlert.textFields.firstObject.text;
+        NSString *key = [strongAlert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
         NSCharacterSet *invalid = [[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdefABCDEF"] invertedSet];
         if (key.length != 64 || [key rangeOfCharacterFromSet:invalid].location != NSNotFound) {
             strong->_connectionLabel.text = @"Key must contain 64 hex chars";
@@ -804,7 +1051,21 @@ static NSString *BTSafeStr(id val, NSString *fallback) {
             NSFilePosixPermissions: @0600,
             NSFileProtectionKey: NSFileProtectionCompleteUntilFirstUserAuthentication
         } ofItemAtPath:path error:nil];
-        strong->_connectionLabel.text = @"Key saved. Reopen BackThread.";
+
+        NSMutableData *keyBytes = [NSMutableData dataWithLength:32];
+        uint8_t *dst = (uint8_t *)keyBytes.mutableBytes;
+        for (NSUInteger i = 0; i < 32; i++) {
+            unsigned int byte = 0;
+            [[NSScanner scannerWithString:[key substringWithRange:NSMakeRange(i * 2, 2)]] scanHexInt:&byte];
+            dst[i] = (uint8_t)byte;
+        }
+        if (strong.onKeyUpdated) {
+            strong.onKeyUpdated(keyBytes);
+        } else {
+            [strong.agent updateKey:keyBytes];
+            [strong.agent start];
+        }
+        strong->_connectionLabel.text = @"Key saved and activated — waiting for host";
     }]];
     [self presentViewController:alert animated:YES completion:nil];
 }

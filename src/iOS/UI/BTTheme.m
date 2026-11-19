@@ -72,7 +72,10 @@
     button.layer.cornerRadius = 10;
     button.layer.borderWidth = 1.0 / UIScreen.mainScreen.scale;
     button.layer.borderColor = [self hairlineColor].CGColor;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     button.contentEdgeInsets = UIEdgeInsetsMake(8, 12, 8, 12);
+#pragma clang diagnostic pop
     [button.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
     if (target && action) {
         [button addTarget:target action:action forControlEvents:UIControlEventTouchUpInside];
@@ -88,7 +91,10 @@
     [button setTitleColor:[self textMuted] forState:UIControlStateDisabled];
     button.backgroundColor = [self accentTeal];
     button.layer.cornerRadius = 10;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     button.contentEdgeInsets = UIEdgeInsetsMake(8, 14, 8, 14);
+#pragma clang diagnostic pop
     [button.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
     if (target && action) {
         [button addTarget:target action:action forControlEvents:UIControlEventTouchUpInside];

@@ -14,7 +14,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from ios_build_support import macho, verify_adhoc, write_debian
+from ios_build_support import debian_rootless, macho, verify_adhoc, write_debian, write_ipa
 
 BUILD = (ROOT / os.environ.get('BACKTHREAD_IOS_BUILD_DIR', 'artifacts/ios-build')).resolve()
 if not BUILD.is_relative_to(ROOT / 'artifacts') or BUILD == ROOT / 'artifacts':
@@ -40,6 +40,71 @@ def members(path):
     return result
 
 
+class IosProfileAndPlistTests(unittest.TestCase):
+    def _synthetic_macho(self, min_major, dyld_cmd):
+        # 32-byte header + LC_BUILD_VERSION (24 bytes) + dyld link metadata command (16 bytes)
+        lc_build = struct.pack('<6I', 0x32, 24, 2, min_major << 16, 15 << 16, 0)
+        lc_dyld = struct.pack('<4I', dyld_cmd, 16, 0, 0)
+        cmds = lc_build + lc_dyld
+        header = struct.pack('<8I', 0xfeedfacf, 0x100000c, 0, 2, 2, len(cmds), 0, 0)
+        return header + cmds
+
+    def test_info_plist_ios12_and_ios15_keys(self):
+        info = plistlib.loads((ROOT / 'src/iOS/Resources/Info.plist').read_bytes())
+        self.assertEqual('0.3.0', info['CFBundleShortVersionString'])
+        self.assertGreaterEqual(int(info['CFBundleVersion']), 7)
+        self.assertEqual('12.0', info['MinimumOSVersion'])
+        self.assertEqual('Dark', info['UIUserInterfaceStyle'])
+        self.assertIn('_backthread._tcp', info['NSBonjourServices'])
+        self.assertTrue(info['NSLocalNetworkUsageDescription'])
+        self.assertTrue(info['NSCameraUsageDescription'])
+        self.assertTrue(info['NSSpeechRecognitionUsageDescription'])
+        self.assertIn('UILaunchScreen', info)
+        self.assertIn('UILaunchImages', info)
+
+    def test_macho_dual_profile_validation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ios12_bin = pathlib.Path(tmp) / 'ios12'
+            ios12_bin.write_bytes(self._synthetic_macho(12, 0x80000022))
+            self.assertEqual('12.0.0', macho(ios12_bin, profile='ios12-universal')['minimumOS'])
+            self.assertEqual('legacy dyld info', macho(ios12_bin, profile='ios15')['linkMetadataFormat'])
+
+            ios15_bin = pathlib.Path(tmp) / 'ios15'
+            ios15_bin.write_bytes(self._synthetic_macho(15, 0x80000034))
+            with self.assertRaisesRegex(ValueError, 'legacy dyld'):
+                macho(ios15_bin, profile='ios12-universal')
+            parsed = macho(ios15_bin, profile='ios15')
+            self.assertEqual('15.0.0', parsed['minimumOS'])
+            self.assertEqual('chained fixups', parsed['linkMetadataFormat'])
+
+    def test_rootless_deb_and_deterministic_ipa(self):
+        import zipfile
+        with tempfile.TemporaryDirectory() as tmp:
+            app = pathlib.Path(tmp) / 'BackThread.app'
+            app.mkdir()
+            (app / 'BackThread').write_bytes(b'\xcf\xfa\xed\xfe' + b'\x00' * 28)
+            (app / 'Info.plist').write_bytes((ROOT / 'src/iOS/Resources/Info.plist').read_bytes())
+
+            ipa1 = pathlib.Path(tmp) / 'a.ipa'
+            ipa2 = pathlib.Path(tmp) / 'b.ipa'
+            write_ipa(ipa1, app, epoch=1700000000)
+            write_ipa(ipa2, app, epoch=1700000000)
+            self.assertEqual(ipa1.read_bytes(), ipa2.read_bytes())
+            with zipfile.ZipFile(ipa1, 'r') as zf:
+                self.assertIn('Payload/BackThread.app/BackThread', zf.namelist())
+                self.assertIn('Payload/BackThread.app/Info.plist', zf.namelist())
+
+            deb = pathlib.Path(tmp) / 'rootless.deb'
+            debian_rootless(deb, (ROOT / 'src/iOS/control').read_bytes(), app, epoch=0)
+            archive = members(deb)
+            with tarfile.open(fileobj=io.BytesIO(archive['control.tar.gz'])) as tar:
+                self.assertIn('Architecture: iphoneos-arm64', tar.extractfile('./control').read().decode())
+            with tarfile.open(fileobj=io.BytesIO(archive['data.tar.gz'])) as tar:
+                names = set(tar.getnames())
+                self.assertIn('./var/jb/Applications/BackThread.app/BackThread', names)
+
+
+@unittest.skipUnless(APP.is_dir(), 'Requires pre-built artifacts/ios-build bundle')
 class NativeArtifactTests(unittest.TestCase):
     def test_arm64_ios12_and_public_linkage(self):
         for binary in (APP / 'BackThread', BUILD / 'BackThread.Agent'):
@@ -167,8 +232,8 @@ class NativeArtifactTests(unittest.TestCase):
     def test_ipa_archive_and_version(self):
         import zipfile
         info = plistlib.loads((APP / 'Info.plist').read_bytes())
-        self.assertEqual('0.2.0', info['CFBundleShortVersionString'])
-        self.assertGreaterEqual(int(info['CFBundleVersion']), 6)
+        self.assertEqual('0.3.0', info['CFBundleShortVersionString'])
+        self.assertGreaterEqual(int(info['CFBundleVersion']), 7)
         ipa = BUILD / 'BackThread.ipa'
         self.assertTrue(ipa.is_file())
         with zipfile.ZipFile(ipa, 'r') as zf:

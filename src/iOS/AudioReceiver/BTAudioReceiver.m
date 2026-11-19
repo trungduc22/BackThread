@@ -7,21 +7,24 @@ static void BTOutput(void *ctx,AudioQueueRef q,AudioQueueBufferRef b) {
     BTAudioReceiver *receiver=(__bridge BTAudioReceiver *)ctx;
     pthread_mutex_lock(&receiver->_mutex);
     BOOL active=receiver->_running;
-    if(active&&!receiver->_primed&&receiver->_ring.count>=5760){receiver->_primed=YES;receiver->_underrunStreak=0;}
+    uint32_t packetBytes=receiver->_packetBytes>=1920?receiver->_packetBytes:1920;
+    size_t primeBytes=receiver->_primeBytes>=packetBytes?receiver->_primeBytes:5760;
+    if(active&&!receiver->_primed&&receiver->_ring.count>=primeBytes){receiver->_primed=YES;receiver->_underrunStreak=0;}
     if(active&&receiver->_primed) {
-        size_t readBytes=bt_pcm_read(&receiver->_ring,b->mAudioData,1920);
+        size_t readBytes=bt_pcm_read(&receiver->_ring,b->mAudioData,packetBytes);
         if(readBytes==0) {
             if(++receiver->_underrunStreak>=2){receiver->_primed=NO;receiver->_underrunStreak=0;}
         } else {
             receiver->_underrunStreak=0;
         }
     }
-    else memset(b->mAudioData,0,1920);
+    else memset(b->mAudioData,0,packetBytes);
     const int16_t *samples=b->mAudioData;
-    for(unsigned i=0;i<960;i++){int32_t value=samples[i];if(value){receiver->_renderNonzero++;if(value<0)value=-value;if(value>receiver->_renderPeak)receiver->_renderPeak=value;}}
+    unsigned sampleCount=packetBytes/2;
+    for(unsigned i=0;i<sampleCount;i++){int32_t value=samples[i];if(value){receiver->_renderNonzero++;if(value<0)value=-value;if(value>receiver->_renderPeak)receiver->_renderPeak=value;}}
     receiver->_callbacks++;
     pthread_mutex_unlock(&receiver->_mutex);
-    b->mAudioDataByteSize=1920;
+    b->mAudioDataByteSize=packetBytes;
     if(active) {
         OSStatus status=AudioQueueEnqueueBuffer(q,b,0,NULL);
         if(status!=noErr){pthread_mutex_lock(&receiver->_mutex);receiver->_lastStatus=status;receiver->_running=NO;pthread_mutex_unlock(&receiver->_mutex);}
@@ -30,10 +33,27 @@ static void BTOutput(void *ctx,AudioQueueRef q,AudioQueueBufferRef b) {
 @implementation BTAudioReceiver
 - (instancetype)init {
     if((self=[super init])) {
-        pthread_mutex_init(&_mutex,NULL);_volume=1;_lifecycle=[NSRecursiveLock new];
+        pthread_mutex_init(&_mutex,NULL);_volume=1;_packetBytes=1920;_primeBytes=5760;_ringCapacityBytes=BT_PCM_CAPACITY;_lifecycle=[NSRecursiveLock new];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(interruption:) name:AVAudioSessionInterruptionNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(reset:) name:AVAudioSessionMediaServicesWereResetNotification object:nil];
     } return self;
+}
+- (void)configureForPacketMs:(int)packetMs primeMs:(int)primeMs ringCapacityMs:(int)ringMs {
+    [_lifecycle lock];
+    uint32_t pkt=(packetMs==20)?3840:1920;
+    size_t cap=(ringMs>=100&&ringMs<=200)?(size_t)ringMs*192:(pkt==3840?BT_PCM_CAPACITY_MAX:BT_PCM_CAPACITY);
+    if(cap<BT_PCM_CAPACITY)cap=BT_PCM_CAPACITY;
+    if(cap>BT_PCM_CAPACITY_MAX)cap=BT_PCM_CAPACITY_MAX;
+    cap-=(cap%4);
+    size_t prime=(primeMs>=10&&primeMs<=180)?(size_t)primeMs*192:(pkt==3840?13440:5760);
+    if(prime<pkt)prime=pkt;
+    if(prime>cap-pkt)prime=cap-pkt;
+    pthread_mutex_lock(&_mutex);
+    _packetBytes=pkt;
+    _primeBytes=prime;
+    _ringCapacityBytes=cap;
+    pthread_mutex_unlock(&_mutex);
+    [_lifecycle unlock];
 }
 - (BOOL)running { pthread_mutex_lock(&_mutex);BOOL v=_running;pthread_mutex_unlock(&_mutex);return v; }
 - (BOOL)failStart:(OSStatus)status error:(NSError **)error {
@@ -45,14 +65,19 @@ static void BTOutput(void *ctx,AudioQueueRef q,AudioQueueBufferRef b) {
     [self stop];
     if(![[BTAudioSessionCoordinator sharedCoordinator] activateForPcmReceiver:error])return NO;
     _sessionActive=YES;
-    AudioStreamBasicDescription f={0};f.mSampleRate=48000;f.mFormatID=kAudioFormatLinearPCM;f.mFormatFlags=kLinearPCMFormatFlagIsSignedInteger|kAudioFormatFlagIsPacked;f.mBytesPerPacket=4;f.mFramesPerPacket=1;f.mBytesPerFrame=4;f.mChannelsPerFrame=2;f.mBitsPerChannel=16;
+    AudioStreamBasicDescription f={0};f.mSampleRate=48000;f.mFormatID=kAudioFormatLinearPCM;f.mFormatFlags=kLinearPCMFormatFlagIsSignedInteger|kLinearPCMFormatFlagIsPacked;f.mBytesPerPacket=4;f.mFramesPerPacket=1;f.mBytesPerFrame=4;f.mChannelsPerFrame=2;f.mBitsPerChannel=16;
     OSStatus status=AudioQueueNewOutput(&f,BTOutput,(__bridge void *)self,NULL,NULL,0,&_queue);
     if(status!=noErr)return [self failStart:status error:error];
-    pthread_mutex_lock(&_mutex);memset(&_ring,0,sizeof(_ring));_primed=NO;_underrunStreak=0;_interrupted=NO;_running=YES;_lastStatus=noErr;_callbacks=0;_inputNonzero=_renderNonzero=0;_inputPeak=_renderPeak=0;pthread_mutex_unlock(&_mutex);
+    pthread_mutex_lock(&_mutex);
+    uint32_t packetBytes=_packetBytes>=1920?_packetBytes:1920;
+    size_t ringCap=_ringCapacityBytes>=BT_PCM_CAPACITY?_ringCapacityBytes:BT_PCM_CAPACITY;
+    bt_pcm_init(&_ring,ringCap);
+    _primed=NO;_underrunStreak=0;_interrupted=NO;_running=YES;_lastStatus=noErr;_callbacks=0;_inputNonzero=_renderNonzero=0;_inputPeak=_renderPeak=0;
+    pthread_mutex_unlock(&_mutex);
     for(int i=0;i<3;i++) {
-        status=AudioQueueAllocateBuffer(_queue,1920,&_buffers[i]);
+        status=AudioQueueAllocateBuffer(_queue,packetBytes,&_buffers[i]);
         if(status!=noErr)return [self failStart:status error:error];
-        memset(_buffers[i]->mAudioData,0,1920);_buffers[i]->mAudioDataByteSize=1920;status=AudioQueueEnqueueBuffer(_queue,_buffers[i],0,NULL);
+        memset(_buffers[i]->mAudioData,0,packetBytes);_buffers[i]->mAudioDataByteSize=packetBytes;status=AudioQueueEnqueueBuffer(_queue,_buffers[i],0,NULL);
         if(status!=noErr)return [self failStart:status error:error];
     }
     status=AudioQueueSetParameter(_queue,kAudioQueueParam_Volume,_volume);
@@ -82,10 +107,10 @@ static void BTOutput(void *ctx,AudioQueueRef q,AudioQueueBufferRef b) {
 }
 - (NSDictionary *)statistics {
     [_lifecycle lock];@try {
-    pthread_mutex_lock(&_mutex);size_t buffered=_ring.count;uint64_t dropped=_ring.dropped,silence=_ring.silence,callbacks=_callbacks;OSStatus status=_lastStatus;BOOL running=_running,primed=_primed,interrupted=_interrupted;uint64_t inputNonzero=_inputNonzero,renderNonzero=_renderNonzero;int32_t inputPeak=_inputPeak,renderPeak=_renderPeak;pthread_mutex_unlock(&_mutex);
+    pthread_mutex_lock(&_mutex);size_t buffered=_ring.count,ringCap=_ringCapacityBytes,primeBytes=_primeBytes;uint32_t packetBytes=_packetBytes;uint64_t dropped=_ring.dropped,silence=_ring.silence,callbacks=_callbacks;OSStatus status=_lastStatus;BOOL running=_running,primed=_primed,interrupted=_interrupted;uint64_t inputNonzero=_inputNonzero,renderNonzero=_renderNonzero;int32_t inputPeak=_inputPeak,renderPeak=_renderPeak;pthread_mutex_unlock(&_mutex);
     UInt32 queueRunning=0,size=sizeof(queueRunning);AudioQueueParameterValue gain=_volume;OSStatus runningStatus=noErr,gainStatus=noErr;if(_queue){runningStatus=AudioQueueGetProperty(_queue,kAudioQueueProperty_IsRunning,&queueRunning,&size);gainStatus=AudioQueueGetParameter(_queue,kAudioQueueParam_Volume,&gain);}
     NSMutableArray *routes=[NSMutableArray new];AVAudioSession *session=[AVAudioSession sharedInstance];for(AVAudioSessionPortDescription *port in session.currentRoute.outputs)if(port.portType)[routes addObject:port.portType];
-    return @{@"bufferedBytes":@(buffered),@"droppedBytes":@(dropped),@"silenceBytes":@(silence),@"callbacks":@(callbacks),@"lastOSStatus":@(status),@"running":@(running),@"primed":@(primed),@"interrupted":@(interrupted),@"routeTypes":routes,@"outputVolume":@(session.outputVolume),@"queueRunning":@(queueRunning!=0),@"queueGain":@(gain),@"queueRunningStatus":@(runningStatus),@"queueGainStatus":@(gainStatus),@"queuePresent":@(_queue!=NULL),@"hardwareSampleRate":@(session.sampleRate),@"sessionCategory":session.category?:@"",@"sessionMode":session.mode?:@"",@"otherAudioPlaying":@(session.otherAudioPlaying),@"secondaryAudioSilencedHint":@(session.secondaryAudioShouldBeSilencedHint),@"inputPeak":@(inputPeak),@"renderPeak":@(renderPeak),@"inputNonzeroSamples":@(inputNonzero),@"renderNonzeroSamples":@(renderNonzero)};
+    return @{@"bufferedBytes":@(buffered),@"droppedBytes":@(dropped),@"silenceBytes":@(silence),@"callbacks":@(callbacks),@"lastOSStatus":@(status),@"running":@(running),@"primed":@(primed),@"interrupted":@(interrupted),@"packetBytes":@(packetBytes),@"primeBytes":@(primeBytes),@"ringCapacityBytes":@(ringCap),@"routeTypes":routes,@"outputVolume":@(session.outputVolume),@"queueRunning":@(queueRunning!=0),@"queueGain":@(gain),@"queueRunningStatus":@(runningStatus),@"queueGainStatus":@(gainStatus),@"queuePresent":@(_queue!=NULL),@"hardwareSampleRate":@(session.sampleRate),@"sessionCategory":session.category?:@"",@"sessionMode":session.mode?:@"",@"otherAudioPlaying":@(session.otherAudioPlaying),@"secondaryAudioSilencedHint":@(session.secondaryAudioShouldBeSilencedHint),@"inputPeak":@(inputPeak),@"renderPeak":@(renderPeak),@"inputNonzeroSamples":@(inputNonzero),@"renderNonzeroSamples":@(renderNonzero)};
     } @finally{[_lifecycle unlock];}
 }
 - (void)interruption:(NSNotification *)n {

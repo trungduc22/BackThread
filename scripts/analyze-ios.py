@@ -26,6 +26,8 @@ SOURCES = [
     'src/iOS/Media/BTYouTubeEmbedController.m',
     'src/iOS/Agent/BTAgent.m',
     'src/iOS/Agent/main.m',
+    'src/iOS/Transport/BTWifiClient.m',
+    'src/iOS/Worker/BTWorkerEngine.m',
     'src/iOS/AudioReceiver/BTAudioSessionCoordinator.m',
     'src/iOS/AudioReceiver/BTAudioReceiver.m',
     'src/iOS/AudioReceiver/BTPcmRing.c',
@@ -40,7 +42,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--zig', required=True, type=pathlib.Path)
     parser.add_argument('--sdk', required=True, type=pathlib.Path)
+    parser.add_argument('--profile', choices=['ios12-universal', 'ios15'], default='ios12-universal')
     args = parser.parse_args()
+    min_ios = '15.0' if args.profile == 'ios15' else '12.0'
     zig, sdk = args.zig.resolve(), args.sdk.resolve()
     out = ROOT / 'artifacts/ios-analysis'
     out.mkdir(parents=True, exist_ok=True)
@@ -57,7 +61,7 @@ def main():
         report['currentSource']=source;save()
         plist = out / f'{index}.plist'
         plist.unlink(missing_ok=True)
-        command = [str(zig), 'clang', '--analyze', '-target', 'arm64-apple-ios12.0',
+        command = [str(zig), 'clang', '--analyze', '-target', f'arm64-apple-ios{min_ios}',
                    '-isysroot', str(sdk), '-iframework', str(sdk / 'System/Library/Frameworks'),
                    '-isystem', str(sdk / 'usr/include'), '-isystem', str(zig.parent / 'lib/include'),
                    '-I', str(out),

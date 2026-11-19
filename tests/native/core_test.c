@@ -57,6 +57,21 @@ int main(void) {
     }
     assert(r.count == 0);
 
+    // Adaptive 200 ms Wi-Fi ring buffer (38400 bytes, 20 ms = 3840-byte packets)
+    assert(BT_PCM_CAPACITY_MAX == 38400);
+    BTPcmRing wifiRing;
+    bt_pcm_init(&wifiRing, BT_PCM_CAPACITY_MAX);
+    assert(wifiRing.capacity == 38400 && wifiRing.count == 0 && wifiRing.head == 0);
+    for (int i = 0; i < 12; i++) assert(bt_pcm_write(&wifiRing, chunk, sizeof(chunk)) == 0); // 46080 written -> 7680 dropped
+    assert(wifiRing.count == 38400 && wifiRing.dropped == 7680);
+    for (int i = 0; i < 10; i++) {
+        assert(bt_pcm_read(&wifiRing, drained, 3840) == 3840);
+        assert(memcmp(drained, chunk, 3840) == 0);
+    }
+    assert(wifiRing.count == 0);
+    assert(bt_pcm_read(&wifiRing, drained, 3840) == 0);
+    assert(wifiRing.silence == 3840);
+
     puts("PASS native protocol and PCM ring");
     return 0;
 }

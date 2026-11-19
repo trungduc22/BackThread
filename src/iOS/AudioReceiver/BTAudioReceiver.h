@@ -19,9 +19,13 @@
     int32_t _inputPeak,_renderPeak;
     NSUInteger _underrunStreak;
     float _volume;
+    uint32_t _packetBytes;
+    size_t _primeBytes;
+    size_t _ringCapacityBytes;
     NSRecursiveLock *_lifecycle;
 }
 @property(nonatomic,readonly) BOOL running;
+- (void)configureForPacketMs:(int)packetMs primeMs:(int)primeMs ringCapacityMs:(int)ringMs;
 - (BOOL)start:(NSError **)error;
 - (void)receive:(NSData *)data;
 - (void)stop;
