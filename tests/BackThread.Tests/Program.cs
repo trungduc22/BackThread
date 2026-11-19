@@ -247,6 +247,36 @@ await Test("simulator.slow-file-io-keeps-control-responsive",async()=>
     finally {server.FileIoDelayMs=0;await upload;}
     Check.True((await session.Worker.ReadArtifactAsync("fixture.dat",0,data.Length,ct)).SequenceEqual(data));
 });
+await Test("simulator.blocked-job-journal-preserves-pcm-and-heartbeat", async () =>
+{
+    var persistEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    using var release = new ManualResetEventSlim();
+    await using var server = new AgentServer(0, key, Path.Combine(root, "blocked-journal"), () =>
+    {
+        persistEntered.TrySetResult();
+        if (!release.Wait(TimeSpan.FromSeconds(10), ct)) throw new IOException("Fixture journal barrier timed out");
+    });
+    server.Start();
+    await using var session = await Session.Open(server.Port, key, ct);
+    await session.Connection.RequestAsync(LogicalChannel.Control, "audio.start", new { sampleRate = 48000, channels = 2, bits = 16 }, ct);
+    var submit = session.Worker.SubmitAsync(new("blocked", "diagnostic", "version"), ct);
+    try
+    {
+        await persistEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
+        for (int i = 0; i < 3; i++)
+            await session.Connection.SendFrameAsync(LogicalChannel.Audio, PcmRing.Sine(i * 480), (ulong)i * 10000, ct);
+        var pong = await session.Connection.RequestAsync(LogicalChannel.Control, "ping", new { }, ct, TimeSpan.FromSeconds(2));
+        Check.Equal("pong", pong.Type);
+        await Check.Eventually(async () =>
+        {
+            var stats = await session.Connection.RequestAsync(LogicalChannel.Diagnostics, "audio.stats", new { }, ct, TimeSpan.FromSeconds(2));
+            return stats.Body.GetProperty("packets").GetInt64() == 3;
+        });
+        Check.True(!submit.IsCompleted, "Job unexpectedly replied before its journal write");
+    }
+    finally { release.Set(); await submit; }
+    await Check.Eventually(async () => (await session.Worker.QueryAsync("blocked", ct)).Body.GetProperty("state").GetString() == "completed");
+});
 await Test("integration.heartbeat-audio-order-and-content", async () =>
 {
     await using var server = new AgentServer(0, key, Path.Combine(root, "audio")); server.Start(); await using var s = await Session.Open(server.Port, key, ct);
@@ -469,7 +499,7 @@ if (duration > 0) await Test("soak.concurrent-audio-worker", async () =>
     final = (await s.Connection.RequestAsync(LogicalChannel.Diagnostics, "audio.stats", new { }, ct)).Body.Clone();
     } finally { audioStop.Cancel();try{await stream;}catch(OperationCanceledException)when(audioStop.IsCancellationRequested){} }
     process.Refresh(); Console.WriteLine("METRIC " + JsonSerializer.Serialize(new { durationSeconds = watch.Elapsed.TotalSeconds, finalStatsTakenBeforeSourceStop=true, jobs, maximumBuffer, startMemory, endMemory = process.WorkingSet64, cpuSeconds = (process.TotalProcessorTime - cpu).TotalSeconds, senderDropped = s.Connection.DroppedAudio,
-        sender=new {queueMaximumMilliseconds=s.Connection.AudioQueueMaximumMilliseconds,writeMaximumMilliseconds=s.Connection.AudioWriteMaximumMilliseconds,slowWrites=s.Connection.AudioSlowWrites,pacingMaximumLatenessMilliseconds=audio.PacingMaximumLatenessMilliseconds,pacingLateFrames=audio.PacingLateFrames,pacingResets=audio.PacingResets,captureDroppedBytes=audio.Ring.DroppedBytes,captureSilenceBytes=audio.Ring.SilenceBytes},
+        sender=new {queueMaximumMilliseconds=s.Connection.AudioQueueMaximumMilliseconds,writeMaximumMilliseconds=s.Connection.AudioWriteMaximumMilliseconds,maximumWriteCompletionGap=s.Connection.MaximumAudioWriteGap,slowWrites=s.Connection.AudioSlowWrites,pacingMaximumLatenessMilliseconds=audio.PacingMaximumLatenessMilliseconds,pacingLateFrames=audio.PacingLateFrames,pacingResets=audio.PacingResets,captureDroppedBytes=audio.Ring.DroppedBytes,captureSilenceBytes=audio.Ring.SilenceBytes},
         receiver = final,lossSamples }, Message.Json));
     Check.True(maximumBuffer <= 19200);
     Check.Equal(0L, final.GetProperty("skippedPlaybackTicks").GetInt64());

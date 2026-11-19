@@ -23,6 +23,10 @@ public sealed class Connection : IAsyncDisposable
     private long dropped;
     private long audioWriteMaximumUs,audioSlowWrites,audioQueueMaximumUs,handlerMaximumUs;
     private long lastReceive = Environment.TickCount64;
+    public sealed record AudioWriteGap(uint Sequence, double Milliseconds);
+    private long lastAudioWriteCompletedAt;
+    private AudioWriteGap? maximumAudioWriteGap;
+    public AudioWriteGap? MaximumAudioWriteGap => Volatile.Read(ref maximumAudioWriteGap);
     public long DroppedAudio => Interlocked.Read(ref dropped);
     public double AudioWriteMaximumMilliseconds=>Interlocked.Read(ref audioWriteMaximumUs)/1000d;
     public long AudioSlowWrites=>Interlocked.Read(ref audioSlowWrites);
@@ -127,7 +131,15 @@ public sealed class Connection : IAsyncDisposable
     private void RecordWrite(Frame frame,long started)
     {
         if(frame.Channel!=LogicalChannel.Audio)return;
-        long elapsed=Stopwatch.GetElapsedTime(started).Ticks/10;
+        long completedAt = Stopwatch.GetTimestamp();
+        if (lastAudioWriteCompletedAt != 0)
+        {
+            double gap = Stopwatch.GetElapsedTime(lastAudioWriteCompletedAt, completedAt).TotalMilliseconds;
+            if (gap > (maximumAudioWriteGap?.Milliseconds ?? 0))
+                Volatile.Write(ref maximumAudioWriteGap, new(frame.Sequence, gap));
+        }
+        lastAudioWriteCompletedAt = completedAt;
+        long elapsed = Stopwatch.GetElapsedTime(started, completedAt).Ticks / 10;
         RecordMaximum(ref audioWriteMaximumUs,elapsed);
         if(elapsed>=50000)Interlocked.Increment(ref audioSlowWrites);
     }

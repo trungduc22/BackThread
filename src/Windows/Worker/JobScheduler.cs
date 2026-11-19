@@ -12,6 +12,7 @@ public sealed class JobScheduler : IAsyncDisposable
 {
     private readonly Storage storage;
     private readonly string journal;
+    private readonly Action? beforePersist;
     private readonly Channel<JobSpec> queue = Channel.CreateBounded<JobSpec>(8);
     private readonly Dictionary<string, JobState> states = [];
     private readonly Dictionary<string, JobSpec> specs = [];
@@ -21,9 +22,9 @@ public sealed class JobScheduler : IAsyncDisposable
     private readonly object gate = new();
     public bool MemoryPressure { get; set; }
     public event Action<JobState>? Changed;
-    public JobScheduler(Storage storage, string journal)
+    public JobScheduler(Storage storage, string journal, Action? beforePersist = null)
     {
-        this.storage = storage; this.journal = journal;
+        this.storage = storage; this.journal = journal; this.beforePersist = beforePersist;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(journal))!);
         if (File.Exists(journal))
         {
@@ -62,6 +63,7 @@ public sealed class JobScheduler : IAsyncDisposable
     public bool Cancel(string id) { lock (gate) { if (!cancellations.TryGetValue(id, out var c)) return false; c.Cancel(); return true; } }
     private void Persist()
     {
+        beforePersist?.Invoke();
         File.WriteAllText(journal + ".tmp", JsonSerializer.Serialize(states.Values)); File.Move(journal + ".tmp", journal, true);
     }
     private void Update(JobState s)

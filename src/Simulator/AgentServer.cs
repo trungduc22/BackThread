@@ -28,9 +28,9 @@ public sealed class AgentServer : IAsyncDisposable
     public event Action<string>? Log;
     private Task? serving;
     private readonly EventRouter events = new();
-    public AgentServer(int port, byte[] key, string stateRoot)
+    public AgentServer(int port, byte[] key, string stateRoot, Action? beforeJobPersist = null)
     {
-        this.key = key; listener = new(IPAddress.Loopback, port); storage = new(Path.Combine(stateRoot, "files")); Jobs = new(storage, Path.Combine(stateRoot, "jobs.json"));
+        this.key = key; listener = new(IPAddress.Loopback, port); storage = new(Path.Combine(stateRoot, "files")); Jobs = new(storage, Path.Combine(stateRoot, "jobs.json"), beforeJobPersist);
     }
     public void Start() { listener.Start(2); serving = ServeAsync(); }
     private async Task ServeAsync()
@@ -47,7 +47,8 @@ public sealed class AgentServer : IAsyncDisposable
                 var ring = new PcmRing(); using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
                 bool audioOn = false; long packets = 0, bytes = 0, gaps = 0; uint previous = 0; long framesRead = 0, playbackEpoch = 0, skippedPlaybackTicks = 0, maxPlaybackWakeUs = 0;
                 var playbackGate = new object();
-                long lastArrival=0,maximumArrivalGapUs=0;
+                long lastArrival = 0, maximumArrivalGapUs = 0;
+                uint maximumArrivalGapSequence = 0;
                 var pendingTasks = new List<Task>();
                 using var fileSlots=new SemaphoreSlim(2,2);
                 var fileWork=Channel.CreateBounded<(Func<Task> Run,Message? Request,LogicalChannel Channel)>(2);
@@ -88,6 +89,40 @@ public sealed class AgentServer : IAsyncDisposable
                     }
                     catch(Exception)when(session.IsCancellationRequested) { }
                     catch(Exception ex){Log?.Invoke("File worker failed: "+ex.Message);session.Cancel();}
+                });
+                // One executing command plus at most seven waiting. Journal writes and
+                // scheduler locks stay off the reader while preserving job command order.
+                var jobCommands = Channel.CreateBounded<(LogicalChannel Channel, Message Request)>(7);
+                var jobIo = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await foreach (var (channel, request) in jobCommands.Reader.ReadAllAsync(session.Token))
+                        {
+                            session.Token.ThrowIfCancellationRequested();
+                            Message response;
+                            try
+                            {
+                                var body = request.Body;
+                                object result = request.Type switch
+                                {
+                                    "job.submit" => Jobs.Submit(body.Deserialize<JobSpec>(Message.Json) ?? throw new InvalidDataException()),
+                                    "job.query" => Jobs.Query(body.GetProperty("jobId").GetString()!) ?? throw new FileNotFoundException("Unknown job"),
+                                    "job.cancel" => new { cancelled = Jobs.Cancel(body.GetProperty("jobId").GetString()!) },
+                                    _ => throw new InvalidDataException("Unsupported job command")
+                                };
+                                response = Message.Create("ok", result, replyTo: request.Id);
+                            }
+                            catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException
+                                or InvalidOperationException or KeyNotFoundException or JsonException)
+                            {
+                                response = Message.Create("error", new { error = error.Message }, replyTo: request.Id);
+                            }
+                            await c.SendAsync(channel, response, session.Token);
+                        }
+                    }
+                    catch (Exception) when (session.IsCancellationRequested) { }
+                    catch (Exception error) { Log?.Invoke("Job command queue failed: " + error.GetType().Name); session.Cancel(); }
                 });
                 void JobChanged(JobState s)
                 {
@@ -132,7 +167,15 @@ public sealed class AgentServer : IAsyncDisposable
                             if (frame.Payload.Length % 4 != 0) throw new InvalidDataException("Invalid PCM stream");
                             if (!audioOn) return; // A PCM frame queued before Stop can arrive afterwards.
                             long arrived=Stopwatch.GetTimestamp();
-                            if(lastArrival!=0)maximumArrivalGapUs=Math.Max(maximumArrivalGapUs,Stopwatch.GetElapsedTime(lastArrival,arrived).Ticks/10);
+                            if (lastArrival != 0)
+                            {
+                                long gapUs = Stopwatch.GetElapsedTime(lastArrival, arrived).Ticks / 10;
+                                if (gapUs > maximumArrivalGapUs)
+                                {
+                                    maximumArrivalGapUs = gapUs;
+                                    maximumArrivalGapSequence = frame.Sequence;
+                                }
+                            }
                             lastArrival=arrived;
                             if (previous != 0 && frame.Sequence != previous + 1) gaps++;
                             previous = frame.Sequence; hash.AppendData(frame.Payload); ring.Write(frame.Payload);
@@ -166,7 +209,8 @@ public sealed class AgentServer : IAsyncDisposable
                                         playbackEpoch = framesRead = skippedPlaybackTicks = maxPlaybackWakeUs = 0;
                                         Volatile.Write(ref audioOn, true);
                                     }
-                                    hash.GetHashAndReset(); packets = bytes = gaps = 0; lastArrival = maximumArrivalGapUs = 0; previous = 0;
+                                    hash.GetHashAndReset(); packets = bytes = gaps = 0; lastArrival = maximumArrivalGapUs = 0;
+                                    previous = maximumArrivalGapSequence = 0;
                                     await Reply(new { ready = true }); break;
                                 case "audio.stop":
                                     lock (playbackGate) { Volatile.Write(ref audioOn, false); ring.Clear(); }
@@ -177,12 +221,14 @@ public sealed class AgentServer : IAsyncDisposable
                                         audioStats = new { packets, bytes, gaps, bufferedBytes = ring.Count, droppedBytes = ring.DroppedBytes,
                                             silenceBytes = ring.SilenceBytes, playbackTicks = framesRead, skippedPlaybackTicks,
                                             maximumPlaybackWakeMilliseconds = maxPlaybackWakeUs / 1000d,
-                                            maximumArrivalGapMilliseconds = maximumArrivalGapUs / 1000d,
+                                            maximumArrivalGapMilliseconds = maximumArrivalGapUs / 1000d, maximumArrivalGapSequence,
                                             handlerMaximumMilliseconds = c.HandlerMaximumMilliseconds, sha256 = Convert.ToHexString(hash.GetCurrentHash()).ToLowerInvariant() };
                                     await Reply(audioStats); break;
-                                case "job.submit": await Reply(Jobs.Submit(b.Deserialize<JobSpec>(Message.Json) ?? throw new InvalidDataException())); break;
-                                case "job.query": await Reply(Jobs.Query(b.GetProperty("jobId").GetString()!) ?? throw new FileNotFoundException("Unknown job")); break;
-                                case "job.cancel": await Reply(new { cancelled = Jobs.Cancel(b.GetProperty("jobId").GetString()!) }); break;
+                                case "job.submit":
+                                case "job.query":
+                                case "job.cancel":
+                                    if (!jobCommands.Writer.TryWrite((frame.Channel, message))) throw new IOException("Job command queue is busy");
+                                    break;
                                 case "file.begin": QueueFileOperation(async()=>await Reply(new{offset=await storage.BeginAsync(b.Deserialize<TransferSpec>(Message.Json)??throw new InvalidDataException(),session.Token)}),message,frame.Channel);break;
                                 case "file.commit":
                                     lock (pendingTasks)
@@ -196,7 +242,7 @@ public sealed class AgentServer : IAsyncDisposable
                                         }, session.Token));
                                     }
                                     break;
-                                case "file.list": await Reply(new { files = storage.List() }); break;
+                                case "file.list": QueueFileOperation(() => Reply(new { files = storage.List() }).AsTask(), message, frame.Channel); break;
                                 case "file.read":
                                     string name = b.GetProperty("name").GetString()!, id = b.GetProperty("transferId").GetString()!;
                                     if (id.Length != 32 || !id.All(Uri.IsHexDigit)) throw new InvalidDataException("Invalid download ID");
@@ -226,7 +272,11 @@ public sealed class AgentServer : IAsyncDisposable
                 }
                 finally
                 {
-                    Jobs.Changed -= JobChanged;fileWork.Writer.TryComplete();session.Cancel();await playback;await fileIo;
+                    Jobs.Changed -= JobChanged;
+                    fileWork.Writer.TryComplete();
+                    jobCommands.Writer.TryComplete();
+                    session.Cancel();
+                    await Task.WhenAll(playback, fileIo, jobIo);
                     Task[] remaining; lock (pendingTasks) remaining = pendingTasks.ToArray();
                     try { await Task.WhenAll(remaining); } catch (Exception) when(session.IsCancellationRequested) { }
                 }
