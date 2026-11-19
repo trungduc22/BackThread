@@ -1,0 +1,33 @@
+name: Windows regression
+
+on:
+  push:
+    branches: [integration/hiberdesk-bridge]
+  pull_request:
+    branches: [integration/hiberdesk-bridge]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Build BackThread
+        run: dotnet build BackThread.sln -c Release
+      - name: Run managed and available native regression checks
+        run: ./scripts/test.ps1
+      - name: Verify the host has no desktop UI dependencies
+        run: |
+          $deps = Get-Content 'src/Windows/Host/bin/Release/net8.0-windows10.0.19041.0/BackThread.Host.deps.json' -Raw | ConvertFrom-Json
+          if ($deps.libraries.PSObject.Properties.Name -match 'WindowsAppSDK|NativeShellKit.WinUI|NativeShellKit.DesignSystem|WindowsDesktop') {
+            throw 'The standalone host includes a desktop UI dependency.'
+          }
