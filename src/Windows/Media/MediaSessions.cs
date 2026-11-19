@@ -6,16 +6,100 @@ using Windows.Graphics.Imaging;
 namespace BackThread.Media;
 
 public sealed record MediaSnapshot(string Source, string Title, string Artist, string Album, string State, double PositionSeconds, double DurationSeconds, bool CanSeek, string? ArtworkBase64, bool CanPlay, bool CanPause, bool CanNext, bool CanPrevious);
-public sealed class MediaSessions
+public sealed class MediaSessions : IDisposable
 {
+    private readonly Lock hookGate = new();
     private GlobalSystemMediaTransportControlsSessionManager? manager;
+    private GlobalSystemMediaTransportControlsSession? hookedSession;
     private string? artworkKey, artwork;
+
+    public event Action? Changed;
+
     public Task InitializeAsync() => OperatingSystem.IsWindows() ? InitializeWindowsAsync() : Task.CompletedTask;
     public Task<MediaSnapshot?> SnapshotAsync() => OperatingSystem.IsWindows() ? SnapshotWindowsAsync() : Task.FromResult<MediaSnapshot?>(null);
     public Task<bool> CommandAsync(string command, double seconds = 0, string? source = null) => OperatingSystem.IsWindows() ? CommandWindowsAsync(command, seconds, source) : Task.FromResult(false);
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private async Task InitializeWindowsAsync() => manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+    private async Task InitializeWindowsAsync()
+    {
+        manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+        if (manager is not null)
+        {
+            manager.CurrentSessionChanged += OnCurrentSessionChanged;
+            HookCurrentSession();
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void OnCurrentSessionChanged(GlobalSystemMediaTransportControlsSessionManager sender, CurrentSessionChangedEventArgs args)
+    {
+        HookCurrentSession();
+        Changed?.Invoke();
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void OnSessionPropertiesChanged(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs args) => Changed?.Invoke();
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void OnSessionPlaybackChanged(GlobalSystemMediaTransportControlsSession sender, PlaybackInfoChangedEventArgs args) => Changed?.Invoke();
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void HookCurrentSession()
+    {
+        lock (hookGate)
+        {
+            var next = manager?.GetCurrentSession();
+            if (ReferenceEquals(hookedSession, next)) return;
+            if (hookedSession is not null)
+            {
+                try
+                {
+                    hookedSession.MediaPropertiesChanged -= OnSessionPropertiesChanged;
+                    hookedSession.PlaybackInfoChanged -= OnSessionPlaybackChanged;
+                }
+                catch { }
+            }
+            hookedSession = next;
+            if (hookedSession is not null)
+            {
+                try
+                {
+                    hookedSession.MediaPropertiesChanged += OnSessionPropertiesChanged;
+                    hookedSession.PlaybackInfoChanged += OnSessionPlaybackChanged;
+                }
+                catch { }
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        DisposeWindowsResources();
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void DisposeWindowsResources()
+    {
+        lock (hookGate)
+        {
+            if (hookedSession is not null)
+            {
+                try
+                {
+                    hookedSession.MediaPropertiesChanged -= OnSessionPropertiesChanged;
+                    hookedSession.PlaybackInfoChanged -= OnSessionPlaybackChanged;
+                }
+                catch { }
+                hookedSession = null;
+            }
+            if (manager is not null)
+            {
+                try { manager.CurrentSessionChanged -= OnCurrentSessionChanged; } catch { }
+                manager = null;
+            }
+        }
+    }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private async Task<MediaSnapshot?> SnapshotWindowsAsync()

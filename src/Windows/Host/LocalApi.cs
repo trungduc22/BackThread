@@ -78,7 +78,43 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
 
         application.MapGet("/v1/status", () => host.Status);
         application.MapGet("/v1/telemetry", () => host.LatestTelemetry);
+        application.MapGet("/v1/lan/status", () => host.LanStatus);
+        application.MapPost("/v1/lan/pair/start", () => host.StartQrPairing());
+        application.MapGet("/v1/lan/devices", () => new { devices = host.ListDevices() });
+        application.MapPost("/v1/lan/devices/{id}/revoke", (string id) => new { revoked = host.RevokeDevice(id) });
+        application.MapPost("/v1/power-profile", async (HttpContext c) =>
+        {
+            var b = await Body<PowerProfileRequest>(c);
+            return new { powerProfile = host.SetPowerProfile(b.Profile).ToString() };
+        });
         application.MapGet("/v1/audio/state", () => host.CurrentAudioControlState());
+        application.MapGet("/v1/audio/mixer", () => new { sessions = host.ListPerAppAudio() });
+        application.MapPost("/v1/audio/mixer", async (HttpContext c) =>
+        {
+            var b = await Body<AudioMixerSetRequest>(c);
+            var updated = host.SetPerAppAudio(b.ProcessId, b.Volume, b.Muted);
+            return updated is not null ? Results.Ok(updated) : Results.NotFound(new { error = "Audio session not found" });
+        });
+        application.MapGet("/v1/gpu", () => new { gpus = host.SampleGpu() });
+        application.MapGet("/v1/processes", (int? limit) => new { processes = host.SampleProcesses(limit ?? 10) });
+        application.MapGet("/v1/dev", async (HttpContext c) => await host.SampleDevSessionsAsync(c.RequestAborted));
+        application.MapGet("/v1/offload/status", () => host.GetOffloadSnapshot());
+        application.MapPost("/v1/offload/evaluate", async (HttpContext c) => host.EvaluateOffload(await Body<OffloadCandidate>(c)));
+        application.MapGet("/v1/rules/status", () => host.GetRulesStatus());
+        application.MapPost("/v1/rules/pause", async (HttpContext c) =>
+        {
+            var b = await OptionalBody<RulesPauseRequest>(c);
+            host.PauseRules(b?.Minutes ?? 60);
+            return host.GetRulesStatus();
+        });
+        application.MapGet("/v1/charge-guard/status", () => host.GetChargeGuardStatus());
+        application.MapGet("/v1/feeds/proxy", async (string? url, HttpContext c) =>
+        {
+            var res = await host.FetchSafeFeedAsync(url, c.RequestAborted);
+            return res.Error is null
+                ? Results.Bytes(res.Body, res.ContentType)
+                : Results.Json(new { error = res.Error }, Message.Json, statusCode: res.StatusCode);
+        });
         application.MapPost("/v1/audio/mode", async (HttpContext c) =>
         {
             var b = await Body<AudioOutputModeRequest>(c);
@@ -228,6 +264,9 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
     private sealed record FocusRequest(AudioFocusPolicy Policy);
     private sealed record AudioOutputModeRequest(AudioOutputMode Mode);
     private sealed record AudioVolumeRequest(float Value, string? Layer = null);
+    private sealed record AudioMixerSetRequest(int ProcessId, float? Volume = null, bool? Muted = null);
+    private sealed record PowerProfileRequest(PowerProfile Profile);
+    private sealed record RulesPauseRequest(int? Minutes = null);
     private sealed record ModeSelectRequest(PlaybackMode Mode, string? Url = null, string? FilePath = null);
     private sealed record SpotifyAuthStartRequest(string? ClientId, string? RedirectUri);
     private sealed record SpotifyPlayRequest(string? Uri, string? DeviceId);

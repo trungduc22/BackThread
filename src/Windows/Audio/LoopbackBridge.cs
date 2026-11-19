@@ -9,15 +9,23 @@ namespace BackThread.Audio;
 
 public sealed class LoopbackBridge
 {
+    public const long SilenceSleepThresholdMs = 10_000;
+
     // Windows WASAPI shared loopback delivers bursts up to ~100ms; give the capture ring 250ms headroom.
     public PcmRing Ring { get; } = new(PcmRing.BytesPer10Ms * 25);
     public string? DeviceName { get; private set; }
     public string? LastError { get; private set; }
     public long FramesSent { get; private set; }
+    public int ActivePacketMs { get; private set; } = 10;
+    public bool IsInSilenceSleep => Volatile.Read(ref silenceSleepActive) != 0;
+    public long SilenceSleepTransitions => Interlocked.Read(ref silenceSleepTransitions);
+
     private long lastCapture;
     private long maximumLatenessMs, lateFrames, pacingResets;
     private long nonZeroPackets, zeroPackets, lastNonZeroTick;
     private int lastPeakSample;
+    private int silenceSleepActive;
+    private long silenceSleepTransitions;
 
     public long PacingMaximumLatenessMilliseconds => Interlocked.Read(ref maximumLatenessMs);
     public long PacingLateFrames => Interlocked.Read(ref lateFrames);
@@ -30,6 +38,7 @@ public sealed class LoopbackBridge
     {
         if (!streamActive) return "stopped";
         if (fixture) return "fixture";
+        if (IsInSilenceSleep) return "silence-sleep";
         long now = Environment.TickCount64;
         long lastNz = Interlocked.Read(ref lastNonZeroTick);
         if (Interlocked.Read(ref nonZeroPackets) > 0 && lastNz != 0 && now - lastNz <= 3000)
@@ -66,67 +75,139 @@ public sealed class LoopbackBridge
     }
 
     /// <summary>WASAPI shared-mode PCM conversion is requested from the Windows audio engine.</summary>
-    public async Task RunAsync(Connection connection, bool fixture, CancellationToken ct, Action? pacingStarted = null)
+    public async Task RunAsync(
+        Connection connection,
+        bool fixture,
+        CancellationToken ct,
+        Action? pacingStarted = null,
+        AdaptiveAudioProfile? audioProfile = null,
+        bool enableSilenceSleep = true)
     {
-        using var scheduling = new AudioTimerScope();
-        await connection.RequestAsync(LogicalChannel.Control, "audio.start", new { sampleRate = 48000, channels = 2, bits = 16, packetMs = 10 }, ct);
+        var profile = audioProfile ?? AdaptiveAudioProfile.ForRoute(TransportRouteKind.Usb);
+        int packetMs = profile.PacketMs == 20 ? 20 : 10;
+        ActivePacketMs = packetMs;
+        Volatile.Write(ref silenceSleepActive, 0);
+
+        await connection.RequestAsync(LogicalChannel.Control, "audio.start", new
+        {
+            sampleRate = 48000,
+            channels = 2,
+            bits = 16,
+            packetMs,
+            primeMs = profile.PrimeMs,
+            ringCapacityMs = profile.RingCapacityMs
+        }, ct);
+
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var captureTask = fixture ? Task.CompletedTask : CaptureLoopAsync(linked.Token);
         try
         {
-            await Task.Factory.StartNew(() => SendLoop(connection, fixture, ct, pacingStarted), ct, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            await Task.Factory.StartNew(
+                () => SendLoop(connection, fixture, packetMs, enableSilenceSleep, ct, pacingStarted),
+                ct,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default);
         }
-        finally { linked.Cancel(); await captureTask; }
+        finally
+        {
+            Volatile.Write(ref silenceSleepActive, 0);
+            linked.Cancel();
+            await captureTask;
+        }
     }
-    private void SendLoop(Connection connection, bool fixture, CancellationToken ct, Action? pacingStarted)
+
+    private void SendLoop(Connection connection, bool fixture, int packetMs, bool enableSilenceSleep, CancellationToken ct, Action? pacingStarted)
     {
         // Audio deadlines must not wait for file/hash continuations on the general worker pool.
         Thread.CurrentThread.Name = "BackThread PCM pacing";
         Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
+
+        int framesPerPacket = packetMs * 48; // 480 for 10ms, 960 for 20ms
+        int bytesPerPacket = framesPerPacket * PcmRing.BytesPerSample;
         long sample = 0;
         long epoch = Stopwatch.GetTimestamp();
         double nextMs = 0;
-        pacingStarted?.Invoke();
-        while (!ct.IsCancellationRequested)
+        long streamStartTick = Environment.TickCount64;
+        AudioTimerScope? timerScope = new();
+
+        try
         {
-            double elapsedMs = Stopwatch.GetElapsedTime(epoch).TotalMilliseconds;
-            double delayMs = nextMs - elapsedMs;
-            if (delayMs >= 1.0 && ct.WaitHandle.WaitOne((int)delayMs)) ct.ThrowIfCancellationRequested();
-
-            elapsedMs = Stopwatch.GetElapsedTime(epoch).TotalMilliseconds;
-            long lateness = Math.Max(0L, (long)(elapsedMs - nextMs));
-            long old = Interlocked.Read(ref maximumLatenessMs);
-            while (lateness > old) { long observed = Interlocked.CompareExchange(ref maximumLatenessMs, lateness, old); if (observed == old) break; old = observed; }
-            if (lateness >= 10) Interlocked.Increment(ref lateFrames);
-
-            // After a severe stall (> 120ms), skip missed timeline slots without clearing fresh capture samples;
-            // the circular Ring already bounds capture age by dropping oldest data.
-            if (elapsedMs - nextMs > 120.0)
+            pacingStarted?.Invoke();
+            while (!ct.IsCancellationRequested)
             {
-                Interlocked.Increment(ref pacingResets);
-                nextMs = elapsedMs;
-            }
-
-            int burst = 0;
-            do
-            {
-                byte[] pcm = fixture ? PcmRing.Sine(sample) : new byte[PcmRing.BytesPer10Ms];
-                if (!fixture)
+                // Low-thread / weak-PC Silence Sleep: when real capture has been silent for >10s,
+                // release timeBeginPeriod(1) and sleep at 100ms cadence until audio resumes.
+                if (!fixture && enableSilenceSleep)
                 {
-                    if (Ring.Count > 0 && Environment.TickCount64 - Interlocked.Read(ref lastCapture) > 150) Ring.Clear();
-                    Ring.Read(pcm);
+                    long nowTick = Environment.TickCount64;
+                    long lastNz = Interlocked.Read(ref lastNonZeroTick);
+                    long silentForMs = lastNz == 0 ? nowTick - streamStartTick : nowTick - lastNz;
+                    if (silentForMs >= SilenceSleepThresholdMs && Ring.Count == 0)
+                    {
+                        if (Volatile.Read(ref silenceSleepActive) == 0)
+                        {
+                            Volatile.Write(ref silenceSleepActive, 1);
+                            Interlocked.Increment(ref silenceSleepTransitions);
+                            timerScope?.Dispose();
+                            timerScope = null;
+                        }
+                        if (ct.WaitHandle.WaitOne(100)) ct.ThrowIfCancellationRequested();
+                        continue;
+                    }
+                    else if (Volatile.Read(ref silenceSleepActive) != 0)
+                    {
+                        Volatile.Write(ref silenceSleepActive, 0);
+                        timerScope = new AudioTimerScope();
+                        epoch = Stopwatch.GetTimestamp();
+                        nextMs = 0;
+                    }
                 }
-                // Drop-oldest audio writes complete synchronously; no socket I/O occurs on this thread.
-                connection.SendFrameAsync(LogicalChannel.Audio, pcm, (ulong)(sample * 1_000_000 / 48000), ct).GetAwaiter().GetResult();
-                sample += 480;
-                FramesSent++;
-                nextMs += 10.0;
-                burst++;
+
+                double elapsedMs = Stopwatch.GetElapsedTime(epoch).TotalMilliseconds;
+                double delayMs = nextMs - elapsedMs;
+                if (delayMs >= 1.0 && ct.WaitHandle.WaitOne((int)delayMs)) ct.ThrowIfCancellationRequested();
+
+                elapsedMs = Stopwatch.GetElapsedTime(epoch).TotalMilliseconds;
+                long lateness = Math.Max(0L, (long)(elapsedMs - nextMs));
+                long old = Interlocked.Read(ref maximumLatenessMs);
+                while (lateness > old) { long observed = Interlocked.CompareExchange(ref maximumLatenessMs, lateness, old); if (observed == old) break; old = observed; }
+                if (lateness >= packetMs) Interlocked.Increment(ref lateFrames);
+
+                // After a severe stall (> 120ms), skip missed timeline slots without clearing fresh capture samples;
+                // the circular Ring already bounds capture age by dropping oldest data.
+                if (elapsedMs - nextMs > 120.0)
+                {
+                    Interlocked.Increment(ref pacingResets);
+                    nextMs = elapsedMs;
+                }
+
+                int burst = 0;
+                do
+                {
+                    byte[] pcm = fixture ? PcmRing.Sine(sample, framesPerPacket) : new byte[bytesPerPacket];
+                    if (!fixture)
+                    {
+                        if (Ring.Count > 0 && Environment.TickCount64 - Interlocked.Read(ref lastCapture) > 150) Ring.Clear();
+                        Ring.Read(pcm);
+                    }
+                    // Drop-oldest audio writes complete synchronously; no socket I/O occurs on this thread.
+                    connection.SendFrameAsync(LogicalChannel.Audio, pcm, (ulong)(sample * 1_000_000 / 48000), ct).GetAwaiter().GetResult();
+                    sample += framesPerPacket;
+                    FramesSent++;
+                    nextMs += packetMs;
+                    burst++;
+                }
+                while (!ct.IsCancellationRequested && burst < 3 && Stopwatch.GetElapsedTime(epoch).TotalMilliseconds >= nextMs + (packetMs / 2.0));
             }
-            while (!ct.IsCancellationRequested && burst < 3 && Stopwatch.GetElapsedTime(epoch).TotalMilliseconds >= nextMs + 5.0);
+            ct.ThrowIfCancellationRequested();
         }
-        ct.ThrowIfCancellationRequested();
+        finally
+        {
+            Volatile.Write(ref silenceSleepActive, 0);
+            timerScope?.Dispose();
+        }
     }
+
     private Task CaptureLoopAsync(CancellationToken ct)
     {
         if (OperatingSystem.IsWindows()) return CaptureWindowsLoopAsync(ct);
@@ -153,7 +234,7 @@ public sealed class LoopbackBridge
                 {
                     while (!ct.IsCancellationRequested && !stopped.Task.IsCompleted)
                     {
-                        await Task.Delay(1000, ct);
+                        await Task.Delay(2000, ct);
                         using var current = devices.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
                         if (current.ID != id) break;
                     }

@@ -197,11 +197,33 @@ public sealed class AgentServer : IAsyncDisposable
                             switch (message.Type)
                             {
                                 case "hello":
-                                    await Reply(new { agent = "BackThread.Simulator", simulated = true, capabilities = new[] { "pcm", "jobs", "files", "events", "faults", "hybrid-media", "buffered-media", "top-bar-notifications", "telemetry", "audio-modes", "sync" } });
+                                    await Reply(new
+                                    {
+                                        agent = "BackThread.Simulator",
+                                        deviceName = "Simulated iPhone 15",
+                                        iosVersion = "15.8",
+                                        ramMb = 4096,
+                                        cpuCores = 6,
+                                        hasNeuralEngine = true,
+                                        thermalState = "nominal",
+                                        batteryLevel = 85,
+                                        batteryCharging = true,
+                                        simulated = true,
+                                        supportedCodecs = new[] { "h264", "hevc" },
+                                        supportedJobs = new[] { "sha256", "verify", "metadata", "text", "compress", "decompress", "log.scan", "feed.poll", "image.resize", "pdf.extract", "ocr.extract", "speech.transcribe" },
+                                        capabilities = new[] { "pcm", "jobs", "files", "events", "faults", "hybrid-media", "buffered-media", "top-bar-notifications", "telemetry", "audio-modes", "sync", "wifi-tls", "adaptive-audio" }
+                                    });
+                                    break;
+                                case "transport.wifi.provision":
+                                    break;
+                                case "rule.action":
+                                case "offload.pip.suggest":
                                     break;
                                 case "audio.start":
                                     if (b.GetProperty("sampleRate").GetInt32() != 48000 || b.GetProperty("channels").GetInt32() != 2 || b.GetProperty("bits").GetInt32() != 16) throw new InvalidDataException("Only 48 kHz stereo PCM16 supported");
-                                    Volatile.Write(ref audioOn, false); ring.Clear(); hash.GetHashAndReset(); packets = bytes = gaps = 0; lastArrival=maximumArrivalGapUs=0; previous = 0; Interlocked.Exchange(ref playbackEpoch, 0); Volatile.Write(ref audioOn, true); await Reply(new { ready = true }); break;
+                                    int pMs = b.TryGetProperty("packetMs", out var pm) ? pm.GetInt32() : 10;
+                                    if (pMs is not (10 or 20)) throw new InvalidDataException("Only 10ms or 20ms PCM packets supported");
+                                    Volatile.Write(ref audioOn, false); ring.Clear(); hash.GetHashAndReset(); packets = bytes = gaps = 0; lastArrival=maximumArrivalGapUs=0; previous = 0; Interlocked.Exchange(ref playbackEpoch, 0); Volatile.Write(ref audioOn, true); await Reply(new { ready = true, packetMs = pMs }); break;
                                 case "audio.stop": audioOn = false; ring.Clear(); await Reply(new { stopped = true }); break;
                                 case "audio.volume":
                                     LastAppGainVolume = b.TryGetProperty("value", out var av) && av.ValueKind == JsonValueKind.Number ? Math.Clamp(av.GetDouble(), 0.0, 1.0) : 1.0;

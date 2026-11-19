@@ -34,8 +34,13 @@ public static class Authentication
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(5));
         var frame = await Wire.ReadAsync(stream, timeout.Token);
-        var challenge = Message.Decode(frame.Payload);
-        if (frame.Channel != LogicalChannel.Control || challenge.Type != "auth.challenge") throw new InvalidDataException("Expected challenge");
+        await ClientFromChallengeAsync(stream, frame, key, timeout.Token);
+    }
+    public static async Task ClientFromChallengeAsync(Stream stream, Frame challengeFrame, byte[] key, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(5));
+        var challenge = Message.Decode(challengeFrame.Payload);
+        if (challengeFrame.Channel != LogicalChannel.Control || challenge.Type != "auth.challenge") throw new InvalidDataException("Expected challenge");
         string server = Nonce(challenge, "serverNonce"), client = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
         await Wire.WriteAsync(stream, new(LogicalChannel.Control, 0, 0, Message.Create("auth.response", new { clientNonce = client, proof = Proof(key, "host", server, client) }).Encode()), timeout.Token);
         var reply = await Wire.ReadAsync(stream, timeout.Token);

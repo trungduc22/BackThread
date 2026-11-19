@@ -219,7 +219,7 @@ await Test("integration.transfer-hash-text-download-and-failed-job", async () =>
     var upload = await s.Worker.UploadAsync(path, "backup.txt", ct); Check.Equal(expected, upload.Body.GetProperty("sha256").GetString());
     await s.Worker.SubmitAsync(new("hash", "sha256", "backup.txt"), ct); await Check.Eventually(async () => (await s.Worker.QueryAsync("hash", ct)).Body.GetProperty("state").GetString() == "completed");
     Check.Equal(expected, (await s.Worker.QueryAsync("hash", ct)).Body.GetProperty("result").GetProperty("sha256").GetString());
-    var bytes = await s.Worker.ReadArtifactAsync("backup.txt", 10, 32768, ct); Check.True(bytes.SequenceEqual((await File.ReadAllBytesAsync(path, ct)).AsSpan(10, 32768).ToArray()));
+    var bytes = await s.Worker.ReadArtifactAsync("backup.txt", 10, 32768, ct); byte[] fullBytes = await File.ReadAllBytesAsync(path, ct); Check.True(bytes.AsSpan().SequenceEqual(fullBytes.AsSpan(10, 32768)));
     await s.Worker.SubmitAsync(new("text", "text", "backup.txt"), ct); await Check.Eventually(async () => (await s.Worker.QueryAsync("text", ct)).Body.GetProperty("state").GetString() == "completed");
     var text = (await s.Worker.QueryAsync("text", ct)).Body.GetProperty("result"); Check.Equal(10000L, text.GetProperty("lines").GetInt64()); Check.Equal(20000L, text.GetProperty("words").GetInt64());
     await s.Worker.SubmitAsync(new("missing", "sha256", "missing.bin"), ct); await Check.Eventually(async () => (await s.Worker.QueryAsync("missing", ct)).Body.GetProperty("state").GetString() == "failed");
@@ -296,6 +296,7 @@ await Test("integration.notification-routing", async () =>
 });
 
 await HybridMediaTests.RunAllAsync(Test, root, key, ct);
+await UpgradeFeaturesTests.RunAllAsync(Test, root, key, ct);
 
 await Test("acceptance.audio-window-excludes-slow-shutdown-tail", async () =>
 {

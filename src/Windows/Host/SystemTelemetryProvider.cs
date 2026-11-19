@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.NetworkInformation;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -30,14 +31,31 @@ public interface ISystemTelemetryProvider
 
 /// <summary>
 /// Samples genuine Windows host telemetry (CPU via GetSystemTimes delta, RAM via GlobalMemoryStatusEx,
-/// Power via GetSystemPowerStatus, Wi-Fi via Wireless80211 interface, and real Bluetooth radio +
-/// Aep.IsConnected device count via WinRT without guessing connected state from radio-on).
+/// Power via GetSystemPowerStatus, Wi-Fi via Wireless80211 interface, and event-driven WinRT Bluetooth
+/// radio + Aep.IsConnected DeviceWatcher with 30s fallback refresh so weak PCs avoid 2s PnP query storms).
 /// </summary>
-public sealed class SystemTelemetryProvider : ISystemTelemetryProvider
+public sealed class SystemTelemetryProvider : ISystemTelemetryProvider, IDisposable
 {
+    private const string AqsConnectedBt =
+        "System.Devices.Aep.IsConnected:=System.StructuredQueryType.Boolean#True " +
+        "AND (System.Devices.Aep.ProtocolId:=\"{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}\" " +
+        "OR System.Devices.Aep.ProtocolId:=\"{bb7bb05e-5972-42b5-94fc-76eaa7084d49}\")";
+
     private readonly object cpuGate = new();
+    private readonly object btGate = new();
     private ulong prevIdle, prevKernel, prevUser;
     private bool hasPrevCpu;
+
+    // Event-driven Bluetooth state (initialized lazily on Windows)
+    private readonly ConcurrentDictionary<string, byte> connectedBtIds = new(StringComparer.OrdinalIgnoreCase);
+    private DeviceWatcher? btWatcher;
+    private Radio? btRadio;
+    private string cachedBtRadioState = "Unknown";
+    private bool btWatcherStarted;
+    private bool btInitialEnumComplete;
+    private long lastBtRefreshTick = -1;
+    private long lastWifiRefreshTick = -1;
+    private (bool? Connected, string? Name) cachedWifi;
 
     public async ValueTask<SystemTelemetrySnapshot> SampleAsync(CancellationToken ct)
     {
@@ -73,7 +91,7 @@ public sealed class SystemTelemetryProvider : ISystemTelemetryProvider
         double? cpu = SampleWindowsCpuPercent();
         (long? usedMb, long? totalMb, double? memPct) = SampleWindowsMemory();
         (double? batPct, bool? acOnline, string batStatus) = SampleWindowsBattery();
-        (bool? wifiUp, string? wifiName) = SampleWifiInterface();
+        (bool? wifiUp, string? wifiName) = SampleWifiCached();
         (string btRadioState, int btConnectedCount, bool? btConnected) = await SampleWindowsBluetoothAsync(ct);
 
         return new SystemTelemetrySnapshot(
@@ -160,6 +178,17 @@ public sealed class SystemTelemetryProvider : ISystemTelemetryProvider
         return (pct, ac, status);
     }
 
+    private (bool? connected, string? name) SampleWifiCached()
+    {
+        long now = Environment.TickCount64;
+        if (lastWifiRefreshTick >= 0 && now - lastWifiRefreshTick < 5000)
+            return cachedWifi;
+
+        cachedWifi = SampleWifiInterface();
+        lastWifiRefreshTick = now;
+        return cachedWifi;
+    }
+
     private static (bool? connected, string? name) SampleWifiInterface()
     {
         try
@@ -181,52 +210,145 @@ public sealed class SystemTelemetryProvider : ISystemTelemetryProvider
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static async Task<(string radioState, int connectedCount, bool? connected)> SampleWindowsBluetoothAsync(CancellationToken ct)
+    private void EnsureBluetoothWatcherStarted()
     {
-        string radioState = "Unavailable";
-        try
+        lock (btGate)
         {
-            var radios = await Radio.GetRadiosAsync();
-            var btRadio = radios.FirstOrDefault(r => r.Kind == RadioKind.Bluetooth);
-            if (btRadio is null)
-                return ("Unavailable", 0, false);
-
-            radioState = btRadio.State switch
+            if (btWatcherStarted) return;
+            btWatcherStarted = true;
+            try
             {
-                RadioState.On => "On",
-                RadioState.Off => "Off",
-                RadioState.Disabled => "Disabled",
-                _ => "Unknown"
-            };
+                var watcher = DeviceInformation.CreateWatcher(AqsConnectedBt);
+                watcher.Added += (_, info) => connectedBtIds[info.Id] = 1;
+                watcher.Removed += (_watcher, update) => connectedBtIds.TryRemove(update.Id, out byte _);
+                watcher.EnumerationCompleted += (_, _) => btInitialEnumComplete = true;
+                watcher.Stopped += (_, _) =>
+                {
+                    lock (btGate) { btWatcherStarted = false; }
+                };
+                watcher.Start();
+                btWatcher = watcher;
+            }
+            catch
+            {
+                btWatcher = null;
+            }
         }
-        catch
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private async Task<(string radioState, int connectedCount, bool? connected)> SampleWindowsBluetoothAsync(CancellationToken ct)
+    {
+        EnsureBluetoothWatcherStarted();
+        long now = Environment.TickCount64;
+        bool needRadioRefresh = lastBtRefreshTick < 0 || now - lastBtRefreshTick >= 30_000;
+
+        if (needRadioRefresh)
         {
-            radioState = "Unknown";
+            lastBtRefreshTick = now;
+            try
+            {
+                var radios = await Radio.GetRadiosAsync();
+                ct.ThrowIfCancellationRequested();
+                var radio = radios.FirstOrDefault(r => r.Kind == RadioKind.Bluetooth);
+                lock (btGate)
+                {
+                    if (btRadio is not null && !ReferenceEquals(btRadio, radio))
+                        try { btRadio.StateChanged -= OnBluetoothRadioStateChanged; } catch { }
+                    btRadio = radio;
+                    if (radio is null)
+                    {
+                        cachedBtRadioState = "Unavailable";
+                    }
+                    else
+                    {
+                        cachedBtRadioState = FormatRadioState(radio.State);
+                        try
+                        {
+                            radio.StateChanged -= OnBluetoothRadioStateChanged;
+                            radio.StateChanged += OnBluetoothRadioStateChanged;
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                lock (btGate) cachedBtRadioState = "Unknown";
+            }
+
+            // Fallback one-time PnP sync if watcher failed to start or hasn't finished initial scan yet.
+            if (btWatcher is null || !btInitialEnumComplete)
+            {
+                try
+                {
+                    var devices = await DeviceInformation.FindAllAsync(AqsConnectedBt);
+                    ct.ThrowIfCancellationRequested();
+                    connectedBtIds.Clear();
+                    if (devices is not null)
+                    {
+                        foreach (var d in devices)
+                            connectedBtIds[d.Id] = 1;
+                    }
+                    btInitialEnumComplete = true;
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch { }
+            }
         }
 
-        if (radioState is "Off" or "Disabled")
+        string radioState;
+        lock (btGate) radioState = cachedBtRadioState;
+
+        if (radioState is "Unavailable" or "Off" or "Disabled")
             return (radioState, 0, false);
 
-        try
+        int count = connectedBtIds.Count;
+        return (radioState, count, count > 0);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void OnBluetoothRadioStateChanged(Radio sender, object args)
+    {
+        lock (btGate) cachedBtRadioState = FormatRadioState(sender.State);
+    }
+
+    private static string FormatRadioState(RadioState state) => state switch
+    {
+        RadioState.On => "On",
+        RadioState.Off => "Off",
+        RadioState.Disabled => "Disabled",
+        _ => "Unknown"
+    };
+
+    public void Dispose()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        DisposeWindowsResources();
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void DisposeWindowsResources()
+    {
+        lock (btGate)
         {
-            // Strict Windows PnP Aep.IsConnected query across Bluetooth Classic & BLE protocols.
-            // Radio enabled alone MUST NOT report BluetoothConnected = true.
-            const string aqsConnectedBt =
-                "System.Devices.Aep.IsConnected:=System.StructuredQueryType.Boolean#True " +
-                "AND (System.Devices.Aep.ProtocolId:=\"{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}\" " +
-                "OR System.Devices.Aep.ProtocolId:=\"{bb7bb05e-5972-42b5-94fc-76eaa7084d49}\")";
-            var devices = await DeviceInformation.FindAllAsync(aqsConnectedBt);
-            ct.ThrowIfCancellationRequested();
-            int count = devices?.Count ?? 0;
-            return (radioState, count, count > 0);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch
-        {
-            return (radioState, 0, null);
+            if (btWatcher is not null)
+            {
+                try { if (btWatcher.Status is DeviceWatcherStatus.Started or DeviceWatcherStatus.EnumerationCompleted) btWatcher.Stop(); } catch { }
+                btWatcher = null;
+            }
+            if (btRadio is not null)
+            {
+                try { btRadio.StateChanged -= OnBluetoothRadioStateChanged; } catch { }
+                btRadio = null;
+            }
         }
     }
 

@@ -1,9 +1,45 @@
 {
   "keyFile": "config/session.key",
-  "transport": "usb",
+  "transport": "auto",
   "devicePort": 23451,
   "deviceSerial": null,
   "apiPort": 23452,
+  "enableHttpApi": true,
+  "powerProfile": "Balanced",
+  "lan": {
+    "enabled": false,
+    "port": 23453,
+    "bindAddress": "0.0.0.0",
+    "advertiseMdns": true,
+    "autoProvisionOverUsb": true
+  },
+  "offload": {
+    "enabled": true,
+    "autoPipCpuThresholdPercent": 70,
+    "autoPipSustainSeconds": 12,
+    "pressureCpuThresholdPercent": 70,
+    "pressureRamThresholdPercent": 80,
+    "minOffloadBytes": 262144,
+    "pauseBelowBatteryPercent": 20,
+    "allowOcrOffload": true,
+    "allowSpeechOffload": true,
+    "allowFeedPollingOffload": true
+  },
+  "rules": [],
+  "chargeGuard": {
+    "enabled": false,
+    "minPercent": 50,
+    "maxPercent": 80,
+    "method": "webhook"
+  },
+  "feedProxy": {
+    "enabled": false,
+    "extraAllowedHosts": []
+  },
+  "devMonitor": {
+    "enabled": false,
+    "ollamaEndpoint": "http://127.0.0.1:11434"
+  },
   "streamAudio": true,
   "audioOutputMode": "Both",
   "audioGain": 1,

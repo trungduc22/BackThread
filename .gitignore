@@ -11,3 +11,10 @@ __pycache__/
 *.key
 state/
 config/local.json
+*.pfx
+*.p12
+*.dpapi
+*.db
+*.log
+*.snk
+paired-pcs.json
