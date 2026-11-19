@@ -1,5 +1,9 @@
 # Hardware test results — 2026-11-18
 
+## Audio follow-up
+
+Build 11 is an offline artifact. The journal isolation, USB playback and listening outcome still need physical verification. See [results and verification commands](AUDIO_JOURNAL_FOLLOWUP.md).
+
 ## Foundation checkpoint
 
 The foundation build is prepared for ARM64 iOS 12. No new hardware acceptance was performed. See [the engineering report](NATIVE_FOUNDATION_REPORT.md) for local test scope.

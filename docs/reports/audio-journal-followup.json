@@ -1,0 +1,81 @@
+{
+  "scope": "Fixture PCM over authenticated Windows loopback with concurrent real file/hash jobs",
+  "baselineCommit": "69dab7b",
+  "windowsCommit": "c6435ad",
+  "journalFixture": {
+    "beforeExit": 1,
+    "afterExit": 0,
+    "before": "Heartbeat request timed out with journal barrier closed",
+    "after": "Heartbeat and three PCM packets observed before job acknowledgement"
+  },
+  "managedTests": 38,
+  "pythonAndArtifactTests": 31,
+  "soakExit": 1,
+  "metrics": {
+    "durationSeconds": 120.2438815,
+    "finalStatsTakenBeforeSourceStop": true,
+    "jobs": 205,
+    "maximumBuffer": 11520,
+    "startMemory": 39825408,
+    "endMemory": 52363264,
+    "cpuSeconds": 86.578125,
+    "senderDropped": 0,
+    "sender": {
+      "queueMaximumMilliseconds": 12.77,
+      "writeMaximumMilliseconds": 3.145,
+      "maximumWriteCompletionGap": {
+        "sequence": 11458,
+        "milliseconds": 25.3208
+      },
+      "slowWrites": 0,
+      "pacingMaximumLatenessMilliseconds": 15,
+      "pacingLateFrames": 1,
+      "pacingResets": 0,
+      "captureDroppedBytes": 0,
+      "captureSilenceBytes": 0
+    },
+    "receiver": {
+      "packets": 12024,
+      "bytes": 23086080,
+      "gaps": 0,
+      "bufferedBytes": 11520,
+      "droppedBytes": 0,
+      "silenceBytes": 1920,
+      "playbackTicks": 12019,
+      "skippedPlaybackTicks": 0,
+      "maximumPlaybackWakeMilliseconds": 32.442,
+      "maximumArrivalGapMilliseconds": 56.245,
+      "maximumArrivalGapSequence": 7011,
+      "handlerMaximumMilliseconds": 13.725,
+      "sha256": "ec0fa1c3b689cc172040eca849abd1e4c580aa3368cd960cedae80e0b571648e"
+    },
+    "lossSamples": [
+      {
+        "elapsedSeconds": 59.0565305,
+        "receiver": {
+          "packets": 5905,
+          "bytes": 11337600,
+          "gaps": 0,
+          "bufferedBytes": 9600,
+          "droppedBytes": 0,
+          "silenceBytes": 1920,
+          "playbackTicks": 5901,
+          "skippedPlaybackTicks": 0,
+          "maximumPlaybackWakeMilliseconds": 32.442,
+          "maximumArrivalGapMilliseconds": 49.725,
+          "maximumArrivalGapSequence": 5851,
+          "handlerMaximumMilliseconds": 13.725,
+          "sha256": "e15480c3848538bc5a6c68f9412d827f97261b071950da15ae58804fc4953823"
+        },
+        "senderDrops": 0
+      }
+    ]
+  },
+  "physicalRun": false,
+  "nativeBuild": 11,
+  "ipaSha256": "94a08b584e60f2a433fb3f77a4df0c1662f9d618ef0f93471f6ee46a09393768",
+  "nativeStaticAnalysis": {
+    "passed": true,
+    "translationUnits": 19
+  }
+}

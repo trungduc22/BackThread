@@ -35,8 +35,8 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
     NSLock *_tx;
     uint32_t _sequences[8],_previousAudio;
     uint64_t _audioPackets,_audioBytes,_audioGaps;
-    dispatch_queue_t _network,_worker,_commands,_fileIO;
-    dispatch_semaphore_t _commandSlots;
+    dispatch_queue_t _network,_worker,_commands,_fileIO,_jobCommands;
+    dispatch_semaphore_t _commandSlots,_jobCommandSlots;
     dispatch_semaphore_t _fileSlots;
     NSMutableSet *_committing;
     NSMutableDictionary *_jobs,*_jobSpecs;
@@ -56,6 +56,8 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         _key=[key copy];_root=[storage copy];_listener=-1;_client=-1;atomic_init(&_stopping,NO);_tx=[NSLock new];_audio=[BTAudioReceiver new];
         _network=dispatch_queue_create("app.backthread.network",DISPATCH_QUEUE_SERIAL);
         _worker=dispatch_queue_create("app.backthread.worker",dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL,QOS_CLASS_UTILITY,0));
+        _jobCommands=dispatch_queue_create("app.backthread.jobcommands",dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL,QOS_CLASS_UTILITY,0));
+        _jobCommandSlots=dispatch_semaphore_create(8);
         _commands=dispatch_queue_create("app.backthread.commands",DISPATCH_QUEUE_SERIAL);_commandSlots=dispatch_semaphore_create(16);
         _fileIO=dispatch_queue_create("app.backthread.fileio",dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL,QOS_CLASS_UTILITY,0));_fileSlots=dispatch_semaphore_create(2);_committing=[NSMutableSet new];
         [[NSFileManager defaultManager] createDirectoryAtPath:_root withIntermediateDirectories:YES attributes:@{NSFileProtectionKey:NSFileProtectionCompleteUntilFirstUserAuthentication} error:nil];
@@ -173,7 +175,14 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
 - (void)rejectCommand:(NSString *)type body:(NSDictionary *)body reason:(NSString *)reason{[self notify:@"command.result" body:@{@"requestType":type,@"appId":body[@"appId"]?:@"",@"actionId":body[@"actionId"]?:@"",@"ok":@NO,@"error":reason}];}
 - (void)command:(NSString *)type body:(NSDictionary *)body {
     if([type isEqual:@"wifi.disable"]&&!_authenticated){[self clearWifi];return;}
-    if([type isEqual:@"job.cancel"]){NSString *jid=body[@"jobId"];@synchronized(self){if(jid&&[@[@"queued",@"running"] containsObject:_jobs[jid][@"state"]])[_cancelled addObject:jid];}return;}
+    if([type isEqual:@"job.cancel"]){
+        if(dispatch_semaphore_wait(_jobCommandSlots,DISPATCH_TIME_NOW)!=0){[self rejectCommand:type body:body reason:@"Job command queue is busy"];return;}
+        dispatch_async(_jobCommands,^{
+            @try { [self cancelJob:body[@"jobId"]]; }
+            @finally { dispatch_semaphore_signal(self->_jobCommandSlots); }
+        });
+        return;
+    }
     if(dispatch_semaphore_wait(_commandSlots,DISPATCH_TIME_NOW)!=0){[self rejectCommand:type body:body reason:@"Command queue is busy"];return;}
     [_tx lock];uint64_t generation=_generation;BOOL connected=_authenticated;[_tx unlock];if(!connected){dispatch_semaphore_signal(_commandSlots);[self rejectCommand:type body:body reason:@"Companion is disconnected"];return;}
     dispatch_async(_commands,^{@autoreleasepool { BOOL delivered=[self send:type body:body reply:nil channel:3 generation:generation];if(!delivered)[self rejectCommand:type body:body reason:@"Command was not delivered"];if([type isEqual:@"wifi.disable"])[self clearWifi];dispatch_semaphore_signal(self->_commandSlots); }});
@@ -233,9 +242,9 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         else if([type isEqual:@"ok"]&&[m[@"replyTo"] isKindOfClass:NSString.class]&&[b[@"success"] isEqual:@NO]) { [self notify:@"error" body:@{@"error":@"Windows could not perform the requested action"}]; }
         else if([type isEqual:@"event.publish"]) { BOOL accepted=[self event:b];[self send:@"ok" body:@{@"accepted":@(accepted)} reply:rid channel:h.channel]; }
         else if([type isEqual:@"event.history"]) { [self send:@"ok" body:@{@"events":[_events copy]} reply:rid channel:h.channel]; }
-        else if([type isEqual:@"job.submit"]) { [self submit:b message:m channel:h.channel]; }
-        else if([type isEqual:@"job.query"]) { NSDictionary *s;@synchronized(self){s=_jobs[b[@"jobId"]];}if(s)[self send:@"ok" body:s reply:rid channel:h.channel];else [self fail:@"Unknown job" message:m channel:h.channel]; }
-        else if([type isEqual:@"job.cancel"]) { BOOL found;@synchronized(self){found=[@[@"queued",@"running"] containsObject:_jobs[b[@"jobId"]][@"state"]];if(found)[_cancelled addObject:b[@"jobId"]];}[self send:@"ok" body:@{@"cancelled":@(found)} reply:rid channel:h.channel]; }
+        else if([type isEqual:@"job.submit"]||[type isEqual:@"job.query"]||[type isEqual:@"job.cancel"]) {
+            [self queueJobCommand:type body:b message:m channel:h.channel];
+        }
         else if([type isEqual:@"file.begin"]) { [self begin:b message:m channel:h.channel]; }
         else if([type isEqual:@"file.commit"]) { [self commit:b message:m channel:h.channel client:fd]; }
         else if([type isEqual:@"file.read"]) {
@@ -322,9 +331,48 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
         if(ok)[self send:@"ok" body:@{@"length":@(chunk.length)} reply:m[@"id"] channel:c generation:generation];
     } @finally{[file closeFile];}
 }
+- (BOOL)cancelJob:(id)jobID {
+    if(![jobID isKindOfClass:NSString.class])return NO;
+    @synchronized(_jobs) {
+        BOOL found=[@[@"queued",@"running"] containsObject:_jobs[jobID][@"state"]];
+        if(found)[_cancelled addObject:jobID];
+        return found;
+    }
+}
+- (void)queueJobCommand:(NSString *)type body:(NSDictionary *)body message:(NSDictionary *)message channel:(uint16_t)channel {
+    if(dispatch_semaphore_wait(_jobCommandSlots,DISPATCH_TIME_NOW)!=0){
+        [self fail:@"Job command queue is busy" message:message channel:channel];
+        return;
+    }
+    [_tx lock];uint64_t generation=_generation;[_tx unlock];
+    dispatch_async(_jobCommands,^{@autoreleasepool {
+        @try {
+            [self->_tx lock];
+            BOOL current=self->_authenticated&&self->_generation==generation&&!self->_stopping;
+            [self->_tx unlock];
+            if(!current)return;
+            id reply=message[@"id"];
+            if([type isEqual:@"job.submit"]){
+                [self submit:body message:message channel:channel generation:generation];
+            } else if([type isEqual:@"job.cancel"]){
+                [self send:@"ok" body:@{@"cancelled":@([self cancelJob:body[@"jobId"]])} reply:reply channel:channel generation:generation];
+            } else {
+                NSDictionary *state=nil;
+                id jobID=body[@"jobId"];
+                if([jobID isKindOfClass:NSString.class]){
+                    @synchronized(self->_jobs){state=self->_jobs[jobID];}
+                }
+                [self send:state?@"ok":@"error" body:state?:@{@"error":@"Unknown job"} reply:reply channel:channel generation:generation];
+            }
+        } @catch(NSException *exception) {
+            (void)exception;
+            [self send:@"error" body:@{@"error":@"Job command failed"} reply:message[@"id"] channel:channel generation:generation];
+        } @finally { dispatch_semaphore_signal(self->_jobCommandSlots); }
+    }});
+}
 - (void)persist { NSData *data=[NSJSONSerialization dataWithJSONObject:_jobs options:0 error:nil];[data writeToFile:[_root stringByAppendingPathComponent:@".jobs.json"] atomically:YES]; }
-- (void)update:(NSDictionary *)state { @synchronized(self){NSString *previous=_jobs[state[@"jobId"]][@"state"];_jobs[state[@"jobId"]]=state;if(![previous isEqual:state[@"state"]])[self persist];}[self notify:@"job.progress" body:state];[self send:@"job.progress" body:state reply:nil channel:5]; }
-- (BOOL)cancelled:(NSString *)jid { @synchronized(self){return _stopping||(jid&&[_cancelled containsObject:jid]);} }
+- (void)update:(NSDictionary *)state { @synchronized(_jobs){NSString *previous=_jobs[state[@"jobId"]][@"state"];_jobs[state[@"jobId"]]=state;if(![previous isEqual:state[@"state"]])[self persist];}[self notify:@"job.progress" body:state];[self send:@"job.progress" body:state reply:nil channel:5]; }
+- (BOOL)cancelled:(NSString *)jid { @synchronized(_jobs){return _stopping||(jid&&[_cancelled containsObject:jid]);} }
 - (NSString *)hash:(NSString *)path job:(NSString *)jid error:(NSError **)error {
     FILE *file=fopen(path.fileSystemRepresentation,"rb");if(!file){if(error)*error=[NSError errorWithDomain:NSPOSIXErrorDomain code:errno userInfo:nil];return nil;}
     struct stat st;if(fstat(fileno(file),&st)){if(error)*error=[NSError errorWithDomain:NSPOSIXErrorDomain code:errno userInfo:nil];fclose(file);return nil;}
@@ -336,15 +384,46 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
     }
     if(ferror(file))failed=YES;fclose(file);if(failed)return nil;uint8_t digest[CC_SHA256_DIGEST_LENGTH];CC_SHA256_Final(digest,&hash);return hex(digest,sizeof(digest));
 }
-- (void)submit:(NSDictionary *)b message:(NSDictionary *)m channel:(uint16_t)c {
+- (void)submit:(NSDictionary *)b message:(NSDictionary *)m channel:(uint16_t)c generation:(uint64_t)generation {
     NSString *jid=b[@"jobId"],*kind=b[@"kind"],*name=b[@"name"];
-    if(![jid isKindOfClass:NSString.class]||jid.length==0||jid.length>64||![@[@"sha256",@"verify",@"metadata",@"text",@"diagnostic"] containsObject:kind]||![name isKindOfClass:NSString.class]){[self fail:@"Invalid job" message:m channel:c];return;}
-    @synchronized(self) {
-        if(_jobs[jid]){if(_jobSpecs[jid]&&![_jobSpecs[jid] isEqual:b])[self fail:@"Job ID conflict" message:m channel:c];else [self send:@"ok" body:_jobs[jid] reply:m[@"id"] channel:c];return;}
-        if(_queuedJobs>=8||self.memoryPressure){[self fail:@"Worker busy or paused for memory pressure" message:m channel:c];return;}
-        if(_jobs.count>=64){NSString *old=nil;for(NSString *key in _jobs)if(![@[@"queued",@"running"] containsObject:_jobs[key][@"state"]]){old=key;break;}if(!old){[self fail:@"Job history full" message:m channel:c];return;}[_jobs removeObjectForKey:old];[_jobSpecs removeObjectForKey:old];}
-        _queuedJobs++;_jobSpecs[jid]=[b copy];_jobs[jid]=@{@"jobId":jid,@"state":@"queued",@"progress":@0};[self persist];[self send:@"ok" body:_jobs[jid] reply:m[@"id"] channel:c];
+    if(![jid isKindOfClass:NSString.class]||jid.length==0||jid.length>64||![@[@"sha256",@"verify",@"metadata",@"text",@"diagnostic"] containsObject:kind]||![name isKindOfClass:NSString.class]){
+        [self send:@"error" body:@{@"error":@"Invalid job"} reply:m[@"id"] channel:c generation:generation];
+        return;
     }
+    NSDictionary *response=nil;
+    NSString *rejection=nil;
+    BOOL admitted=NO;
+    @synchronized(_jobs) {
+        response=_jobs[jid];
+        if(response){
+            if(_jobSpecs[jid]&&![_jobSpecs[jid] isEqual:b])rejection=@"Job ID conflict";
+        } else {
+            NSString *old=nil;
+            if(_jobs.count>=64){
+                for(NSString *key in _jobs){
+                    if(![@[@"queued",@"running"] containsObject:_jobs[key][@"state"]]){old=key;break;}
+                }
+                if(!old)rejection=@"Job history full";
+            }
+            if(!rejection){
+                // The shared admission count uses the short agent lock only.
+                @synchronized(self) {
+                    if(_queuedJobs>=8||self.memoryPressure)rejection=@"Worker busy or paused for memory pressure";
+                    else {_queuedJobs++;admitted=YES;}
+                }
+            }
+            if(admitted){
+                if(old){[_jobs removeObjectForKey:old];[_jobSpecs removeObjectForKey:old];}
+                _jobSpecs[jid]=[b copy];
+                response=@{@"jobId":jid,@"state":@"queued",@"progress":@0};
+                _jobs[jid]=response;
+                // Serialize journal replacement with other job updates, never with PCM.
+                [self persist];
+            }
+        }
+    }
+    [self send:rejection?@"error":@"ok" body:rejection?@{@"error":rejection}:response reply:m[@"id"] channel:c generation:generation];
+    if(!admitted)return;
     dispatch_async(_worker,^{@autoreleasepool {
         NSDictionary *result=nil;NSString *error=nil;
         @try {
@@ -361,7 +440,8 @@ static BOOL jsonDepth(id value,unsigned depth) { BOOL dict=[value isKindOfClass:
             }
         } @catch(NSException *e){error=e.reason;}
         BOOL cancelled=[self cancelled:jid];NSString *state=cancelled?@"cancelled":error?@"failed":@"completed";NSMutableDictionary *s=[@{@"jobId":jid,@"state":state,@"progress":@([state isEqual:@"completed"]?1:0)} mutableCopy];if(result)s[@"result"]=result;if(error)s[@"error"]=error;[self update:s];
-        @synchronized(self){self->_queuedJobs--;[self->_cancelled removeObject:jid];}
+        @synchronized(self->_jobs){[self->_cancelled removeObject:jid];}
+        @synchronized(self){self->_queuedJobs--;}
     }});
 }
 @end

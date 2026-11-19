@@ -20,6 +20,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--zig', required=True, type=pathlib.Path)
     parser.add_argument('--sdk', required=True, type=pathlib.Path)
+    parser.add_argument('--build-dir', type=pathlib.Path, default=pathlib.Path('artifacts/ios-build'))
     args = parser.parse_args()
     zig, sdk = args.zig.resolve(), args.sdk.resolve()
     out = ROOT / 'artifacts/ios-analysis'
@@ -38,7 +39,10 @@ def main():
                 time.sleep(.01*(2**attempt))
     # Invalidate any old clean report before invoking a compiler or reading build inputs.
     save()
-    write_audit_header(ROOT/'artifacts/ios-build/stage/BackThread.app/BackThread',out/'audit-symbols.h')
+    build = (ROOT / args.build_dir).resolve()
+    if not build.is_relative_to(ROOT / 'artifacts'):
+        parser.error('--build-dir must be inside artifacts/')
+    write_audit_header(build / 'stage/BackThread.app/BackThread', out / 'audit-symbols.h')
     results = report['results']
     for index, source in enumerate(SOURCES):
         print('Analyzing ' + source, flush=True)

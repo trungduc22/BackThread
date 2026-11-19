@@ -1,5 +1,9 @@
 # Next steps — 0.1.2
 
+## Audio follow-up
+
+Instrument the same PCM sequence on the writer and receiver around an underrun. The soak still fails despite confirmed isolation from job journal I/O. Preserve the current app until the user authorizes installation. See [results and verification commands](AUDIO_JOURNAL_FOLLOWUP.md).
+
 ## Foundation checkpoint
 
 See the [engineering report and acceptance order](NATIVE_FOUNDATION_REPORT.md). Prioritize timing correlation and isolated audio soak before resuming the workbench UI.

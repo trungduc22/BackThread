@@ -1,5 +1,9 @@
 # Feature acceptance matrix — 0.1.2
 
+## Audio follow-up
+
+Simulator PCM and heartbeat now continue while job journal I/O is held in the regression fixture. Native build 11 has the matching job dispatch isolation. The strict soak remains open with one 10 ms underrun. See [results and verification commands](AUDIO_JOURNAL_FOLLOWUP.md).
+
 ## Foundation checkpoint
 
 Windows solution, managed/C regression and native artifact checks pass. The strict audio soak and hardware gates are tracked in the [engineering report](NATIVE_FOUNDATION_REPORT.md). Workbench features remain deferred.
