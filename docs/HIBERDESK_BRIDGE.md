@@ -6,6 +6,8 @@ Both the standalone TCP listener and the optional same-user named pipe use the e
 
 The same per-user host lease applies to tray and CLI hosts. BackThread acquires the lease and starts its local listeners before opening a device session. Separate local fixtures can use separate API ports. Installed binaries from earlier versions do not participate in this lease. The opt-in HiberDesk controller also checks whether a standalone listener is already running before launching.
 
+Submissions from the HiberDesk pipe honor the host's `pauseWindowsOnConfirmedHandoff` preference. The host can veto auto-pause, and the media router remains responsible for confirmation.
+
 `POST /v1/events` over the HiberDesk pipe returns `routerAccepted`, `deviceAcknowledged`, and nullable `deviceAccepted`. The iPhone's reply covers acceptance of the event, with no claim of visible playback or banner display. The existing TCP response and iPhone UI stay compatible. When the optional Windows collector is enabled alongside the bridge, it skips known HiberDesk and GhostCode notifications. Those applications use the explicit relay policy.
 
 Remove `enableHiberDeskBridge` or set it to `false` and launch BackThread without `--hiberdesk` to close the pipe. Keep the configured session key, iPhone pairing, and Spotify data in their original locations.

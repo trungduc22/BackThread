@@ -135,6 +135,8 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
         application.MapPost("/v1/media/submit", async (HttpContext c) =>
         {
             var request = await Body<MediaSubmissionRequest>(c);
+            if (useHiberDeskPipe && c.Connection.LocalIpAddress is null && !host.Config.PauseWindowsOnConfirmedHandoff)
+                request = request with { AutoPauseWindowsOnConfirm = false };
             return await host.SubmitMediaAsync(request, c.RequestAborted);
         });
         application.MapPost("/v1/media/cancel", async (HttpContext c) =>
