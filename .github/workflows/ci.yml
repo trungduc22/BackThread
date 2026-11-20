@@ -140,7 +140,7 @@ jobs:
           import ios_build_support as s
           s.macho(Path("artifacts/ios15/Payload/BackThread.app/BackThread"), profile="ios15")
           s.macho(Path("artifacts/ios15/BackThread.Agent"), profile="ios15")
-          s.write_ipa(Path("artifacts/ios15/Payload/BackThread.app"), Path("artifacts/ios15/BackThread-iOS15.ipa"))
+          s.write_ipa(Path("artifacts/ios15/BackThread-iOS15.ipa"), Path("artifacts/ios15/Payload/BackThread.app"))
           print("VERIFIED iOS 15 arm64 Mach-O & IPA:", Path("artifacts/ios15/BackThread-iOS15.ipa").stat().st_size, "bytes")
           PY
 
