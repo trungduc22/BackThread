@@ -65,7 +65,10 @@ internal static class UpgradeFeaturesTests
                     var replyFrame = await Wire.ReadAsync(ssl, ct);
                     var reply = Message.Decode(replyFrame.Payload);
                     Check.Equal("pair.ok", reply.Type);
-                    Check.Equal(Convert.ToHexString(key).ToLowerInvariant(), reply.Body.GetProperty("sessionKey").GetString());
+                    string issuedHex = reply.Body.GetProperty("sessionKey").GetString()!;
+                    Check.Equal(64, issuedHex.Length);
+                    Check.True(!string.Equals(Convert.ToHexString(key).ToLowerInvariant(), issuedHex, StringComparison.OrdinalIgnoreCase), "QR pairing must issue a device-specific key");
+                    Check.Equal(Convert.ToHexString(devices.TryGetDeviceKey("iphone-15-pro")!).ToLowerInvariant(), issuedHex);
                     Check.Equal(checkCode, reply.Body.GetProperty("checkCode").GetString());
                 }
             }
@@ -442,7 +445,7 @@ internal static class UpgradeFeaturesTests
                 {
                     using (ptcp) using (pssl)
                     {
-                        await Authentication.ServerAsync(pssl, claimedKey, phoneStop.Token);
+                        await Authentication.ServerAsync(pssl, claimedKey, phoneStop.Token, deviceId: "iphone15-e2e", deviceName: "iPhone 15 Lab");
                         await using var conn = new Connection(pssl);
                         var read = conn.RunAsync(async (frame, msg, token) =>
                         {

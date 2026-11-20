@@ -48,6 +48,8 @@ public sealed class HostRuntime : IDisposable
     private SystemTelemetrySnapshot? latestTelemetry;
     private readonly CancellationTokenSource? disposedCts = new();
     private CancellationTokenSource? liveAudioSliceCts;
+    private CancellationTokenSource? activeSessionCts;
+    private string? activeDeviceId;
 
     private X509Certificate2? lanCert;
     private LanTlsServer? lanServer;
@@ -262,7 +264,39 @@ public sealed class HostRuntime : IDisposable
     }
 
     public IReadOnlyList<PairedDeviceRecord> ListDevices() => Devices.List();
-    public bool RevokeDevice(string deviceId) => Devices.Revoke(deviceId);
+    public bool RevokeDevice(string deviceId)
+    {
+        bool ok = Devices.Revoke(deviceId);
+        if (ok) DisconnectDevice(deviceId);
+        return ok;
+    }
+
+    public bool DisconnectDevice(string? deviceId = null)
+    {
+        CancellationTokenSource? cts;
+        lock (stateGate)
+        {
+            if (activeSessionCts is null) return false;
+            if (!string.IsNullOrWhiteSpace(deviceId) && !string.Equals(activeDeviceId, deviceId, StringComparison.OrdinalIgnoreCase))
+                return false;
+            cts = activeSessionCts;
+        }
+        try { cts.Cancel(); Log?.Invoke($"Explicitly disconnected device {(deviceId ?? activeDeviceId ?? "active")}"); return true; }
+        catch (ObjectDisposedException) { return false; }
+    }
+
+    public PairedDeviceRecord? RotateDeviceKey(string deviceId)
+    {
+        var rotated = Devices.RotateDeviceKey(deviceId);
+        if (rotated is null) return null;
+        System.Security.Cryptography.CryptographicOperations.ZeroMemory(rotated.Value.Key);
+        DisconnectDevice(deviceId);
+        Log?.Invoke($"Rotated device key for {deviceId} (now v{rotated.Value.Record.KeyVersion})");
+        return rotated.Value.Record;
+    }
+
+    public PairedDeviceRecord? SetDeviceInputPermissions(string deviceId, bool? allowTouchpad, bool? allowDrawingPad)
+        => Devices.SetInputPermissions(deviceId, allowTouchpad, allowDrawingPad);
     public IReadOnlyList<PerAppAudioSession> ListPerAppAudio() => audioMixer.ListSessions();
     public PerAppAudioSession? SetPerAppAudio(int processId, float? volumeScalar, bool? muted) => audioMixer.SetSessionVolume(processId, volumeScalar, muted);
     public IReadOnlyList<GpuAdapterSnapshot> SampleGpu() => gpuMonitor.Sample();
@@ -437,29 +471,58 @@ public sealed class HostRuntime : IDisposable
                     }
                     else if (config.Transport == "auto")
                     {
-                        var usbAttempt = await TryConnectUsbAsync(TimeSpan.FromSeconds(2.5), ct);
-                        if (usbAttempt is not null)
-                        {
-                            stream = usbAttempt.Value.Stream;
-                            routeKind = TransportRouteKind.Usb;
-                            remoteAddr = usbAttempt.Value.Serial;
-                            deviceId = usbAttempt.Value.Serial;
-                        }
-                        else if (lanServer is not null)
+                        bool wifiFirst = !string.Equals(config.ConnectionPreference, "usb-first", StringComparison.OrdinalIgnoreCase);
+                        if (wifiFirst && lanServer is not null)
                         {
                             using var wifiWait = CancellationTokenSource.CreateLinkedTokenSource(ct);
                             wifiWait.CancelAfter(TimeSpan.FromSeconds(2.5));
-                            tlsSession = await lanServer.Sessions.ReadAsync(wifiWait.Token);
-                            stream = tlsSession.Stream;
-                            alreadyAuthenticated = true;
-                            routeKind = tlsSession.RouteKind;
-                            remoteAddr = tlsSession.RemoteAddress;
-                            deviceId = tlsSession.DeviceId ?? ("wifi-" + remoteAddr);
-                            deviceName = tlsSession.DeviceName ?? "iPhone";
+                            try
+                            {
+                                tlsSession = await lanServer.Sessions.ReadAsync(wifiWait.Token);
+                                stream = tlsSession.Stream;
+                                alreadyAuthenticated = true;
+                                routeKind = tlsSession.RouteKind;
+                                remoteAddr = tlsSession.RemoteAddress;
+                                deviceId = tlsSession.DeviceId ?? ("wifi-" + remoteAddr);
+                                deviceName = tlsSession.DeviceName ?? "iPhone";
+                            }
+                            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                            {
+                                var usbFallback = await TryConnectUsbAsync(TimeSpan.FromSeconds(2.5), ct);
+                                if (usbFallback is null)
+                                    throw new IOException("No Wi-Fi or USB iPhone detected (wifi-first mode)");
+                                stream = usbFallback.Value.Stream;
+                                routeKind = TransportRouteKind.Usb;
+                                remoteAddr = usbFallback.Value.Serial;
+                                deviceId = usbFallback.Value.Serial;
+                            }
                         }
                         else
                         {
-                            throw new IOException("No USB iPhone detected (enable lan.enabled for Wi-Fi failover)");
+                            var usbAttempt = await TryConnectUsbAsync(TimeSpan.FromSeconds(2.5), ct);
+                            if (usbAttempt is not null)
+                            {
+                                stream = usbAttempt.Value.Stream;
+                                routeKind = TransportRouteKind.Usb;
+                                remoteAddr = usbAttempt.Value.Serial;
+                                deviceId = usbAttempt.Value.Serial;
+                            }
+                            else if (lanServer is not null)
+                            {
+                                using var wifiWait = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                                wifiWait.CancelAfter(TimeSpan.FromSeconds(2.5));
+                                tlsSession = await lanServer.Sessions.ReadAsync(wifiWait.Token);
+                                stream = tlsSession.Stream;
+                                alreadyAuthenticated = true;
+                                routeKind = tlsSession.RouteKind;
+                                remoteAddr = tlsSession.RemoteAddress;
+                                deviceId = tlsSession.DeviceId ?? ("wifi-" + remoteAddr);
+                                deviceName = tlsSession.DeviceName ?? "iPhone";
+                            }
+                            else
+                            {
+                                throw new IOException("No USB iPhone detected (enable lan.enabled for Wi-Fi failover)");
+                            }
                         }
                     }
                     else
@@ -484,6 +547,7 @@ public sealed class HostRuntime : IDisposable
                         await using var c = new Connection(stream);
                         connection = c;
                         worker = new(c);
+                        lock (stateGate) { activeSessionCts = session; activeDeviceId = deviceId; }
                         ActiveRoute.SetActive(routeKind, remoteAddr, deviceId);
 
                         var reader = c.RunAsync(ReceiveAsync, session.Token);
@@ -495,11 +559,13 @@ public sealed class HostRuntime : IDisposable
                                 host = "BackThread.Host",
                                 protocol = 2,
                                 route = routeKind.ToString(),
+                                connectionPreference = config.ConnectionPreference,
                                 capabilities = new[]
                                 {
                                     "hybrid-media", "buffered-media", "top-bar-notifications",
                                     "telemetry", "audio-modes", "sync",
-                                    "wifi-tls", "adaptive-audio", "per-app-mixer", "gpu-monitor", "offload-v2", "rules"
+                                    "wifi-tls", "wifi-first", "per-device-keys", "adaptive-audio",
+                                    "per-app-mixer", "gpu-monitor", "offload-v2", "rules"
                                 }
                             }, session.Token);
 
@@ -512,18 +578,26 @@ public sealed class HostRuntime : IDisposable
 
                             await c.RequestAsync(LogicalChannel.Control, "action.registry", new { actions = config.Actions.Select(a => new { a.Id, a.Title }) }, session.Token);
 
-                            // 1-tap automatic Wi-Fi credential provisioning over trusted USB so unplugging fails over seamlessly!
+                            // 1-tap automatic Wi-Fi credential provisioning over trusted USB using a device-specific key.
                             if (routeKind == TransportRouteKind.Usb && lanServer is not null && config.Lan.AutoProvisionOverUsb)
                             {
                                 try
                                 {
-                                    var provision = QrPairingService.BuildUsbProvisionPayload(
-                                        Environment.MachineName,
-                                        lanServer.Fingerprint,
-                                        lanServer.Port,
-                                        LanNetworkDiscovery.GetReachableAddresses(),
-                                        key);
-                                    await c.SendAsync(LogicalChannel.Control, Message.Create("transport.wifi.provision", provision), session.Token);
+                                    var issued = Devices.IssueDeviceKey(deviceId, deviceName, TransportRouteKind.Usb.ToString());
+                                    try
+                                    {
+                                        var provision = QrPairingService.BuildUsbProvisionPayload(
+                                            Environment.MachineName,
+                                            lanServer.Fingerprint,
+                                            lanServer.Port,
+                                            LanNetworkDiscovery.GetReachableAddresses(),
+                                            issued.Key);
+                                        await c.SendAsync(LogicalChannel.Control, Message.Create("transport.wifi.provision", provision), session.Token);
+                                    }
+                                    finally
+                                    {
+                                        System.Security.Cryptography.CryptographicOperations.ZeroMemory(issued.Key);
+                                    }
                                 }
                                 catch { /* Older iOS agents without Wi-Fi support ignore cleanly. */ }
                             }
@@ -537,8 +611,10 @@ public sealed class HostRuntime : IDisposable
                             if (config.CollectWindowsNotifications) notificationLoop = NotificationLoopAsync(session.Token);
                             audioLoop = AudioLoopAsync(c, routeKind, session.Token);
 
-                            // When running over Wi-Fi in "auto" mode, automatically preempt back to USB if plugged in.
-                            if (config.Transport == "auto" && routeKind is TransportRouteKind.WifiLan or TransportRouteKind.Tailscale)
+                            // Only preempt Wi-Fi back to USB when explicitly configured for usb-first mode.
+                            if (config.Transport == "auto"
+                                && string.Equals(config.ConnectionPreference, "usb-first", StringComparison.OrdinalIgnoreCase)
+                                && routeKind is TransportRouteKind.WifiLan or TransportRouteKind.Tailscale)
                                 usbPreempt = UsbPreemptMonitorAsync(session);
 
                             var raced = usbPreempt is not null
@@ -549,6 +625,14 @@ public sealed class HostRuntime : IDisposable
                         }
                         finally
                         {
+                            lock (stateGate)
+                            {
+                                if (ReferenceEquals(activeSessionCts, session))
+                                {
+                                    activeSessionCts = null;
+                                    activeDeviceId = null;
+                                }
+                            }
                             Router.OnTransportDisconnected();
                             ActiveRoute.Clear();
                             SafeRestorePcMute();

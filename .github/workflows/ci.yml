@@ -2,7 +2,7 @@ name: BackThread CI
 
 on:
   push:
-    branches: [ master, main, 'eco/**' ]
+    branches: [ master, main, 'eco/**', 'feat/**' ]
   pull_request:
     branches: [ master, main ]
   workflow_dispatch:
@@ -92,60 +92,87 @@ jobs:
       - name: Checkout BackThread
         uses: actions/checkout@v4
 
-      - name: Compile and package BackThread iOS 15 arm64 (.ipa + Agent)
+      - name: Compile and verify BOTH iOS 12+ (universal) and iOS 15+ profiles (.ipa + rootless/rootful .deb)
         run: |
           set -euo pipefail
-          mkdir -p artifacts/ios15/Payload/BackThread.app artifacts/ios15/obj
           INC="-Isrc/Shared/Protocol -Isrc/iOS/Transport -Isrc/iOS/AudioReceiver -Isrc/iOS/Media -Isrc/iOS/Worker -Isrc/iOS/Agent -Isrc/iOS/UI"
-          CFLAGS="-arch arm64 -miphoneos-version-min=15.0 -O2 -Wall -Wextra -Werror -Werror=unguarded-availability-new -fobjc-arc -fblocks $INC"
           C_SRCS="src/Shared/Protocol/bt_wire.c src/iOS/AudioReceiver/BTPcmRing.c"
           AGENT_M="src/iOS/Agent/BTAgent.m src/iOS/Transport/BTWifiClient.m src/iOS/Worker/BTWorkerEngine.m src/iOS/AudioReceiver/BTAudioSessionCoordinator.m src/iOS/AudioReceiver/BTAudioReceiver.m"
           UI_M="src/iOS/UI/main.m src/iOS/UI/BTTheme.m src/iOS/UI/BTVideoSurfaceView.m src/iOS/UI/BTNowPlayingView.m src/iOS/UI/BTIdleHubView.m src/iOS/UI/BTQuickActionsView.m src/iOS/UI/BTWorkerStatusView.m src/iOS/UI/BTSettingsView.m src/iOS/UI/BTNotificationOverlayView.m src/iOS/UI/BTViewController.m src/iOS/Media/BTBufferedMediaEngine.m src/iOS/Media/BTDirectMediaPlayer.m src/iOS/Media/BTYouTubeEmbedController.m"
 
-          OBJS=""
-          for f in $C_SRCS; do
-            out="artifacts/ios15/obj/$(basename "$f").o"
-            xcrun -sdk iphoneos clang -std=c11 -arch arm64 -miphoneos-version-min=15.0 -O2 -Wall -Wextra -Werror $INC -c "$f" -o "$out"
-            OBJS="$OBJS $out"
-          done
-          for f in $AGENT_M; do
-            out="artifacts/ios15/obj/$(basename "$f").o"
-            xcrun -sdk iphoneos clang $CFLAGS -c "$f" -o "$out"
-            OBJS="$OBJS $out"
-          done
+          build_profile() {
+            local profile="$1" min_ver="$2" macro="$3" out_dir="$4" ipa_name="$5"
+            echo "=== Building iOS profile: $profile (min iOS $min_ver) ==="
+            mkdir -p "$out_dir/Payload/BackThread.app" "$out_dir/obj"
+            local cflags="-arch arm64 -miphoneos-version-min=$min_ver -D$macro=1 -DBT_ENABLE_JAILBREAK_EXTENSIONS=0 -O2 -Wall -Wextra -Werror -Werror=unguarded-availability-new -fobjc-arc -fblocks $INC"
+            local link_extra=""
+            if [ "$profile" = "ios12-universal" ]; then
+              link_extra="-Wl,-no_fixup_chains"
+            fi
 
-          AGENT_OBJS="$OBJS"
-          xcrun -sdk iphoneos clang $CFLAGS -c src/iOS/Agent/main.m -o artifacts/ios15/obj/agent_main.o
-          xcrun -sdk iphoneos clang -arch arm64 -miphoneos-version-min=15.0 $AGENT_OBJS artifacts/ios15/obj/agent_main.o \
-            -framework Foundation -framework AudioToolbox -framework AVFoundation -framework Network -framework Security -framework ImageIO -framework CoreGraphics -framework SystemConfiguration \
-            -weak_framework PDFKit -weak_framework Vision -weak_framework Speech -lz \
-            -o artifacts/ios15/BackThread.Agent
+            local objs=""
+            for f in $C_SRCS; do
+              local out="$out_dir/obj/$(basename "$f").o"
+              xcrun -sdk iphoneos clang -std=c11 -arch arm64 -miphoneos-version-min="$min_ver" -O2 -Wall -Wextra -Werror $INC -c "$f" -o "$out"
+              objs="$objs $out"
+            done
+            for f in $AGENT_M; do
+              local out="$out_dir/obj/$(basename "$f").o"
+              xcrun -sdk iphoneos clang $cflags -c "$f" -o "$out"
+              objs="$objs $out"
+            done
 
-          UI_OBJS="$OBJS"
-          for f in $UI_M; do
-            out="artifacts/ios15/obj/$(basename "$f").o"
-            xcrun -sdk iphoneos clang $CFLAGS -c "$f" -o "$out"
-            UI_OBJS="$UI_OBJS $out"
-          done
-          xcrun -sdk iphoneos clang -arch arm64 -miphoneos-version-min=15.0 $UI_OBJS \
-            -framework UIKit -framework Foundation -framework AVFoundation -framework AVKit -framework CoreMedia -framework AudioToolbox -framework MediaPlayer -framework WebKit -framework Security -framework Network -framework ImageIO -framework CoreGraphics -framework QuartzCore -framework SystemConfiguration \
-            -weak_framework PDFKit -weak_framework Vision -weak_framework Speech -lz \
-            -o artifacts/ios15/Payload/BackThread.app/BackThread
+            local agent_objs="$objs"
+            xcrun -sdk iphoneos clang $cflags -c src/iOS/Agent/main.m -o "$out_dir/obj/agent_main.o"
+            xcrun -sdk iphoneos clang -arch arm64 -miphoneos-version-min="$min_ver" $link_extra $agent_objs "$out_dir/obj/agent_main.o" \
+              -framework Foundation -framework AudioToolbox -framework AVFoundation -framework Network -framework Security -framework ImageIO -framework CoreGraphics -framework SystemConfiguration \
+              -weak_framework PDFKit -weak_framework Vision -weak_framework Speech -lz \
+              -o "$out_dir/BackThread.Agent"
 
-          cp -R src/iOS/Resources/* artifacts/ios15/Payload/BackThread.app/
-          python3 - <<'PY'
+            local ui_objs="$objs"
+            for f in $UI_M; do
+              local out="$out_dir/obj/$(basename "$f").o"
+              xcrun -sdk iphoneos clang $cflags -c "$f" -o "$out"
+              ui_objs="$ui_objs $out"
+            done
+            xcrun -sdk iphoneos clang -arch arm64 -miphoneos-version-min="$min_ver" $link_extra $ui_objs \
+              -framework UIKit -framework Foundation -framework AVFoundation -framework AVKit -framework CoreMedia -framework AudioToolbox -framework MediaPlayer -framework WebKit -framework Security -framework Network -framework ImageIO -framework CoreGraphics -framework QuartzCore -framework SystemConfiguration \
+              -weak_framework PDFKit -weak_framework Vision -weak_framework Speech -lz \
+              -o "$out_dir/Payload/BackThread.app/BackThread"
+
+            cp -R src/iOS/Resources/* "$out_dir/Payload/BackThread.app/"
+            python3 - "$profile" "$out_dir" "$ipa_name" <<'PY'
           from pathlib import Path
           import sys
           sys.path.insert(0, "scripts")
           import ios_build_support as s
-          s.macho(Path("artifacts/ios15/Payload/BackThread.app/BackThread"), profile="ios15")
-          s.macho(Path("artifacts/ios15/BackThread.Agent"), profile="ios15")
-          s.write_ipa(Path("artifacts/ios15/BackThread-iOS15.ipa"), Path("artifacts/ios15/Payload/BackThread.app"))
-          print("VERIFIED iOS 15 arm64 Mach-O & IPA:", Path("artifacts/ios15/BackThread-iOS15.ipa").stat().st_size, "bytes")
+          profile, out_dir, ipa_name = sys.argv[1], Path(sys.argv[2]), sys.argv[3]
+          app_dir = out_dir / "Payload/BackThread.app"
+          app_info = s.macho(app_dir / "BackThread", profile=profile)
+          agent_info = s.macho(out_dir / "BackThread.Agent", profile=profile)
+          ipa_path = out_dir / ipa_name
+          s.write_ipa(ipa_path, app_dir)
+          print(f"VERIFIED {profile} Mach-O (minOS={app_info['minimumOS']}, agent={agent_info['minimumOS']}) & IPA: {ipa_path.stat().st_size} bytes")
+          if profile == "ios12-universal":
+              deb_rootful = out_dir / "BackThread-iOS12-rootful.deb"
+              s.debian(deb_rootful, Path("src/iOS/control").read_bytes(), app_dir)
+              print(f"VERIFIED rootful .deb: {deb_rootful.stat().st_size} bytes")
+          else:
+              deb_rootless = out_dir / "BackThread-iOS15-rootless.deb"
+              s.debian_rootless(deb_rootless, Path("src/iOS/control").read_bytes(), app_dir)
+              print(f"VERIFIED rootless .deb: {deb_rootless.stat().st_size} bytes")
           PY
+          }
 
-      - name: Upload BackThread-iOS15.ipa artifact
+          build_profile "ios12-universal" "12.0" "BT_PROFILE_IOS12" "artifacts/ios12" "BackThread-iOS12.ipa"
+          build_profile "ios15" "15.0" "BT_PROFILE_IOS15" "artifacts/ios15" "BackThread-iOS15.ipa"
+
+      - name: Upload iOS 12 & iOS 15 IPA and Debian artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: BackThread-iOS15-ipa
-          path: artifacts/ios15/BackThread-iOS15.ipa
+          name: BackThread-iOS-DualProfile
+          path: |
+            artifacts/ios12/BackThread-iOS12.ipa
+            artifacts/ios12/BackThread-iOS12-rootful.deb
+            artifacts/ios15/BackThread-iOS15.ipa
+            artifacts/ios15/BackThread-iOS15-rootless.deb

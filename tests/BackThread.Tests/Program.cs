@@ -421,6 +421,85 @@ if (duration > 0) await Test("soak.concurrent-audio-worker", async () =>
     Check.Equal(0L, s.Connection.DroppedAudio);
 });
 
+await Test("lan.per-device-keys-rotation-revocation-and-manual-uri", async () =>
+{
+    var cert = LanCertificateStore.LoadOrCreate(Path.Combine(root, "lan-per-device.pfx"), "TestPC");
+    var fp = LanCertificateStore.GetFingerprint(cert);
+    var pairing = new QrPairingService();
+    var devices = new DeviceRegistry(Path.Combine(root, "devices-per-key.json"));
+    await using var server = new LanTlsServer(cert, key, pairing, port: 0, bindAddress: IPAddress.Loopback, pcName: "TestPC", devices: devices);
+    server.Start();
+
+    // Verify manual pairing URI helper
+    var snapA = pairing.CreateSession("TestPC", fp, server.Port, ["127.0.0.1"]);
+    string manualUri = QrPairingService.BuildManualPairingUri("127.0.0.1", server.Port, fp, snapA.OneTimeCode, "TestPC");
+    Check.True(manualUri.StartsWith("backthread://pair#v=1&", StringComparison.Ordinal));
+    Check.True(manualUri.Contains(fp, StringComparison.OrdinalIgnoreCase));
+
+    // Pair Device A over pinned TLS
+    byte[] keyA;
+    {
+        var (tcp, ssl) = await LanTlsServer.ConnectPinnedClientAsync("127.0.0.1", server.Port, fp, ct);
+        using (tcp) using (ssl)
+        {
+            await Wire.WriteAsync(ssl, new(LogicalChannel.Control, 0, 0,
+                Message.Create("pair.claim", new { code = snapA.OneTimeCode, deviceId = "dev-a", deviceName = "iPhone A" }, id: "p1").Encode()), ct);
+            var reply = Message.Decode((await Wire.ReadAsync(ssl, ct)).Payload);
+            Check.Equal("pair.ok", reply.Type);
+            keyA = Convert.FromHexString(reply.Body.GetProperty("sessionKey").GetString()!);
+            Check.Equal(32, keyA.Length);
+            // Device-specific key MUST differ from global USB session key
+            Check.True(!keyA.SequenceEqual(key));
+        }
+    }
+
+    // Replaying the same single-use code MUST fail
+    {
+        var (tcp, ssl) = await LanTlsServer.ConnectPinnedClientAsync("127.0.0.1", server.Port, fp, ct);
+        using (tcp) using (ssl)
+        {
+            await Wire.WriteAsync(ssl, new(LogicalChannel.Control, 0, 0,
+                Message.Create("pair.claim", new { code = snapA.OneTimeCode, deviceId = "dev-replay", deviceName = "Replay" }, id: "p2").Encode()), ct);
+            var reply = Message.Decode((await Wire.ReadAsync(ssl, ct)).Payload);
+            Check.Equal("error", reply.Type);
+        }
+    }
+
+    // Pair Device B and verify Device A & B receive distinct keys
+    var snapB = pairing.CreateSession("TestPC", fp, server.Port, ["127.0.0.1"]);
+    byte[] keyB;
+    {
+        var (tcp, ssl) = await LanTlsServer.ConnectPinnedClientAsync("127.0.0.1", server.Port, fp, ct);
+        using (tcp) using (ssl)
+        {
+            await Wire.WriteAsync(ssl, new(LogicalChannel.Control, 0, 0,
+                Message.Create("pair.claim", new { code = snapB.OneTimeCode, deviceId = "dev-b", deviceName = "iPhone B" }, id: "p3").Encode()), ct);
+            var reply = Message.Decode((await Wire.ReadAsync(ssl, ct)).Payload);
+            Check.Equal("pair.ok", reply.Type);
+            keyB = Convert.FromHexString(reply.Body.GetProperty("sessionKey").GetString()!);
+            Check.True(!keyB.SequenceEqual(keyA));
+        }
+    }
+
+    // Public listing MUST never expose DeviceKeyHex
+    Check.True(devices.List().All(d => d.DeviceKeyHex is null));
+    // Default input permissions MUST be disabled
+    Check.Equal((false, false), devices.GetInputPermissions("dev-a"));
+
+    // Rotate Device A key -> old keyA rejected, new rotated key succeeds
+    var rotated = devices.RotateDeviceKey("dev-a");
+    Check.True(rotated is not null);
+    Check.Equal(2, rotated!.Value.Record.KeyVersion);
+    Check.True(!rotated.Value.Key.SequenceEqual(keyA));
+
+    // Revoke Device A -> Device A is revoked and key cleared; Device B remains untouched
+    Check.True(devices.Revoke("dev-a"));
+    Check.True(devices.IsRevoked("dev-a"));
+    Check.True(devices.TryGetDeviceKey("dev-a") is null);
+    Check.True(!devices.IsRevoked("dev-b"));
+    Check.True(devices.TryGetDeviceKey("dev-b")!.SequenceEqual(keyB));
+});
+
 if (OperatingSystem.IsWindows())
 {
     await Test("hiberdesk.bridge-pipe-auth-and-capabilities", async () =>

@@ -114,6 +114,29 @@ static NSData *BTDataFromHex(NSString *hex) {
     return proposal;
 }
 
++ (nullable instancetype)proposalWithHost:(NSString *)host
+                                     port:(uint16_t)port
+                              fingerprint:(NSString *)fingerprint
+                              oneTimeCode:(NSString *)oneTimeCode
+                                   pcName:(nullable NSString *)pcName {
+    NSString *trimmedHost = [host isKindOfClass:NSString.class]
+        ? [host stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]
+        : nil;
+    NSString *fp = [fingerprint isKindOfClass:NSString.class] ? [fingerprint lowercaseString] : nil;
+    if (!trimmedHost.length || trimmedHost.length > 128 || port == 0 || !BTIsHex(fp, 64)
+        || ![oneTimeCode isKindOfClass:NSString.class] || !oneTimeCode.length || oneTimeCode.length > 64) {
+        return nil;
+    }
+    BTPairingProposal *proposal = [BTPairingProposal new];
+    proposal.pcName = pcName.length ? pcName : trimmedHost;
+    proposal.fingerprint = fp;
+    proposal.checkCode = [BTPairedPC humanCheckCodeForFingerprint:fp];
+    proposal.port = port;
+    proposal.hosts = @[trimmedHost];
+    proposal.oneTimeCode = oneTimeCode;
+    return proposal;
+}
+
 @end
 
 @implementation BTTlsStream {
@@ -396,6 +419,7 @@ static NSData *BTDataFromHex(NSString *hex) {
     NSMutableDictionary<NSString *, id> *_discoveredEndpoints;
     dispatch_queue_t _queue;
     id _browser;
+    nw_path_monitor_t _pathMonitor;
 }
 
 - (instancetype)initWithStorageDirectory:(NSString *)directory {
@@ -466,6 +490,23 @@ static NSData *BTDataFromHex(NSString *hex) {
 }
 
 - (void)startDiscovery {
+    [_lock lock];
+    if (!_pathMonitor) {
+        nw_path_monitor_t monitor = nw_path_monitor_create();
+        _pathMonitor = monitor;
+        __weak typeof(self) weakSelf = self;
+        nw_path_monitor_set_queue(monitor, _queue);
+        nw_path_monitor_set_update_handler(monitor, ^(nw_path_t path) {
+            BTWifiClient *strong = weakSelf;
+            if (!strong) return;
+            BOOL satisfied = (nw_path_get_status(path) == nw_path_status_satisfied);
+            void (^cb)(BOOL) = strong.onNetworkChanged;
+            if (cb) cb(satisfied);
+        });
+        nw_path_monitor_start(monitor);
+    }
+    [_lock unlock];
+
     if (@available(iOS 13.0, *)) {
         [_lock lock];
         if (_browser) {
@@ -511,6 +552,12 @@ static NSData *BTDataFromHex(NSString *hex) {
 }
 
 - (void)stopDiscovery {
+    [_lock lock];
+    nw_path_monitor_t monitor = _pathMonitor;
+    _pathMonitor = nil;
+    [_lock unlock];
+    if (monitor) nw_path_monitor_cancel(monitor);
+
     if (@available(iOS 13.0, *)) {
         [_lock lock];
         nw_browser_t browser = (nw_browser_t)_browser;

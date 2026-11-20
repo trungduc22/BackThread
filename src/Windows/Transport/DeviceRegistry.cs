@@ -45,10 +45,19 @@ public sealed record PairedDeviceRecord(
     string[]? SupportedCodecs = null,
     string LastRoute = "Unknown",
     long LastSeenUnixMs = 0,
-    bool Revoked = false);
+    bool Revoked = false,
+    string? DeviceKeyHex = null,
+    int KeyVersion = 0,
+    bool AllowTouchpad = false,
+    bool AllowDrawingPad = false,
+    string? ModelIdentifier = null)
+{
+    /// <summary>Returns a copy with DeviceKeyHex cleared for safe API/UI exposure.</summary>
+    public PairedDeviceRecord ToPublic() => this with { DeviceKeyHex = null };
+}
 
 /// <summary>
-/// Multi-device registry tracking paired iPhones, runtime capability advertisements, battery/thermal health, and revocations.
+/// Multi-device registry tracking paired iPhones, per-device credentials, input permissions, runtime capability advertisements, battery/thermal health, and revocations.
 /// </summary>
 public sealed class DeviceRegistry
 {
@@ -75,17 +84,106 @@ public sealed class DeviceRegistry
 
     public IReadOnlyList<PairedDeviceRecord> List()
     {
-        lock (gate) return devices.Values.OrderByDescending(d => d.LastSeenUnixMs).ToList();
+        lock (gate) return devices.Values.OrderByDescending(d => d.LastSeenUnixMs).Select(d => d.ToPublic()).ToList();
     }
 
     public PairedDeviceRecord? Get(string deviceId)
     {
-        lock (gate) return devices.GetValueOrDefault(deviceId);
+        lock (gate) return devices.TryGetValue(deviceId, out var d) ? d.ToPublic() : null;
     }
 
     public bool IsRevoked(string deviceId)
     {
         lock (gate) return devices.TryGetValue(deviceId, out var d) && d.Revoked;
+    }
+
+    public byte[]? TryGetDeviceKey(string deviceId)
+    {
+        lock (gate)
+        {
+            if (!devices.TryGetValue(deviceId, out var d) || d.Revoked || string.IsNullOrWhiteSpace(d.DeviceKeyHex))
+                return null;
+            try
+            {
+                byte[] bytes = Convert.FromHexString(d.DeviceKeyHex);
+                return bytes.Length == 32 ? bytes : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
+
+    public (PairedDeviceRecord Record, byte[] Key) IssueDeviceKey(string deviceId, string name, string route)
+    {
+        byte[] keyBytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+        string keyHex = Convert.ToHexString(keyBytes).ToLowerInvariant();
+        long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        lock (gate)
+        {
+            devices.TryGetValue(deviceId, out var prior);
+            var updated = (prior ?? new PairedDeviceRecord(deviceId, name)) with
+            {
+                Name = string.IsNullOrWhiteSpace(name) ? (prior?.Name ?? "iPhone") : name.Trim(),
+                LastRoute = route,
+                LastSeenUnixMs = now,
+                Revoked = false,
+                DeviceKeyHex = keyHex,
+                KeyVersion = (prior?.KeyVersion ?? 0) + 1
+            };
+            devices[deviceId] = updated;
+            PersistUnsafe();
+            return (updated.ToPublic(), keyBytes);
+        }
+    }
+
+    public (PairedDeviceRecord Record, byte[] Key)? RotateDeviceKey(string deviceId)
+    {
+        lock (gate)
+        {
+            if (!devices.TryGetValue(deviceId, out var prior) || prior.Revoked)
+                return null;
+            byte[] keyBytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+            string keyHex = Convert.ToHexString(keyBytes).ToLowerInvariant();
+            var updated = prior with
+            {
+                DeviceKeyHex = keyHex,
+                KeyVersion = prior.KeyVersion + 1,
+                LastSeenUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            };
+            devices[deviceId] = updated;
+            PersistUnsafe();
+            return (updated.ToPublic(), keyBytes);
+        }
+    }
+
+    public PairedDeviceRecord? SetInputPermissions(string deviceId, bool? allowTouchpad, bool? allowDrawingPad)
+    {
+        lock (gate)
+        {
+            if (!devices.TryGetValue(deviceId, out var prior) || prior.Revoked)
+                return null;
+            var updated = prior with
+            {
+                AllowTouchpad = allowTouchpad ?? prior.AllowTouchpad,
+                AllowDrawingPad = allowDrawingPad ?? prior.AllowDrawingPad
+            };
+            devices[deviceId] = updated;
+            PersistUnsafe();
+            return updated.ToPublic();
+        }
+    }
+
+    public (bool AllowTouchpad, bool AllowDrawingPad) GetInputPermissions(string? deviceId)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId)) return (false, false);
+        lock (gate)
+        {
+            if (!devices.TryGetValue(deviceId, out var d) || d.Revoked)
+                return (false, false);
+            return (d.AllowTouchpad, d.AllowDrawingPad);
+        }
     }
 
     public PairedDeviceRecord RecordSeen(string deviceId, string name, string route)
@@ -104,12 +202,12 @@ public sealed class DeviceRegistry
                 };
                 devices[deviceId] = updated;
                 PersistUnsafe();
-                return updated;
+                return updated.ToPublic();
             }
             var created = new PairedDeviceRecord(deviceId, string.IsNullOrWhiteSpace(name) ? "iPhone" : name, LastRoute: route, LastSeenUnixMs: now);
             devices[deviceId] = created;
             PersistUnsafe();
-            return created;
+            return created.ToPublic();
         }
     }
 
@@ -117,6 +215,7 @@ public sealed class DeviceRegistry
     {
         long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         string? iosVersion = helloBody.TryGetProperty("iosVersion", out var v) ? v.GetString() : null;
+        string? modelId = helloBody.TryGetProperty("modelIdentifier", out var mi) ? mi.GetString() : null;
         int? ramMb = helloBody.TryGetProperty("ramMb", out var rm) && rm.TryGetInt32(out int r) ? r : null;
         int? cpuCores = helloBody.TryGetProperty("cpuCores", out var cc) && cc.TryGetInt32(out int c) ? c : null;
         bool hasNeural = helloBody.TryGetProperty("hasNeuralEngine", out var ne) && ne.ValueKind == JsonValueKind.True;
@@ -136,6 +235,7 @@ public sealed class DeviceRegistry
             {
                 Name = name ?? prior?.Name ?? "iPhone",
                 IosVersion = iosVersion ?? prior?.IosVersion,
+                ModelIdentifier = modelId ?? prior?.ModelIdentifier,
                 CapabilityTier = tier,
                 RamMb = ramMb ?? prior?.RamMb,
                 CpuCores = cpuCores ?? prior?.CpuCores,
@@ -150,7 +250,7 @@ public sealed class DeviceRegistry
             };
             devices[deviceId] = updated;
             PersistUnsafe();
-            return updated;
+            return updated.ToPublic();
         }
     }
 
@@ -167,7 +267,7 @@ public sealed class DeviceRegistry
                 LastSeenUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             };
             devices[deviceId] = updated;
-            return updated;
+            return updated.ToPublic();
         }
     }
 
@@ -176,7 +276,7 @@ public sealed class DeviceRegistry
         lock (gate)
         {
             if (!devices.TryGetValue(deviceId, out var prior)) return false;
-            devices[deviceId] = prior with { Revoked = true };
+            devices[deviceId] = prior with { Revoked = true, DeviceKeyHex = null, AllowTouchpad = false, AllowDrawingPad = false };
             PersistUnsafe();
             return true;
         }

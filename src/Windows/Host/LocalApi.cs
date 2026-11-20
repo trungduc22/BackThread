@@ -102,6 +102,20 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
         application.MapPost("/v1/lan/pair/start", () => host.StartQrPairing());
         application.MapGet("/v1/lan/devices", () => new { devices = host.ListDevices() });
         application.MapPost("/v1/lan/devices/{id}/revoke", (string id) => new { revoked = host.RevokeDevice(id) });
+        application.MapPost("/v1/lan/devices/{id}/disconnect", (string id) => new { disconnected = host.DisconnectDevice(id) });
+        application.MapPost("/v1/lan/devices/{id}/rotate", (string id) =>
+        {
+            var rotated = host.RotateDeviceKey(id);
+            return rotated is null ? Results.NotFound(new { error = "Device not found or revoked" }) : Results.Ok(new { device = rotated });
+        });
+        application.MapPost("/v1/lan/devices/{id}/permissions", async (string id, HttpContext c) =>
+        {
+            using var doc = await JsonDocument.ParseAsync(c.Request.Body, cancellationToken: c.RequestAborted);
+            bool? allowTouchpad = doc.RootElement.TryGetProperty("allowTouchpad", out var tp) && tp.ValueKind is JsonValueKind.True or JsonValueKind.False ? tp.GetBoolean() : null;
+            bool? allowDrawingPad = doc.RootElement.TryGetProperty("allowDrawingPad", out var dp) && dp.ValueKind is JsonValueKind.True or JsonValueKind.False ? dp.GetBoolean() : null;
+            var updated = host.SetDeviceInputPermissions(id, allowTouchpad, allowDrawingPad);
+            return updated is null ? Results.NotFound(new { error = "Device not found or revoked" }) : Results.Ok(new { device = updated });
+        });
         application.MapPost("/v1/power-profile", async (HttpContext c) =>
         {
             var b = await Body<PowerProfileRequest>(c);

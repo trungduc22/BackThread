@@ -25,6 +25,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy) NSString *oneTimeCode;
 
 + (nullable instancetype)parseURI:(NSURL *)url;
++ (nullable instancetype)proposalWithHost:(NSString *)host
+                                     port:(uint16_t)port
+                              fingerprint:(NSString *)fingerprint
+                              oneTimeCode:(NSString *)oneTimeCode
+                                   pcName:(nullable NSString *)pcName;
 @end
 
 @interface BTTlsStream : NSObject
@@ -37,6 +42,8 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 @interface BTWifiClient : NSObject
+@property(atomic, copy, nullable) void (^onNetworkChanged)(BOOL satisfied);
+
 - (instancetype)initWithStorageDirectory:(NSString *)directory;
 - (void)startDiscovery;
 - (void)stopDiscovery;
