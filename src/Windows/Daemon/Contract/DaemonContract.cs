@@ -52,6 +52,11 @@ public static class DaemonOperations
     public const string LanPairStart = "lan.pair.start";
     public const string LanDevicesList = "lan.devices.list";
     public const string LanDevicesRevoke = "lan.devices.revoke";
+    public const string LanDevicesRotate = "lan.devices.rotate";
+    public const string LanDevicesDisconnect = "lan.devices.disconnect";
+    public const string LanDevicesPermissions = "lan.devices.permissions";
+    public const string InputStatus = "input.status";
+    public const string InputEmergencyStop = "input.emergency.stop";
     public const string AudioState = "audio.state";
     public const string AudioModeSet = "audio.mode.set";
     public const string AudioVolumeSet = "audio.volume.set";
@@ -78,6 +83,8 @@ public static class DaemonOperations
     public static readonly IReadOnlyList<string> All =
     [
         StatusGet, TelemetryGet, LanStatus, LanPairStart, LanDevicesList, LanDevicesRevoke,
+        LanDevicesRotate, LanDevicesDisconnect, LanDevicesPermissions,
+        InputStatus, InputEmergencyStop,
         AudioState, AudioModeSet, AudioVolumeSet, AudioMixerList, AudioMixerSet,
         MediaStatus, MediaSubmit, MediaCommand, MediaReturn,
         OffloadStatus, OffloadEvaluate, PowerProfileSet,

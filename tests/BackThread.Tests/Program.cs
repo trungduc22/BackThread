@@ -500,6 +500,8 @@ await Test("lan.per-device-keys-rotation-revocation-and-manual-uri", async () =>
     Check.True(devices.TryGetDeviceKey("dev-b")!.SequenceEqual(keyB));
 });
 
+await BackThread.Tests.NextGenFeaturesTests.RunAllAsync(Test, root, key, ct);
+
 if (OperatingSystem.IsWindows())
 {
     await Test("hiberdesk.bridge-pipe-auth-and-capabilities", async () =>

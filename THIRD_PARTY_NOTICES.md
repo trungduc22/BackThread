@@ -34,5 +34,5 @@ The Windows projection comes from Microsoft.Windows.SDK.NET.Ref. The C#/WinRT ru
 
 ## Inspected / referenced projects
 
-- **PhoneBox** (https://github.com/ersinkoc/phonebox, MIT License, Copyright (c) Ersin Koc): inspired architectural patterns adapted independently in C#/Objective-C for BackThread's pinned Wi-Fi TLS + single-use QR pairing, per-app audio mixer, GPU/process/dev monitors, automation rules, Charge Guard, and safe feed proxy. No PhoneBox source files are copied directly.
+- **PhoneBox** (https://github.com/ersinkoc/phonebox, MIT License, Copyright (c) Ersin Koc): inspired architectural patterns adapted independently in C#/Objective-C for BackThread's pinned Wi-Fi TLS + single-use QR pairing, per-app audio mixer, GPU/process/dev monitors, automation rules, Charge Guard, safe feed proxy, and the optional modular interoperability client (`PhoneBoxAdapter` / `BTPhoneBoxClient`) targeting PhoneBox's documented LAN allowlist and pairing protocol. No PhoneBox source files are copied directly.
 - libusbmuxd, libimobiledevice, vox, WindowsMediaController, Theos, Theos templates and TetherSender are research references. Their code is not included or linked. No TetherSender license grant is assumed. Optional external OpenSSH/iproxy installations remain governed by their own licenses.

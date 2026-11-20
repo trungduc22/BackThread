@@ -53,6 +53,7 @@ public sealed class HostRuntime : IDisposable
 
     private X509Certificate2? lanCert;
     private LanTlsServer? lanServer;
+    private LegacyWebServer? legacyWebServer;
     private MdnsAdvertiser? mdns;
     private Channel<Func<Task>>? commandQueue;
 
@@ -60,6 +61,7 @@ public sealed class HostRuntime : IDisposable
     public SpotifyProvider Spotify { get; }
     public HostConfig Config => config;
     public DeviceRegistry Devices { get; }
+    public RemoteInputEngine Input { get; }
     public ActiveRouteManager ActiveRoute { get; } = new();
     public QrPairingService Pairing { get; } = new();
     public OffloadCoordinator Offload { get; } = new();
@@ -82,7 +84,8 @@ public sealed class HostRuntime : IDisposable
         IPerAppAudioMixer? audioMixer = null,
         IGpuMonitor? gpuMonitor = null,
         ProcessMonitorService? processMonitor = null,
-        DeviceRegistry? deviceRegistry = null)
+        DeviceRegistry? deviceRegistry = null,
+        IRemoteInputSink? inputSink = null)
     {
         this.config = config;
         this.endpointAudio = audioController ?? new WindowsEndpointAudio();
@@ -90,6 +93,7 @@ public sealed class HostRuntime : IDisposable
         this.audioMixer = audioMixer ?? new WindowsPerAppAudioMixer();
         this.gpuMonitor = gpuMonitor ?? new WindowsGpuMonitor();
         this.processMonitor = processMonitor ?? new ProcessMonitorService();
+        this.Input = new RemoteInputEngine(config.RemoteInput, inputSink);
         this.ChargeGuard = new ChargeGuardService(httpHandler);
         this.DevMonitor = new DevSessionMonitor(httpHandler);
         this.audioOutputMode = config.AudioOutputMode;
@@ -423,6 +427,22 @@ public sealed class HostRuntime : IDisposable
 
         LocalApi? api = config.EnableHttpApi ? new LocalApi(this, config.ApiPort, key) : null;
         Task apiTask = api is not null ? api.RunAsync(ct) : Task.Delay(Timeout.Infinite, ct);
+        Task legacyWebTask = Task.CompletedTask;
+        if (config.Lan.EnableLegacyWeb)
+        {
+            try
+            {
+                EnsureLanServerStarted();
+                if (lanCert is not null)
+                {
+                    IPAddress bindIp = IPAddress.TryParse(config.Lan.BindAddress, out var parsed) ? parsed : IPAddress.Any;
+                    legacyWebServer = new LegacyWebServer(this, lanCert, config.Lan.LegacyWebPort, bindIp);
+                    legacyWebTask = legacyWebServer.RunAsync(ct);
+                    Log?.Invoke($"Legacy TLS web companion enabled on https://{bindIp}:{config.Lan.LegacyWebPort}");
+                }
+            }
+            catch (Exception ex) { Log?.Invoke("Legacy TLS web server unavailable: " + ex.Message); }
+        }
         int attempt = 0;
 
         try
@@ -625,6 +645,7 @@ public sealed class HostRuntime : IDisposable
                         }
                         finally
                         {
+                            Input.ReleaseHeldButtons();
                             lock (stateGate)
                             {
                                 if (ReferenceEquals(activeSessionCts, session))
@@ -670,10 +691,14 @@ public sealed class HostRuntime : IDisposable
         }
         finally
         {
+            Input.ReleaseHeldButtons();
             queue.Writer.TryComplete();
             try { await Task.WhenAll(commandWorkers); } catch { }
             commandQueue = null;
             SafeRestorePcMute();
+            legacyWebServer?.Stop();
+            try { await legacyWebTask; } catch (Exception) when (ct.IsCancellationRequested) { }
+            legacyWebServer = null;
             api?.Stop();
             try { await apiTask; } catch (Exception) when (ct.IsCancellationRequested) { }
             if (mdns is not null) { await mdns.DisposeAsync(); mdns = null; }
@@ -1029,6 +1054,44 @@ public sealed class HostRuntime : IDisposable
                 ChargeGuard.RecordPhoneBattery(lv, isChg, thermal);
             if (ActiveRoute.Snapshot.ActiveDeviceId is string devId)
                 Devices.UpdateHealth(devId, thermal, bat, chg);
+            return;
+        }
+
+        if (m.Type == "input.emergencyStop")
+        {
+            Input.EmergencyDisconnect();
+            Log?.Invoke("Remote input emergency stop triggered by device.");
+            return;
+        }
+
+        if (m.Type == "input.touchpad")
+        {
+            var perms = Devices.GetInputPermissions(ActiveRoute.Snapshot.ActiveDeviceId);
+            var ev = new TouchpadEvent(
+                Kind: m.Body.TryGetProperty("kind", out var k) ? (k.GetString() ?? "move") : "move",
+                Dx: m.Body.TryGetProperty("dx", out var dx) && dx.TryGetDouble(out var dxv) ? dxv : 0,
+                Dy: m.Body.TryGetProperty("dy", out var dy) && dy.TryGetDouble(out var dyv) ? dyv : 0,
+                ScrollX: m.Body.TryGetProperty("scrollX", out var sx) && sx.TryGetDouble(out var sxv) ? sxv : 0,
+                ScrollY: m.Body.TryGetProperty("scrollY", out var sy) && sy.TryGetDouble(out var syv) ? syv : 0,
+                ClientTimestampMs: m.Body.TryGetProperty("ts", out var ts) && ts.TryGetInt64(out var tsv) ? tsv : null);
+            Input.ProcessTouchpad(ev, perms.AllowTouchpad);
+            return;
+        }
+
+        if (m.Type == "input.draw")
+        {
+            var perms = Devices.GetInputPermissions(ActiveRoute.Snapshot.ActiveDeviceId);
+            var ev = new DrawingPadEvent(
+                Kind: m.Body.TryGetProperty("kind", out var k) ? (k.GetString() ?? "stroke_move") : "stroke_move",
+                NormX: m.Body.TryGetProperty("x", out var x) && x.TryGetDouble(out var xv) ? xv : 0,
+                NormY: m.Body.TryGetProperty("y", out var y) && y.TryGetDouble(out var yv) ? yv : 0,
+                DeviceAspect: m.Body.TryGetProperty("aspect", out var a) && a.TryGetDouble(out var av) ? av : 0,
+                Portrait: m.Body.TryGetProperty("portrait", out var p) && p.ValueKind == JsonValueKind.True,
+                ContactRadius: m.Body.TryGetProperty("radius", out var r) && r.TryGetDouble(out var rv) ? rv : 0,
+                HasRealPressure: m.Body.TryGetProperty("hasRealPressure", out var hp) && hp.ValueKind == JsonValueKind.True,
+                Pressure: m.Body.TryGetProperty("pressure", out var pr) && pr.TryGetDouble(out var prv) ? prv : null,
+                ClientTimestampMs: m.Body.TryGetProperty("ts", out var ts) && ts.TryGetInt64(out var tsv) ? tsv : null);
+            Input.ProcessDrawingPad(ev, perms.AllowDrawingPad);
             return;
         }
 

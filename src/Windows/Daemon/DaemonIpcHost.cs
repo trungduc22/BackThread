@@ -69,6 +69,29 @@ public sealed class DaemonIpcHost : IAsyncDisposable
             string id = RequireString(p, "deviceId", 128);
             return Done(new { deviceId = id, revoked = runtime.RevokeDevice(id) });
         });
+        Register(DaemonOperations.LanDevicesRotate, (p, _) =>
+        {
+            string id = RequireString(p, "deviceId", 128);
+            return Done(new { device = runtime.RotateDeviceKey(id) });
+        });
+        Register(DaemonOperations.LanDevicesDisconnect, (p, _) =>
+        {
+            string? id = OptionalString(p, "deviceId", 128);
+            return Done(new { disconnected = runtime.DisconnectDevice(id) });
+        });
+        Register(DaemonOperations.LanDevicesPermissions, (p, _) =>
+        {
+            string id = RequireString(p, "deviceId", 128);
+            bool? allowTouchpad = OptionalBool(p, "allowTouchpad");
+            bool? allowDrawingPad = OptionalBool(p, "allowDrawingPad");
+            return Done(new { device = runtime.SetDeviceInputPermissions(id, allowTouchpad, allowDrawingPad) });
+        });
+        Register(DaemonOperations.InputStatus, (_, _) => Done(runtime.Input.GetMetrics()));
+        Register(DaemonOperations.InputEmergencyStop, (_, _) =>
+        {
+            runtime.Input.EmergencyDisconnect();
+            return Done(new { emergencyStopped = true, metrics = runtime.Input.GetMetrics() });
+        });
 
         Register(DaemonOperations.AudioState, (_, _) => Done(runtime.CurrentAudioControlState()));
         Register(DaemonOperations.AudioModeSet, async (p, ct) =>
