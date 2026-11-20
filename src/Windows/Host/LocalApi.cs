@@ -27,26 +27,34 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
     {
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { Args = [], ApplicationName = typeof(LocalApi).Assembly.FullName });
         builder.Logging.ClearProviders();
+        bool useHiberDeskPipe = OperatingSystem.IsWindows() && host.Config.EnableHiberDeskBridge;
+        if (useHiberDeskPipe)
+            builder.WebHost.UseNamedPipes(options => options.CurrentUserOnly = true);
         builder.WebHost.ConfigureKestrel(o =>
         {
             o.Listen(IPAddress.Loopback, port, l => l.Protocols = HttpProtocols.Http1);
+            if (useHiberDeskPipe)
+                o.ListenNamedPipe(HiberDeskApi.PipeName(port), l => l.Protocols = HttpProtocols.Http1);
             o.Limits.MaxRequestBodySize = 65536;
             o.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(5);
             o.Limits.MaxConcurrentConnections = 16;
         });
         await using var application = builder.Build(); app = application;
         string bearer = Convert.ToHexString(key).ToLowerInvariant();
+        string? hiberDeskBearer = useHiberDeskPipe ? HiberDeskApi.Bearer(key) : null;
         application.Use(async (context, next) =>
         {
+            // The pipe transport has no IP endpoint. The only other listener is IPv4 loopback.
+            bool isHiberDesk = useHiberDeskPipe && context.Connection.LocalIpAddress is null;
             // Browser OAuth redirect callback for Spotify PKCE validates CSRF state directly
             // and never exposes Host state or accepts arbitrary cross-origin Origin requests.
-            bool isSpotifyCallback = HttpMethods.IsGet(context.Request.Method)
+            bool isSpotifyCallback = !isHiberDesk && HttpMethods.IsGet(context.Request.Method)
                 && string.Equals(context.Request.Path.Value, "/v1/spotify/callback", StringComparison.Ordinal);
 
             if (!isSpotifyCallback)
             {
                 string actual = context.Request.Headers.Authorization.ToString();
-                string expected = "Bearer " + bearer;
+                string expected = "Bearer " + (isHiberDesk ? hiberDeskBearer : bearer);
                 if (context.Request.Headers.ContainsKey("Origin")
                     || actual.Length != expected.Length
                     || !CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(actual), Encoding.ASCII.GetBytes(expected)))
@@ -54,6 +62,11 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
                     context.Response.StatusCode = 401;
                     return;
                 }
+            }
+            if (isHiberDesk)
+            {
+                context.Response.Headers[HiberDeskApi.VersionHeader] = HiberDeskApi.Version;
+                if (!HiberDeskApi.Allows(context.Request)) { context.Response.StatusCode = 403; return; }
             }
             if (!await capacity.WaitAsync(0, context.RequestAborted)) { context.Response.StatusCode = 429; return; }
             try { await next(context); }
@@ -76,6 +89,13 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
             finally { capacity.Release(); }
         });
 
+        application.MapGet("/v1/ecosystem/capabilities", () => new
+        {
+            appId = "backthread",
+            version = typeof(LocalApi).Assembly.GetName().Version?.ToString() ?? "1.0.0",
+            protocolVersion = HiberDeskApi.ProtocolVersion,
+            supportedOperations = HiberDeskApi.SupportedOperations
+        });
         application.MapGet("/v1/status", () => host.Status);
         application.MapGet("/v1/telemetry", () => host.LatestTelemetry);
         application.MapGet("/v1/lan/status", () => host.LanStatus);

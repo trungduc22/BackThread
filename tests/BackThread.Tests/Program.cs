@@ -421,6 +421,75 @@ if (duration > 0) await Test("soak.concurrent-audio-worker", async () =>
     Check.Equal(0L, s.Connection.DroppedAudio);
 });
 
+if (OperatingSystem.IsWindows())
+{
+    await Test("hiberdesk.bridge-pipe-auth-and-capabilities", async () =>
+    {
+        using var reservation = new TcpListener(IPAddress.Loopback, 0);
+        reservation.Start();
+        int apiPort = ((IPEndPoint)reservation.LocalEndpoint).Port;
+        reservation.Stop();
+        string keyPath = Path.Combine(root, "hiberdesk-bridge.key");
+        await File.WriteAllTextAsync(keyPath, Convert.ToHexString(key), ct);
+        var config = new HostConfig { KeyFile = keyPath, Transport = "localhost", ApiPort = apiPort, EnableHiberDeskBridge = true, StreamAudio = false };
+        using var host = new HostRuntime(config);
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        using var handler = new SocketsHttpHandler
+        {
+            UseProxy = false,
+            ConnectCallback = async (_, token) =>
+            {
+                var pipe = new System.IO.Pipes.NamedPipeClientStream(".", HiberDeskApi.PipeName(apiPort), System.IO.Pipes.PipeDirection.InOut,
+                    System.IO.Pipes.PipeOptions.Asynchronous | System.IO.Pipes.PipeOptions.CurrentUserOnly);
+                try { await pipe.ConnectAsync(token); return pipe; }
+                catch { pipe.Dispose(); throw; }
+            }
+        };
+        using var client = new HttpClient(handler) { BaseAddress = new Uri("http://127.0.0.1/"), Timeout = TimeSpan.FromSeconds(5) };
+        var run = host.RunAsync(stop.Token);
+        try
+        {
+            await Check.Eventually(async () =>
+            {
+                try
+                {
+                    using var probe = new HttpRequestMessage(HttpMethod.Get, "v1/status");
+                    probe.Headers.TryAddWithoutValidation("Authorization", "Bearer " + HiberDeskApi.Bearer(key));
+                    using var resp = await client.SendAsync(probe, ct);
+                    return resp.StatusCode == HttpStatusCode.OK;
+                }
+                catch { return false; }
+            });
+
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Bearer " + Convert.ToHexString(key).ToLowerInvariant());
+            using var rawKeyOnPipe = await client.GetAsync("v1/status", ct);
+            Check.Equal(HttpStatusCode.Unauthorized, rawKeyOnPipe.StatusCode);
+
+            client.DefaultRequestHeaders.Remove("Authorization");
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Bearer " + HiberDeskApi.Bearer(key));
+            using var capsResp = await client.GetAsync("v1/ecosystem/capabilities", ct);
+            Check.Equal(HttpStatusCode.OK, capsResp.StatusCode);
+            Check.Equal("1", capsResp.Headers.GetValues("X-BackThread-Bridge").Single());
+            using var capsDoc = JsonDocument.Parse(await capsResp.Content.ReadAsStringAsync(ct));
+            Check.Equal("backthread", capsDoc.RootElement.GetProperty("appId").GetString());
+            Check.Equal("1.0", capsDoc.RootElement.GetProperty("protocolVersion").GetString());
+
+            using var unlisted = await client.PostAsync("v1/archives", null, ct);
+            Check.Equal(HttpStatusCode.Forbidden, unlisted.StatusCode);
+
+            using var tcp = new HttpClient();
+            tcp.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Bearer " + HiberDeskApi.Bearer(key));
+            using var pipeBearerOnTcp = await tcp.GetAsync($"http://127.0.0.1:{apiPort}/v1/status", ct);
+            Check.Equal(HttpStatusCode.Unauthorized, pipeBearerOnTcp.StatusCode);
+        }
+        finally
+        {
+            stop.Cancel();
+            try { await run; } catch (OperationCanceledException) { }
+        }
+    });
+}
+
 string report = Path.GetFullPath(Environment.GetEnvironmentVariable("BACKTHREAD_TEST_REPORT") ?? "artifacts/test-results.json"); Directory.CreateDirectory(Path.GetDirectoryName(report)!); await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { timestampUtc = DateTimeOffset.UtcNow, simulated = true, results, failed }, new JsonSerializerOptions { WriteIndented = true }), ct);
 Console.WriteLine($"{results.Count - failed}/{results.Count} passed; report: {report}");
 // Test directories contain only generated fixtures; keep them for diagnosis on failure.

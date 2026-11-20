@@ -27,6 +27,7 @@ public sealed record HostConfig
     public string? DeviceSerial { get; init; }
     public int ApiPort { get; init; } = 23452;
     public bool EnableHttpApi { get; init; } = true;
+    public bool EnableHiberDeskBridge { get; init; }
     public PowerProfile PowerProfile { get; init; } = PowerProfile.Balanced;
     public LanConfig Lan { get; init; } = new();
     public OffloadPolicyConfig Offload { get; init; } = new();

@@ -2,10 +2,14 @@ name: BackThread CI
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ master, main, 'eco/**' ]
   pull_request:
     branches: [ master, main ]
   workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
 
 jobs:
   linux-core:
@@ -13,34 +17,31 @@ jobs:
     steps:
       - name: Checkout BackThread
         uses: actions/checkout@v4
-        with:
-          path: BackThread
-
-      - name: Checkout NativeShellKit (sibling for Daemon)
-        uses: actions/checkout@v4
-        with:
-          repository: trungduc22/NativeShellKit
-          path: NativeShellKit
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
 
+      - name: Authenticate GitHub Packages NuGet source
+        run: |
+          dotnet nuget update source github-nativeshellkit \
+            --username x-access-token \
+            --password "${{ secrets.GITHUB_TOKEN }}" \
+            --store-password-in-clear-text \
+            --configfile nuget.config
+
       - name: Build and test BackThread.sln
-        working-directory: BackThread
         run: |
           dotnet build BackThread.sln -c Release
           dotnet run --no-build --project tests/BackThread.Tests/BackThread.Tests.csproj -c Release
 
       - name: Build and smoke-test BackThread.Daemon IPC
-        working-directory: BackThread
         run: |
           dotnet build src/Windows/Daemon/BackThread.Daemon.csproj -c Release -p:EnableWindowsTargeting=true
           dotnet src/Windows/Daemon/bin/Release/net10.0-windows10.0.19041.0/BackThread.Daemon.dll --smoke-test
 
       - name: Native C11 protocol & PCM ring tests (gcc ASan/UBSan + clang)
-        working-directory: BackThread
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Isrc/Shared/Protocol -Isrc/iOS/AudioReceiver \
             src/Shared/Protocol/bt_wire.c src/iOS/AudioReceiver/BTPcmRing.c tests/native/core_test.c -o /tmp/core_test_gcc
@@ -50,7 +51,6 @@ jobs:
           /tmp/core_test_clang
 
       - name: Python iOS build & analyzer unit tests
-        working-directory: BackThread
         run: |
           python3 -m unittest tests/ios_analyzer_test.py tests/ios_device_tool_test.py tests/ios_build_test.py -v
 
@@ -59,32 +59,30 @@ jobs:
     steps:
       - name: Checkout BackThread
         uses: actions/checkout@v4
-        with:
-          path: BackThread
-
-      - name: Checkout NativeShellKit (sibling)
-        uses: actions/checkout@v4
-        with:
-          repository: trungduc22/NativeShellKit
-          path: NativeShellKit
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
 
+      - name: Authenticate GitHub Packages NuGet source
+        shell: pwsh
+        run: |
+          dotnet nuget update source github-nativeshellkit `
+            --username x-access-token `
+            --password "${{ secrets.GITHUB_TOKEN }}" `
+            --store-password-in-clear-text `
+            --configfile nuget.config
+
       - name: Build full desktop solution (Daemon + WinUI 3 App)
-        working-directory: BackThread
         run: |
           dotnet build BackThread.Desktop.sln -c Release -p:Platform=x64
 
       - name: Run BackThread.Tests on Windows
-        working-directory: BackThread
         run: |
           dotnet run --no-build --project tests/BackThread.Tests/BackThread.Tests.csproj -c Release
 
       - name: Run BackThread.Daemon IPC smoke test
-        working-directory: BackThread
         run: |
           src\Windows\Daemon\bin\Release\net10.0-windows10.0.19041.0\BackThread.Daemon.exe --smoke-test
 
@@ -130,7 +128,7 @@ jobs:
             UI_OBJS="$UI_OBJS $out"
           done
           xcrun -sdk iphoneos clang -arch arm64 -miphoneos-version-min=15.0 $UI_OBJS \
-            -framework UIKit -framework Foundation -framework AVFoundation -framework CoreMedia -framework AudioToolbox -framework MediaPlayer -framework WebKit -framework Security -framework Network -framework ImageIO -framework CoreGraphics -framework QuartzCore -framework SystemConfiguration \
+            -framework UIKit -framework Foundation -framework AVFoundation -framework AVKit -framework CoreMedia -framework AudioToolbox -framework MediaPlayer -framework WebKit -framework Security -framework Network -framework ImageIO -framework CoreGraphics -framework QuartzCore -framework SystemConfiguration \
             -weak_framework PDFKit -weak_framework Vision -weak_framework Speech -lz \
             -o artifacts/ios15/Payload/BackThread.app/BackThread
 
