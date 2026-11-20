@@ -170,7 +170,10 @@ public sealed class LanTlsServer : IAsyncDisposable
                     return;
                 }
 
-                await Authentication.ClientFromChallengeAsync(ssl, firstFrame, sessionKey, timeout.Token);
+                // Prefer the device-specific key issued during QR/USB pairing; fall back to legacy global key
+                // only for previously provisioned devices that have not yet received a device-specific credential.
+                byte[] expectedKey = (deviceId is not null ? devices?.TryGetDeviceKey(deviceId) : null) ?? sessionKey;
+                await Authentication.ClientFromChallengeAsync(ssl, firstFrame, expectedKey, timeout.Token);
                 var session = new IncomingTlsSession(ssl, tcp, route, remoteText, deviceId, deviceName);
                 if (!accepted.Writer.TryWrite(session))
                 {
@@ -217,19 +220,42 @@ public sealed class LanTlsServer : IAsyncDisposable
             return;
         }
 
-        devices?.RecordSeen(deviceId, deviceName, route.ToString());
-        await Wire.WriteAsync(ssl, new(LogicalChannel.Control, 0, 0,
-            Message.Create("pair.ok", new
-            {
-                pcId,
-                pcName,
-                fingerprint,
-                checkCode = HumanCheckCode,
-                port = Port,
-                sessionKey = Convert.ToHexString(sessionKey).ToLowerInvariant(),
-                hosts = LanNetworkDiscovery.GetReachableAddresses()
-            }, replyTo: request.Id).Encode()), ct);
-        Log?.Invoke($"Paired device '{deviceName}' ({deviceId}) via QR over pinned TLS from {remoteAddress}");
+        // Issue a device-specific 32-byte secret so revoking or rotating one device never affects others.
+        byte[] issuedKey;
+        int keyVersion = 1;
+        if (devices is not null)
+        {
+            var issued = devices.IssueDeviceKey(deviceId, deviceName, route.ToString());
+            issuedKey = issued.Key;
+            keyVersion = issued.Record.KeyVersion;
+        }
+        else
+        {
+            issuedKey = sessionKey;
+        }
+
+        try
+        {
+            await Wire.WriteAsync(ssl, new(LogicalChannel.Control, 0, 0,
+                Message.Create("pair.ok", new
+                {
+                    pcId,
+                    pcName,
+                    fingerprint,
+                    checkCode = HumanCheckCode,
+                    port = Port,
+                    deviceId,
+                    keyVersion,
+                    sessionKey = Convert.ToHexString(issuedKey).ToLowerInvariant(),
+                    hosts = LanNetworkDiscovery.GetReachableAddresses()
+                }, replyTo: request.Id).Encode()), ct);
+        }
+        finally
+        {
+            if (!ReferenceEquals(issuedKey, sessionKey))
+                System.Security.Cryptography.CryptographicOperations.ZeroMemory(issuedKey);
+        }
+        Log?.Invoke($"Paired device '{deviceName}' ({deviceId}, key v{keyVersion}) via QR over pinned TLS from {remoteAddress}");
     }
 
     /// <summary>

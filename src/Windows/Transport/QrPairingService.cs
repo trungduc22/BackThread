@@ -127,6 +127,17 @@ public sealed class QrPairingService
             + "&h=" + string.Join(",", hosts.Select(Uri.EscapeDataString))
             + "&c=" + Uri.EscapeDataString(oneTimeCode);
 
+    public static string BuildManualPairingUri(string hostOrIp, int tlsPort, string fingerprint, string oneTimeCode, string? pcName = null)
+    {
+        if (string.IsNullOrWhiteSpace(hostOrIp)) throw new ArgumentException("Host or IP is required.", nameof(hostOrIp));
+        if (tlsPort is < 1024 or > 65535) throw new ArgumentOutOfRangeException(nameof(tlsPort));
+        if (string.IsNullOrWhiteSpace(fingerprint) || fingerprint.Trim().Length != 64)
+            throw new ArgumentException("Expected 64-character SHA-256 hex fingerprint.", nameof(fingerprint));
+        if (string.IsNullOrWhiteSpace(oneTimeCode) || oneTimeCode.Length > 64)
+            throw new ArgumentException("Invalid one-time code.", nameof(oneTimeCode));
+        return BuildPairingUri(string.IsNullOrWhiteSpace(pcName) ? hostOrIp.Trim() : pcName.Trim(), fingerprint.Trim(), tlsPort, [hostOrIp.Trim()], oneTimeCode.Trim());
+    }
+
     public static WifiProvisionPayload BuildUsbProvisionPayload(string pcName, string fingerprint, int tlsPort, IReadOnlyList<string> hosts, byte[] sessionKey)
         => new(
             PcId: LanCertificateStore.GetPcId(fingerprint),

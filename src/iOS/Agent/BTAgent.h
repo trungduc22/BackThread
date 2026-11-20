@@ -18,6 +18,7 @@
 - (void)start;
 - (void)stop;
 - (void)triggerWifiReconnect;
+- (void)disconnectActiveSession;
 - (void)setNativePlaybackActive:(BOOL)active;
 - (void)command:(NSString *)type body:(NSDictionary *)body;
 - (void)sendMediaMessage:(NSString *)type body:(NSDictionary *)body;

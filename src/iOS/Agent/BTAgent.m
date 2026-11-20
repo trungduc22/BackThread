@@ -126,6 +126,10 @@ static BOOL jsonDepth(id value, unsigned depth) {
         _audioOutputMode = @"Both";
         _audio = [BTAudioReceiver new];
         _wifiClient = [[BTWifiClient alloc] initWithStorageDirectory:_configDir];
+        __weak typeof(self) weakSelf = self;
+        _wifiClient.onNetworkChanged = ^(BOOL satisfied) {
+            if (satisfied) [weakSelf triggerWifiReconnect];
+        };
         _wifiWakeSem = dispatch_semaphore_create(0);
         _network = dispatch_queue_create("app.backthread.network", DISPATCH_QUEUE_SERIAL);
         _wifiNetwork = dispatch_queue_create("app.backthread.wifi.session", DISPATCH_QUEUE_SERIAL);
@@ -194,6 +198,12 @@ static BOOL jsonDepth(id value, unsigned depth) {
 
 - (void)triggerWifiReconnect {
     dispatch_semaphore_signal(_wifiWakeSem);
+}
+
+- (void)disconnectActiveSession {
+    [_tx lock];
+    [self abortActiveLinkLocked];
+    [_tx unlock];
 }
 
 - (void)setNativePlaybackActive:(BOOL)active {

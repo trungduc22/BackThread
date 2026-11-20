@@ -23,6 +23,8 @@ public sealed record HostConfig
     public string KeyFile { get; init; } = "config/session.key";
     /// <summary>auto | usb | wifi | localhost</summary>
     public string Transport { get; init; } = "usb";
+    /// <summary>wifi-first | usb-first (used when transport == "auto")</summary>
+    public string ConnectionPreference { get; init; } = "wifi-first";
     public int DevicePort { get; init; } = 23451;
     public string? DeviceSerial { get; init; }
     public int ApiPort { get; init; } = 23452;
@@ -60,6 +62,8 @@ public sealed record HostConfig
         var c = JsonSerializer.Deserialize<HostConfig>(File.ReadAllText(path), Message.Json) ?? throw new InvalidDataException("Invalid configuration");
         if (c.Transport is not ("auto" or "usb" or "wifi" or "localhost") || c.DevicePort is < 1024 or > 65535 || c.ApiPort is < 1024 or > 65535 || c.ApiPort == c.DevicePort || c.Actions.Length > 32)
             throw new InvalidDataException("Invalid endpoint or actions");
+        if (c.ConnectionPreference is not ("wifi-first" or "usb-first"))
+            throw new InvalidDataException("connectionPreference must be wifi-first or usb-first");
         if (c.Lan.Port is < 1024 or > 65535 || c.Lan.Port == c.ApiPort || c.Lan.Port == c.DevicePort)
             throw new InvalidDataException("Invalid lan.port");
         if (!Enum.IsDefined(c.PowerProfile))
