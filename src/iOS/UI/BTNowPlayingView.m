@@ -1,5 +1,6 @@
 #import "BTNowPlayingView.h"
 #import "BTTheme.h"
+#import <AVKit/AVKit.h>
 #import <MediaPlayer/MediaPlayer.h>
 #import <ImageIO/ImageIO.h>
 
@@ -136,8 +137,18 @@ static double BTNowNum(id val) {
         transportRow.distribution = UIStackViewDistributionFillEqually;
 
         MPVolumeView *volumeView = [[MPVolumeView alloc] initWithFrame:CGRectZero];
-        volumeView.showsRouteButton = YES;
         [volumeView.heightAnchor constraintEqualToConstant:30].active = YES;
+
+        AVRoutePickerView *routePicker = [[AVRoutePickerView alloc] initWithFrame:CGRectZero];
+        routePicker.tintColor = [BTTheme textPrimary];
+        routePicker.activeTintColor = [BTTheme accentTeal];
+        [routePicker.widthAnchor constraintEqualToConstant:30].active = YES;
+        [routePicker.heightAnchor constraintEqualToConstant:30].active = YES;
+
+        UIStackView *volumeRow = [[UIStackView alloc] initWithArrangedSubviews:@[volumeView, routePicker]];
+        volumeRow.axis = UILayoutConstraintAxisHorizontal;
+        volumeRow.alignment = UIStackViewAlignmentCenter;
+        volumeRow.spacing = 6;
 
         _focusButton = [BTTheme pillButtonWithTitle:@"Focus: Auto" target:self action:@selector(cycleFocusPolicy)];
         _qualityButton = [BTTheme pillButtonWithTitle:@"Cap: Auto" target:self action:@selector(cycleQualityCap)];
@@ -153,7 +164,7 @@ static double BTNowNum(id val) {
             _seekSlider,
             _timelineLabel,
             transportRow,
-            volumeView,
+            volumeRow,
             optionsRow
         ]];
         rightStack.axis = UILayoutConstraintAxisVertical;

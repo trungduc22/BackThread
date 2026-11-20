@@ -35,7 +35,7 @@ AGENT_SOURCES = [
     'src/Shared/Protocol/bt_wire.c',
 ]
 SOURCES = UI_SOURCES + AGENT_SOURCES
-FRAMEWORKS = ['UIKit', 'Foundation', 'AVFoundation', 'CoreMedia', 'AudioToolbox', 'MediaPlayer', 'WebKit', 'Security', 'Network', 'ImageIO', 'CoreGraphics', 'QuartzCore', 'SystemConfiguration']
+FRAMEWORKS = ['UIKit', 'Foundation', 'AVFoundation', 'AVKit', 'CoreMedia', 'AudioToolbox', 'MediaPlayer', 'WebKit', 'Security', 'Network', 'ImageIO', 'CoreGraphics', 'QuartzCore', 'SystemConfiguration']
 WEAK_FRAMEWORKS = ['PDFKit', 'Vision', 'Speech']
 
 

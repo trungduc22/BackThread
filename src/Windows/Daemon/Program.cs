@@ -44,6 +44,8 @@ public static class Program
                 Directory.SetCurrentDirectory(projectRoot);
 
             var config = HostConfig.Load(configPath);
+            if (args.Any(a => string.Equals(a, "--hiberdesk", StringComparison.OrdinalIgnoreCase)))
+                config = config with { EnableHiberDeskBridge = true };
             string keySource = await SessionKeyGuard.EnsureAsync(config.KeyFile, new DpapiSecretStore(identity)).ConfigureAwait(false);
             log.Write($"Config: {configPath} (session key: {keySource})");
 

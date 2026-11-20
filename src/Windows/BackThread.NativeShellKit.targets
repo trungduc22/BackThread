@@ -1,24 +1,17 @@
 <Project>
   <!--
-    Resolves NativeShellKit modules for BackThread desktop projects.
-
-    Usage (import AFTER declaring the modules, because item transforms are evaluated in order):
-      <ItemGroup>
-        <NativeShellKitModule Include="Abstractions;Hosting;Windows" />
-      </ItemGroup>
-      <Import Project="../BackThread.NativeShellKit.targets" />
+    Resolves NativeShellKit modules for BackThread desktop projects (Daemon and App only).
+    BackThread.Host.Core / Audio / Transport / Media remain 100% independent of NativeShellKit and WinUI.
 
     Resolution order:
-      1. $(NativeShellKitRoot) (override with -p:NativeShellKitRoot=...)
-      2. Sibling checkout: <BackThread>/../NativeShellKit/src (local dev and CI)
-      3. Fallback PackageReference (requires NativeShellKit .nupkg files on a local feed,
-         e.g. NativeShellKit/artifacts/packages produced by packaging/Pack-NuGet.ps1).
+      1. PackageReference from GitHub Packages (default in CI and reproducible builds; version pinned in Directory.Packages.props)
+      2. Explicit local source override: pass -p:NativeShellKitRoot=<path/to/NativeShellKit/src> -p:NativeShellKitUseSource=true
   -->
   <PropertyGroup>
+    <NativeShellKitUseSource Condition="'$(NativeShellKitUseSource)' == ''">false</NativeShellKitUseSource>
     <NativeShellKitRoot Condition="'$(NativeShellKitRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', '..', 'NativeShellKit', 'src'))</NativeShellKitRoot>
     <NativeShellKitRoot>$([MSBuild]::EnsureTrailingSlash('$(NativeShellKitRoot)'))</NativeShellKitRoot>
-    <NativeShellKitFromSource Condition="Exists('$(NativeShellKitRoot)NativeShellKit.Abstractions/NativeShellKit.Abstractions.csproj')">true</NativeShellKitFromSource>
-    <NativeShellKitPackageVersion Condition="'$(NativeShellKitPackageVersion)' == ''">0.1.0-alpha.1</NativeShellKitPackageVersion>
+    <NativeShellKitFromSource Condition="'$(NativeShellKitUseSource)' == 'true' and Exists('$(NativeShellKitRoot)NativeShellKit.Abstractions/NativeShellKit.Abstractions.csproj')">true</NativeShellKitFromSource>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(NativeShellKitFromSource)' == 'true'">
@@ -26,6 +19,6 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(NativeShellKitFromSource)' != 'true'">
-    <PackageReference Include="@(NativeShellKitModule->'NativeShellKit.%(Identity)')" Version="$(NativeShellKitPackageVersion)" />
+    <PackageReference Include="@(NativeShellKitModule->'NativeShellKit.%(Identity)')" />
   </ItemGroup>
 </Project>

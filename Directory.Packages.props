@@ -1,0 +1,23 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- NativeShellKit synchronized package train -->
+    <PackageVersion Include="NativeShellKit.Abstractions" Version="0.2.0-alpha.4" />
+    <PackageVersion Include="NativeShellKit.Hosting" Version="0.2.0-alpha.4" />
+    <PackageVersion Include="NativeShellKit.Windows" Version="0.2.0-alpha.4" />
+    <PackageVersion Include="NativeShellKit.WinUI" Version="0.2.0-alpha.4" />
+    <PackageVersion Include="NativeShellKit.DesignSystem" Version="0.2.0-alpha.4" />
+    <PackageVersion Include="NativeShellKit.Notifications" Version="0.2.0-alpha.4" />
+    <PackageVersion Include="NativeShellKit.Tray" Version="0.2.0-alpha.4" />
+    <PackageVersion Include="NativeShellKit.Security" Version="0.2.0-alpha.4" />
+    <PackageVersion Include="NativeShellKit.Communication" Version="0.2.0-alpha.4" />
+    <PackageVersion Include="NativeShellKit.Diagnostics" Version="0.2.0-alpha.4" />
+
+    <!-- BackThread dependencies -->
+    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.6.4" />
+    <PackageVersion Include="NAudio.Wasapi" Version="2.2.1" />
+    <PackageVersion Include="QRCoder" Version="1.6.0" />
+  </ItemGroup>
+</Project>
