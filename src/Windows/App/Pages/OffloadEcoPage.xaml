@@ -1,0 +1,47 @@
+<Page
+    x:Class="BackThread.App.Pages.OffloadEcoPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:NativeShellKit.DesignSystem.Controls">
+    <ScrollViewer Padding="24,16">
+        <StackPanel Spacing="16">
+            <controls:PageHeaderControl
+                Title="Offload &amp; Eco Profile"
+                Subtitle="Smart PC-to-iPhone workload routing and thread/CPU throttling for weak PCs"
+                BadgeText="Smart Offload" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Eco (Weak PC)" Click="OnEcoClick" />
+                <Button Content="Balanced" Click="OnBalancedClick" />
+                <Button Content="Performance" Click="OnPerfClick" />
+                <Button Content="Refresh" Click="OnRefreshClick" />
+            </StackPanel>
+
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <controls:CompactMetricCard x:Name="PhoneHealthCard" Grid.Column="0" Label="Phone Compute Health" Value="—" Caption="Thermal / Battery" Glyph="&#xE8EA;" />
+                <controls:CompactMetricCard x:Name="AutoPipCard" Grid.Column="1" Label="Auto-PiP Advisor" Value="—" Caption="12s CPU threshold" Glyph="&#xE714;" />
+            </Grid>
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="Offload Evaluator (Test Decision)" FontWeight="SemiBold" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <ComboBox x:Name="JobKindBox" SelectedIndex="0" Width="180">
+                        <ComboBoxItem Content="ocr.extract" />
+                        <ComboBoxItem Content="speech.transcribe" />
+                        <ComboBoxItem Content="image.resize" />
+                        <ComboBoxItem Content="pdf.extract" />
+                        <ComboBoxItem Content="compress" />
+                        <ComboBoxItem Content="log.scan" />
+                    </ComboBox>
+                    <TextBox x:Name="PayloadMbBox" Text="4" Width="90" PlaceholderText="MB" />
+                    <Button Content="Evaluate" Style="{ThemeResource AccentButtonStyle}" Click="OnEvaluateClick" />
+                </StackPanel>
+                <TextBlock x:Name="EvalResultText" TextWrapping="Wrap" Opacity="0.85" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

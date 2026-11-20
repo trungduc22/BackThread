@@ -1,0 +1,43 @@
+<Page
+    x:Class="BackThread.App.Pages.MediaAudioPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:NativeShellKit.DesignSystem.Controls">
+    <ScrollViewer Padding="24,16">
+        <StackPanel Spacing="16">
+            <controls:PageHeaderControl
+                Title="Media &amp; Audio"
+                Subtitle="External PiP video handoff, audio output routing, and per-app Windows mixer"
+                BadgeText="WASAPI" />
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="External PiP Handoff" FontWeight="SemiBold" />
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="MediaUrlBox" Grid.Column="0" PlaceholderText="https://youtube.com/watch?v=... or direct media URL" />
+                    <Button Grid.Column="1" Content="Send to iPhone" Style="{ThemeResource AccentButtonStyle}" Click="OnSendMediaClick" />
+                    <Button Grid.Column="2" Content="Return to PC" Click="OnReturnClick" />
+                </Grid>
+                <TextBlock x:Name="MediaStatusText" Opacity="0.75" />
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="Audio Output Mode" FontWeight="SemiBold" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="PC Only" Click="OnModePcClick" />
+                    <Button Content="Phone Only" Click="OnModePhoneClick" />
+                    <Button Content="Both (PC + Phone)" Click="OnModeBothClick" />
+                    <Button Content="Refresh Mixer" Click="OnRefreshClick" />
+                </StackPanel>
+                <TextBlock x:Name="AudioStatusText" Opacity="0.75" />
+            </StackPanel>
+
+            <TextBlock Text="Per-App Audio Mixer" FontWeight="SemiBold" />
+            <StackPanel x:Name="MixerListPanel" Spacing="8" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

@@ -1,0 +1,33 @@
+<Page
+    x:Class="BackThread.App.Pages.DiagnosticsSettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:NativeShellKit.DesignSystem.Controls">
+    <ScrollViewer Padding="24,16">
+        <StackPanel Spacing="16">
+            <controls:PageHeaderControl
+                Title="Diagnostics &amp; Settings"
+                Subtitle="Daemon footprint, Windows startup registration, theme, and logs"
+                BadgeText="NativeShellKit" />
+
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <controls:CompactMetricCard x:Name="DaemonMemCard" Grid.Column="0" Label="Daemon Memory" Value="—" Caption="Background process" Glyph="&#xE950;" />
+                <controls:CompactMetricCard x:Name="UiMemCard" Grid.Column="1" Label="Dashboard Memory" Value="—" Caption="Exits on close (0 MB idle)" Glyph="&#xE7F4;" />
+            </Grid>
+
+            <controls:SettingsSectionControl x:Name="AppSettingsSection" Title="Application Settings" Description="Startup, appearance, and daemon lifecycle" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Refresh Diagnostics &amp; Logs" Click="OnRefreshClick" />
+                <Button Content="Shutdown Daemon" Click="OnShutdownDaemonClick" />
+            </StackPanel>
+
+            <TextBox x:Name="LogsBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" Height="200" FontFamily="Consolas" FontSize="12" />
+            <TextBlock x:Name="StatusText" Opacity="0.75" TextWrapping="Wrap" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

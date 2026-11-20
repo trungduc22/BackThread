@@ -1,0 +1,8 @@
+<Window
+    x:Class="BackThread.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:shell="using:NativeShellKit.WinUI.Shell"
+    Title="BackThread">
+    <shell:NativeShellView x:Name="ShellView" />
+</Window>

@@ -1,0 +1,44 @@
+<Page
+    x:Class="BackThread.App.Pages.DevicesPairingPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:NativeShellKit.DesignSystem.Controls">
+    <ScrollViewer Padding="24,16">
+        <StackPanel Spacing="16">
+            <controls:PageHeaderControl
+                Title="Devices &amp; Wi-Fi Pairing"
+                Subtitle="Pinned TLS + single-use QR pairing (zero plaintext session keys in QR)"
+                BadgeText="TLS Pinning" />
+
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Button Content="Generate Wi-Fi Pairing QR" Style="{ThemeResource AccentButtonStyle}" Click="OnStartPairingClick" />
+                <Button Content="Refresh Devices" Click="OnRefreshClick" />
+            </StackPanel>
+
+            <Border
+                x:Name="QrPanel"
+                Visibility="Collapsed"
+                Padding="16"
+                CornerRadius="8"
+                BorderThickness="1"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                <StackPanel Orientation="Horizontal" Spacing="20">
+                    <Border Background="White" Padding="8" CornerRadius="6">
+                        <Image x:Name="QrImage" Width="200" Height="200" Stretch="Uniform" />
+                    </Border>
+                    <StackPanel Spacing="8" VerticalAlignment="Center">
+                        <TextBlock Text="Verify Check Code on iPhone" Opacity="0.7" FontSize="12" />
+                        <TextBlock x:Name="CheckCodeText" FontSize="28" FontWeight="SemiBold" FontFamily="Consolas" />
+                        <TextBlock x:Name="HostsText" TextWrapping="Wrap" Opacity="0.8" />
+                        <TextBlock x:Name="FingerprintText" FontFamily="Consolas" FontSize="11" Opacity="0.65" TextWrapping="Wrap" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Text="Paired Devices" FontSize="16" FontWeight="SemiBold" />
+            <StackPanel x:Name="DevicesListPanel" Spacing="8" />
+            <TextBlock x:Name="StatusText" Opacity="0.75" TextWrapping="Wrap" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

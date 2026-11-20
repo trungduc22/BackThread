@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    On-demand WinUI 3 Fluent dashboard built on NativeShellKit. It talks to BackThread.Daemon over the
+    HMAC-authenticated Named Pipe and exits completely when its window closes (0 MB idle UI memory);
+    the daemon keeps running in the tray.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>BackThread.App</AssemblyName>
+    <RootNamespace>BackThread.App</RootNamespace>
+    <!-- WinUI/CsWinRT generated sources emit analyzer warnings outside our control. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../Daemon/Contract/DaemonContract.cs" Link="Contract/DaemonContract.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <NativeShellKitModule Include="Abstractions;Hosting;Windows;WinUI;DesignSystem;Notifications;Communication;Security;Diagnostics" />
+  </ItemGroup>
+  <Import Project="../BackThread.NativeShellKit.targets" />
+</Project>

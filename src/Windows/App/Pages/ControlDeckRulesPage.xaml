@@ -1,0 +1,33 @@
+<Page
+    x:Class="BackThread.App.Pages.ControlDeckRulesPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:NativeShellKit.DesignSystem.Controls">
+    <ScrollViewer Padding="24,16">
+        <StackPanel Spacing="16">
+            <controls:PageHeaderControl
+                Title="Control Deck &amp; Automation Rules"
+                Subtitle="Quick media controls, condition-action rules, and docked iPhone Charge Guard"
+                BadgeText="Automation" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Play / Pause" Click="OnToggleMediaClick" />
+                <Button Content="Next Track" Click="OnNextMediaClick" />
+                <Button Content="Pause Rules (60m)" Click="OnPauseRulesClick" />
+                <Button Content="Resume Rules" Click="OnResumeRulesClick" />
+                <Button Content="Refresh" Click="OnRefreshClick" />
+            </StackPanel>
+
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <controls:CompactMetricCard x:Name="RulesCard" Grid.Column="0" Label="Automation Rules" Value="—" Caption="Configured / Active" Glyph="&#xE9F5;" />
+                <controls:CompactMetricCard x:Name="ChargeCard" Grid.Column="1" Label="Charge Guard" Value="—" Caption="50%–80% battery protection" Glyph="&#xE83F;" />
+            </Grid>
+
+            <TextBlock x:Name="StatusText" Opacity="0.75" TextWrapping="Wrap" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

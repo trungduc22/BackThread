@@ -1,0 +1,31 @@
+<Page
+    x:Class="BackThread.App.Pages.NotificationsIntegrationsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:NativeShellKit.DesignSystem.Controls">
+    <ScrollViewer Padding="24,16">
+        <StackPanel Spacing="16">
+            <controls:PageHeaderControl
+                Title="Notifications &amp; Dev Integrations"
+                Subtitle="NativeShellKit unified notifications, Ollama/Dev session monitor, and GPU/process overview"
+                BadgeText="Integrations" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Send Test Notification" Style="{ThemeResource AccentButtonStyle}" Click="OnTestNotificationClick" />
+                <Button x:Name="QuietHoursBtn" Content="Toggle Quiet Hours" Click="OnToggleQuietClick" />
+                <Button Content="Refresh" Click="OnRefreshClick" />
+            </StackPanel>
+
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <controls:CompactMetricCard x:Name="DevCard" Grid.Column="0" Label="Ollama / Dev Monitor" Value="—" Caption="On-demand check" Glyph="&#xE943;" />
+                <controls:CompactMetricCard x:Name="GpuCard" Grid.Column="1" Label="GPU Monitor" Value="—" Caption="PDH / DXGI" Glyph="&#xE7F4;" />
+            </Grid>
+
+            <TextBlock x:Name="StatusText" Opacity="0.75" TextWrapping="Wrap" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

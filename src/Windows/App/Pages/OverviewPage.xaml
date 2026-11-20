@@ -1,0 +1,38 @@
+<Page
+    x:Class="BackThread.App.Pages.OverviewPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:NativeShellKit.DesignSystem.Controls">
+    <ScrollViewer Padding="24,16">
+        <StackPanel Spacing="16">
+            <controls:PageHeaderControl
+                x:Name="Header"
+                Title="Overview"
+                Subtitle="Live transport route, PC telemetry, audio bridge, and offload profile"
+                BadgeText="Daemon IPC" />
+
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <controls:StatusIndicatorControl x:Name="ConnectionIndicator" State="Offline" Label="Connecting to daemon..." />
+                <Button Content="Refresh" Click="OnRefreshClick" />
+            </StackPanel>
+
+            <Grid ColumnSpacing="12" RowSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <controls:CompactMetricCard x:Name="RouteCard" Grid.Row="0" Grid.Column="0" Label="Active Route" Value="—" Caption="Waiting..." Glyph="&#xE701;" />
+                <controls:CompactMetricCard x:Name="TelemetryCard" Grid.Row="0" Grid.Column="1" Label="PC Telemetry" Value="—" Caption="CPU / RAM" Glyph="&#xE9D9;" />
+                <controls:CompactMetricCard x:Name="AudioCard" Grid.Row="1" Grid.Column="0" Label="Audio Bridge" Value="—" Caption="Mode / Packet" Glyph="&#xE767;" />
+                <controls:CompactMetricCard x:Name="OffloadCard" Grid.Row="1" Grid.Column="1" Label="Power &amp; Offload" Value="—" Caption="Profile / Jobs" Glyph="&#xE950;" />
+            </Grid>
+
+            <TextBlock x:Name="ErrorText" Foreground="{ThemeResource SystemFillColorCriticalBrush}" TextWrapping="Wrap" Visibility="Collapsed" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

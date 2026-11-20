@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Headless BackThread background daemon (tray + HostRuntime + authenticated Named Pipe IPC).
+    Intentionally has ZERO dependency on Microsoft.WindowsAppSDK / WinUI so it stays tiny on weak PCs;
+    the WinUI 3 dashboard (BackThread.App) is launched on demand and exits completely when closed.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <AssemblyName>BackThread.Daemon</AssemblyName>
+    <RootNamespace>BackThread.Daemon</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Host/BackThread.Host.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Assets/backthread.ico" CopyToOutputDirectory="PreserveNewest" Link="Assets/backthread.ico" />
+    <None Include="../../../config/example.json" CopyToOutputDirectory="PreserveNewest" Link="config/example.json" />
+  </ItemGroup>
+
+  <!-- Non-UI NativeShellKit modules only (AGENTS.md rule 3). -->
+  <ItemGroup>
+    <NativeShellKitModule Include="Abstractions;Hosting;Windows;Tray;Security;Communication;Diagnostics" />
+  </ItemGroup>
+  <Import Project="../BackThread.NativeShellKit.targets" />
+</Project>

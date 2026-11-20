@@ -1,0 +1,31 @@
+<Project>
+  <!--
+    Resolves NativeShellKit modules for BackThread desktop projects.
+
+    Usage (import AFTER declaring the modules, because item transforms are evaluated in order):
+      <ItemGroup>
+        <NativeShellKitModule Include="Abstractions;Hosting;Windows" />
+      </ItemGroup>
+      <Import Project="../BackThread.NativeShellKit.targets" />
+
+    Resolution order:
+      1. $(NativeShellKitRoot) (override with -p:NativeShellKitRoot=...)
+      2. Sibling checkout: <BackThread>/../NativeShellKit/src (local dev and CI)
+      3. Fallback PackageReference (requires NativeShellKit .nupkg files on a local feed,
+         e.g. NativeShellKit/artifacts/packages produced by packaging/Pack-NuGet.ps1).
+  -->
+  <PropertyGroup>
+    <NativeShellKitRoot Condition="'$(NativeShellKitRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', '..', 'NativeShellKit', 'src'))</NativeShellKitRoot>
+    <NativeShellKitRoot>$([MSBuild]::EnsureTrailingSlash('$(NativeShellKitRoot)'))</NativeShellKitRoot>
+    <NativeShellKitFromSource Condition="Exists('$(NativeShellKitRoot)NativeShellKit.Abstractions/NativeShellKit.Abstractions.csproj')">true</NativeShellKitFromSource>
+    <NativeShellKitPackageVersion Condition="'$(NativeShellKitPackageVersion)' == ''">0.1.0-alpha.1</NativeShellKitPackageVersion>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(NativeShellKitFromSource)' == 'true'">
+    <ProjectReference Include="@(NativeShellKitModule->'$(NativeShellKitRoot)NativeShellKit.%(Identity)/NativeShellKit.%(Identity).csproj')" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(NativeShellKitFromSource)' != 'true'">
+    <PackageReference Include="@(NativeShellKitModule->'NativeShellKit.%(Identity)')" Version="$(NativeShellKitPackageVersion)" />
+  </ItemGroup>
+</Project>

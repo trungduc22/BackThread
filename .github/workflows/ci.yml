@@ -1,0 +1,153 @@
+name: BackThread CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  linux-core:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout BackThread
+        uses: actions/checkout@v4
+        with:
+          path: BackThread
+
+      - name: Checkout NativeShellKit (sibling for Daemon)
+        uses: actions/checkout@v4
+        with:
+          repository: trungduc22/NativeShellKit
+          path: NativeShellKit
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build and test BackThread.sln
+        working-directory: BackThread
+        run: |
+          dotnet build BackThread.sln -c Release
+          dotnet run --no-build --project tests/BackThread.Tests/BackThread.Tests.csproj -c Release
+
+      - name: Build and smoke-test BackThread.Daemon IPC
+        working-directory: BackThread
+        run: |
+          dotnet build src/Windows/Daemon/BackThread.Daemon.csproj -c Release -p:EnableWindowsTargeting=true
+          dotnet src/Windows/Daemon/bin/Release/net10.0-windows10.0.19041.0/BackThread.Daemon.dll --smoke-test
+
+      - name: Native C11 protocol & PCM ring tests (gcc ASan/UBSan + clang)
+        working-directory: BackThread
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Isrc/iOS/Protocol -Isrc/iOS/Audio \
+            src/iOS/Protocol/BTProtocol.c src/iOS/Audio/BTPcmRing.c tests/native/core_test.c -o /tmp/core_test_gcc
+          /tmp/core_test_gcc
+          clang -std=c11 -Wall -Wextra -Werror -Isrc/iOS/Protocol -Isrc/iOS/Audio \
+            src/iOS/Protocol/BTProtocol.c src/iOS/Audio/BTPcmRing.c tests/native/core_test.c -o /tmp/core_test_clang
+          /tmp/core_test_clang
+
+      - name: Python iOS build & analyzer unit tests
+        working-directory: BackThread
+        run: |
+          python3 -m unittest tests/ios_analyzer_test.py tests/ios_device_tool_test.py tests/ios_build_test.py -v
+
+  windows-desktop:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout BackThread
+        uses: actions/checkout@v4
+        with:
+          path: BackThread
+
+      - name: Checkout NativeShellKit (sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: trungduc22/NativeShellKit
+          path: NativeShellKit
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build full desktop solution (Daemon + WinUI 3 App)
+        working-directory: BackThread
+        run: |
+          dotnet build BackThread.Desktop.sln -c Release -p:Platform=x64
+
+      - name: Run BackThread.Tests on Windows
+        working-directory: BackThread
+        run: |
+          dotnet run --no-build --project tests/BackThread.Tests/BackThread.Tests.csproj -c Release
+
+      - name: Run BackThread.Daemon IPC smoke test
+        working-directory: BackThread
+        run: |
+          src\Windows\Daemon\bin\Release\net10.0-windows10.0.19041.0\BackThread.Daemon.exe --smoke-test
+
+  macos-ios:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout BackThread
+        uses: actions/checkout@v4
+
+      - name: Compile and package BackThread iOS 15 arm64 (.ipa + Agent)
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ios15/Payload/BackThread.app artifacts/ios15/obj
+          CFLAGS="-arch arm64 -miphoneos-version-min=15.0 -O2 -Wall -Wextra -Werror -Werror=unguarded-availability-new -fobjc-arc -fblocks -Isrc/iOS/Protocol -Isrc/iOS/Transport -Isrc/iOS/Audio -Isrc/iOS/Media -Isrc/iOS/Worker -Isrc/iOS/Agent -Isrc/iOS/UI"
+          C_SRCS="src/iOS/Protocol/BTProtocol.c src/iOS/Audio/BTPcmRing.c"
+          AGENT_M="src/iOS/Transport/BTConnection.m src/iOS/Transport/BTWifiClient.m src/iOS/Audio/BTAudioReceiver.m src/iOS/Worker/BTWorkerEngine.m src/iOS/Agent/BTAgent.m"
+          UI_M="src/iOS/Media/BTMediaPlayer.m src/iOS/UI/BTTheme.m src/iOS/UI/BTSettingsView.m src/iOS/UI/BTViewController.m src/iOS/UI/main.m"
+
+          OBJS=""
+          for f in $C_SRCS; do
+            out="artifacts/ios15/obj/$(basename "$f").o"
+            xcrun -sdk iphoneos clang -std=c11 -arch arm64 -miphoneos-version-min=15.0 -O2 -Wall -Wextra -Werror -Isrc/iOS/Protocol -Isrc/iOS/Audio -c "$f" -o "$out"
+            OBJS="$OBJS $out"
+          done
+          for f in $AGENT_M; do
+            out="artifacts/ios15/obj/$(basename "$f").o"
+            xcrun -sdk iphoneos clang $CFLAGS -c "$f" -o "$out"
+            OBJS="$OBJS $out"
+          done
+
+          AGENT_OBJS="$OBJS"
+          xcrun -sdk iphoneos clang $CFLAGS -c src/iOS/Agent/main.m -o artifacts/ios15/obj/agent_main.o
+          xcrun -sdk iphoneos clang -arch arm64 -miphoneos-version-min=15.0 $AGENT_OBJS artifacts/ios15/obj/agent_main.o \
+            -framework Foundation -framework AudioToolbox -framework AVFoundation -framework Network -framework Security -framework ImageIO -framework CoreGraphics \
+            -weak_framework PDFKit -weak_framework Vision -weak_framework Speech -lz \
+            -o artifacts/ios15/BackThread.Agent
+
+          UI_OBJS="$OBJS"
+          for f in $UI_M; do
+            out="artifacts/ios15/obj/$(basename "$f").o"
+            xcrun -sdk iphoneos clang $CFLAGS -c "$f" -o "$out"
+            UI_OBJS="$UI_OBJS $out"
+          done
+          xcrun -sdk iphoneos clang -arch arm64 -miphoneos-version-min=15.0 $UI_OBJS \
+            -framework Foundation -framework UIKit -framework CoreGraphics -framework QuartzCore -framework AudioToolbox -framework AVFoundation -framework AVKit -framework Network -framework Security -framework ImageIO \
+            -weak_framework WebKit -weak_framework PDFKit -weak_framework Vision -weak_framework Speech -lz \
+            -o artifacts/ios15/Payload/BackThread.app/BackThread
+
+          cp src/iOS/Resources/Info.plist artifacts/ios15/Payload/BackThread.app/Info.plist
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, "scripts")
+          import ios_build_support as s
+          app_bin = Path("artifacts/ios15/Payload/BackThread.app/BackThread")
+          s.macho(app_bin, profile="ios15")
+          s.macho(Path("artifacts/ios15/BackThread.Agent"), profile="ios15")
+          s.write_ipa(Path("artifacts/ios15/Payload/BackThread.app"), Path("artifacts/ios15/BackThread-iOS15.ipa"))
+          print("VERIFIED iOS 15 arm64 Mach-O & IPA:", Path("artifacts/ios15/BackThread-iOS15.ipa").stat().st_size, "bytes")
+          PY
+
+      - name: Upload BackThread-iOS15.ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BackThread-iOS15-ipa
+          path: artifacts/ios15/BackThread-iOS15.ipa
