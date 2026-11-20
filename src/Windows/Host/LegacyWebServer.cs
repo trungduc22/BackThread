@@ -137,7 +137,8 @@ public sealed class LegacyWebServer
             return Results.Ok(new
             {
                 deviceId,
-                hostState = host.Status.State,
+                hostState = host.ActiveRoute.Snapshot.Route.ToString(),
+                hostStatus = host.Status,
                 cpuPercent = tel.CpuUsagePercent,
                 memoryPercent = tel.MemoryUsedPercent,
                 mediaTitle = media.Title,
@@ -171,8 +172,8 @@ public sealed class LegacyWebServer
             string cmd = doc.RootElement.TryGetProperty("command", out var ce) ? (ce.GetString() ?? "").Trim().ToLowerInvariant() : "";
             if (cmd is not ("toggle" or "play" or "pause" or "next" or "previous"))
                 return Results.BadRequest(new { error = "Command not in allowlist" });
-            bool ok = await host.MediaCommandAsync(cmd, null, c.RequestAborted);
-            return Results.Ok(new { ok, command = cmd });
+            object result = await host.MediaCommandAsync(cmd, 0, null, null, null, c.RequestAborted);
+            return Results.Ok(new { ok = true, command = cmd, result });
         });
 
         // Authenticated WebSocket endpoint (credentials sent in first JSON frame, never in query string)

@@ -574,8 +574,8 @@ public sealed class RemoteInputEngine
             var (fx, fy) = drawFilter.Filter(rawX, rawY, clock.Elapsed.TotalSeconds);
             if (hasLastDrawSample)
             {
-                double rawStep = Math.Hypot(rawX - lastRawX, rawY - lastRawY);
-                double filtDiff = Math.Hypot(fx - rawX, fy - rawY);
+                double rawStep = double.Hypot(rawX - lastRawX, rawY - lastRawY);
+                double filtDiff = double.Hypot(fx - rawX, fy - rawY);
                 if (rawStep < 6.0) { jitterSum += filtDiff; jitterSamples++; }
             }
             lastRawX = rawX; lastRawY = rawY; hasLastDrawSample = true;
