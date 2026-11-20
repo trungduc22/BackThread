@@ -155,11 +155,11 @@ jobs:
           print(f"VERIFIED {profile} Mach-O (minOS={app_info['minimumOS']}, agent={agent_info['minimumOS']}) & IPA: {ipa_path.stat().st_size} bytes")
           if profile == "ios12-universal":
               deb_rootful = out_dir / "BackThread-iOS12-rootful.deb"
-              s.write_debian(deb_rootful, s.debian(app_dir, Path("src/iOS/control").read_bytes()))
+              s.debian(deb_rootful, Path("src/iOS/control").read_bytes(), app_dir)
               print(f"VERIFIED rootful .deb: {deb_rootful.stat().st_size} bytes")
           else:
               deb_rootless = out_dir / "BackThread-iOS15-rootless.deb"
-              s.write_debian(deb_rootless, s.debian_rootless(app_dir, Path("src/iOS/control").read_bytes()))
+              s.debian_rootless(deb_rootless, Path("src/iOS/control").read_bytes(), app_dir)
               print(f"VERIFIED rootless .deb: {deb_rootless.stat().st_size} bytes")
           PY
           }

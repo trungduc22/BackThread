@@ -48,11 +48,14 @@ public static class Authentication
         if (reply.Channel != LogicalChannel.Control || ok.Type != "auth.ok" || !Verify(ok.Body.GetProperty("proof").GetString() ?? "", Proof(key, "agent", server, client)))
             throw new UnauthorizedAccessException("Agent authentication failed");
     }
-    public static async Task ServerAsync(Stream stream, byte[] key, CancellationToken ct)
+    public static async Task ServerAsync(Stream stream, byte[] key, CancellationToken ct, string? deviceId = null, string? deviceName = null)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(5));
         string server = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-        await Wire.WriteAsync(stream, new(LogicalChannel.Control, 0, 0, Message.Create("auth.challenge", new { serverNonce = server }).Encode()), timeout.Token);
+        object challengeBody = deviceId is null
+            ? new { serverNonce = server }
+            : new { serverNonce = server, deviceId, deviceName = deviceName ?? "iPhone" };
+        await Wire.WriteAsync(stream, new(LogicalChannel.Control, 0, 0, Message.Create("auth.challenge", challengeBody).Encode()), timeout.Token);
         var frame = await Wire.ReadAsync(stream, timeout.Token);
         var auth = Message.Decode(frame.Payload);
         if (frame.Channel != LogicalChannel.Control || auth.Type != "auth.response") throw new UnauthorizedAccessException("Expected authentication");
