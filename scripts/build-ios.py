@@ -13,6 +13,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 UI_SOURCES = [
     'src/iOS/UI/main.m',
     'src/iOS/UI/BTTheme.m',
+    'src/iOS/UI/BTDisplayProfile.m',
     'src/iOS/UI/BTVideoSurfaceView.m',
     'src/iOS/UI/BTNowPlayingView.m',
     'src/iOS/UI/BTIdleHubView.m',
@@ -28,6 +29,7 @@ UI_SOURCES = [
 AGENT_SOURCES = [
     'src/iOS/Agent/BTAgent.m',
     'src/iOS/Transport/BTWifiClient.m',
+    'src/iOS/Transport/BTPhoneBoxClient.m',
     'src/iOS/Worker/BTWorkerEngine.m',
     'src/iOS/AudioReceiver/BTAudioSessionCoordinator.m',
     'src/iOS/AudioReceiver/BTAudioReceiver.m',

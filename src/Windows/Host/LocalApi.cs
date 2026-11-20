@@ -116,6 +116,25 @@ public sealed class LocalApi(HostRuntime host, int port, byte[] key)
             var updated = host.SetDeviceInputPermissions(id, allowTouchpad, allowDrawingPad);
             return updated is null ? Results.NotFound(new { error = "Device not found or revoked" }) : Results.Ok(new { device = updated });
         });
+        application.MapGet("/v1/input/status", () => host.Input.GetMetrics());
+        application.MapGet("/v1/input/monitors", () => new { monitors = host.Input.GetMonitors() });
+        application.MapPost("/v1/input/config", async (HttpContext c) =>
+        {
+            var cfg = await JsonSerializer.DeserializeAsync<RemoteInputConfig>(c.Request.Body, Message.Json, c.RequestAborted)
+                ?? throw new InvalidDataException("Invalid input configuration");
+            bool clearStop = string.Equals(c.Request.Query["clearEmergencyStop"].ToString(), "true", StringComparison.OrdinalIgnoreCase);
+            return Results.Ok(host.Input.UpdateConfig(cfg, clearEmergencyStop: clearStop));
+        });
+        application.MapPost("/v1/input/emergency-stop", () =>
+        {
+            host.Input.EmergencyDisconnect();
+            return Results.Ok(new { emergencyStopped = true, metrics = host.Input.GetMetrics() });
+        });
+        application.MapGet("/v1/display/profile", (HttpContext c) =>
+        {
+            string? model = c.Request.Query["model"].ToString();
+            return Results.Ok(DisplayProfileCatalog.Resolve(model));
+        });
         application.MapPost("/v1/power-profile", async (HttpContext c) =>
         {
             var b = await Body<PowerProfileRequest>(c);

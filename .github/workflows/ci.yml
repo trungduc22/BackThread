@@ -97,8 +97,8 @@ jobs:
           set -euo pipefail
           INC="-Isrc/Shared/Protocol -Isrc/iOS/Transport -Isrc/iOS/AudioReceiver -Isrc/iOS/Media -Isrc/iOS/Worker -Isrc/iOS/Agent -Isrc/iOS/UI"
           C_SRCS="src/Shared/Protocol/bt_wire.c src/iOS/AudioReceiver/BTPcmRing.c"
-          AGENT_M="src/iOS/Agent/BTAgent.m src/iOS/Transport/BTWifiClient.m src/iOS/Worker/BTWorkerEngine.m src/iOS/AudioReceiver/BTAudioSessionCoordinator.m src/iOS/AudioReceiver/BTAudioReceiver.m"
-          UI_M="src/iOS/UI/main.m src/iOS/UI/BTTheme.m src/iOS/UI/BTVideoSurfaceView.m src/iOS/UI/BTNowPlayingView.m src/iOS/UI/BTIdleHubView.m src/iOS/UI/BTQuickActionsView.m src/iOS/UI/BTWorkerStatusView.m src/iOS/UI/BTSettingsView.m src/iOS/UI/BTNotificationOverlayView.m src/iOS/UI/BTViewController.m src/iOS/Media/BTBufferedMediaEngine.m src/iOS/Media/BTDirectMediaPlayer.m src/iOS/Media/BTYouTubeEmbedController.m"
+          AGENT_M="src/iOS/Agent/BTAgent.m src/iOS/Transport/BTWifiClient.m src/iOS/Transport/BTPhoneBoxClient.m src/iOS/Worker/BTWorkerEngine.m src/iOS/AudioReceiver/BTAudioSessionCoordinator.m src/iOS/AudioReceiver/BTAudioReceiver.m"
+          UI_M="src/iOS/UI/main.m src/iOS/UI/BTTheme.m src/iOS/UI/BTDisplayProfile.m src/iOS/UI/BTVideoSurfaceView.m src/iOS/UI/BTNowPlayingView.m src/iOS/UI/BTIdleHubView.m src/iOS/UI/BTQuickActionsView.m src/iOS/UI/BTWorkerStatusView.m src/iOS/UI/BTSettingsView.m src/iOS/UI/BTNotificationOverlayView.m src/iOS/UI/BTViewController.m src/iOS/Media/BTBufferedMediaEngine.m src/iOS/Media/BTDirectMediaPlayer.m src/iOS/Media/BTYouTubeEmbedController.m"
 
           build_profile() {
             local profile="$1" min_ver="$2" macro="$3" out_dir="$4" ipa_name="$5"

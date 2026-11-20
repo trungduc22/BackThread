@@ -16,6 +16,9 @@ public sealed record LanConfig
     public string? DeviceRegistryPath { get; init; }
     public bool AdvertiseMdns { get; init; } = true;
     public bool AutoProvisionOverUsb { get; init; } = true;
+    /// <summary>Opt-in TLS-only legacy web companion server (disabled by default).</summary>
+    public bool EnableLegacyWeb { get; init; }
+    public int LegacyWebPort { get; init; } = 23454;
 }
 
 public sealed record HostConfig
@@ -32,6 +35,7 @@ public sealed record HostConfig
     public bool EnableHiberDeskBridge { get; init; }
     public PowerProfile PowerProfile { get; init; } = PowerProfile.Balanced;
     public LanConfig Lan { get; init; } = new();
+    public RemoteInputConfig RemoteInput { get; init; } = new();
     public OffloadPolicyConfig Offload { get; init; } = new();
     public AutomationRuleConfig[] Rules { get; init; } = [];
     public ChargeGuardConfig ChargeGuard { get; init; } = new();

@@ -6,6 +6,7 @@
 #import <CommonCrypto/CommonHMAC.h>
 #import <CommonCrypto/CommonDigest.h>
 #import <Security/Security.h>
+#import <sys/utsname.h>
 #import <sys/socket.h>
 #import <netinet/in.h>
 #import <netinet/tcp.h>
@@ -640,12 +641,18 @@ static BOOL jsonDepth(id value, unsigned depth) {
     NSUInteger cores = [NSProcessInfo processInfo].processorCount;
     BOOL hasNeural = (os.majorVersion >= 15 || ramMb >= 3000);
 
+    struct utsname sysinfo;
+    NSString *modelId = (uname(&sysinfo) == 0)
+        ? ([NSString stringWithCString:sysinfo.machine encoding:NSASCIIStringEncoding] ?: @"Unknown")
+        : @"Unknown";
+
     NSMutableDictionary *body = [@{
         @"agent": @"BackThread.Agent",
         @"version": @"0.3.0",
         @"simulated": @NO,
         @"deviceId": _deviceId ?: @"iphone",
         @"deviceName": self.deviceName ?: @"iPhone",
+        @"modelIdentifier": modelId,
         @"iosVersion": iosVersion,
         @"ramMb": @(ramMb),
         @"cpuCores": @(cores),
