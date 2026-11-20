@@ -42,11 +42,11 @@ jobs:
       - name: Native C11 protocol & PCM ring tests (gcc ASan/UBSan + clang)
         working-directory: BackThread
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Isrc/iOS/Protocol -Isrc/iOS/Audio \
-            src/iOS/Protocol/BTProtocol.c src/iOS/Audio/BTPcmRing.c tests/native/core_test.c -o /tmp/core_test_gcc
+          gcc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Isrc/Shared/Protocol -Isrc/iOS/AudioReceiver \
+            src/Shared/Protocol/bt_wire.c src/iOS/AudioReceiver/BTPcmRing.c tests/native/core_test.c -o /tmp/core_test_gcc
           /tmp/core_test_gcc
-          clang -std=c11 -Wall -Wextra -Werror -Isrc/iOS/Protocol -Isrc/iOS/Audio \
-            src/iOS/Protocol/BTProtocol.c src/iOS/Audio/BTPcmRing.c tests/native/core_test.c -o /tmp/core_test_clang
+          clang -std=c11 -Wall -Wextra -Werror -Isrc/Shared/Protocol -Isrc/iOS/AudioReceiver \
+            src/Shared/Protocol/bt_wire.c src/iOS/AudioReceiver/BTPcmRing.c tests/native/core_test.c -o /tmp/core_test_clang
           /tmp/core_test_clang
 
       - name: Python iOS build & analyzer unit tests
@@ -98,15 +98,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/ios15/Payload/BackThread.app artifacts/ios15/obj
-          CFLAGS="-arch arm64 -miphoneos-version-min=15.0 -O2 -Wall -Wextra -Werror -Werror=unguarded-availability-new -fobjc-arc -fblocks -Isrc/iOS/Protocol -Isrc/iOS/Transport -Isrc/iOS/Audio -Isrc/iOS/Media -Isrc/iOS/Worker -Isrc/iOS/Agent -Isrc/iOS/UI"
-          C_SRCS="src/iOS/Protocol/BTProtocol.c src/iOS/Audio/BTPcmRing.c"
-          AGENT_M="src/iOS/Transport/BTConnection.m src/iOS/Transport/BTWifiClient.m src/iOS/Audio/BTAudioReceiver.m src/iOS/Worker/BTWorkerEngine.m src/iOS/Agent/BTAgent.m"
-          UI_M="src/iOS/Media/BTMediaPlayer.m src/iOS/UI/BTTheme.m src/iOS/UI/BTSettingsView.m src/iOS/UI/BTViewController.m src/iOS/UI/main.m"
+          INC="-Isrc/Shared/Protocol -Isrc/iOS/Transport -Isrc/iOS/AudioReceiver -Isrc/iOS/Media -Isrc/iOS/Worker -Isrc/iOS/Agent -Isrc/iOS/UI"
+          CFLAGS="-arch arm64 -miphoneos-version-min=15.0 -O2 -Wall -Wextra -Werror -Werror=unguarded-availability-new -fobjc-arc -fblocks $INC"
+          C_SRCS="src/Shared/Protocol/bt_wire.c src/iOS/AudioReceiver/BTPcmRing.c"
+          AGENT_M="src/iOS/Agent/BTAgent.m src/iOS/Transport/BTWifiClient.m src/iOS/Worker/BTWorkerEngine.m src/iOS/AudioReceiver/BTAudioSessionCoordinator.m src/iOS/AudioReceiver/BTAudioReceiver.m"
+          UI_M="src/iOS/UI/main.m src/iOS/UI/BTTheme.m src/iOS/UI/BTVideoSurfaceView.m src/iOS/UI/BTNowPlayingView.m src/iOS/UI/BTIdleHubView.m src/iOS/UI/BTQuickActionsView.m src/iOS/UI/BTWorkerStatusView.m src/iOS/UI/BTSettingsView.m src/iOS/UI/BTNotificationOverlayView.m src/iOS/UI/BTViewController.m src/iOS/Media/BTBufferedMediaEngine.m src/iOS/Media/BTDirectMediaPlayer.m src/iOS/Media/BTYouTubeEmbedController.m"
 
           OBJS=""
           for f in $C_SRCS; do
             out="artifacts/ios15/obj/$(basename "$f").o"
-            xcrun -sdk iphoneos clang -std=c11 -arch arm64 -miphoneos-version-min=15.0 -O2 -Wall -Wextra -Werror -Isrc/iOS/Protocol -Isrc/iOS/Audio -c "$f" -o "$out"
+            xcrun -sdk iphoneos clang -std=c11 -arch arm64 -miphoneos-version-min=15.0 -O2 -Wall -Wextra -Werror $INC -c "$f" -o "$out"
             OBJS="$OBJS $out"
           done
           for f in $AGENT_M; do
@@ -118,7 +119,7 @@ jobs:
           AGENT_OBJS="$OBJS"
           xcrun -sdk iphoneos clang $CFLAGS -c src/iOS/Agent/main.m -o artifacts/ios15/obj/agent_main.o
           xcrun -sdk iphoneos clang -arch arm64 -miphoneos-version-min=15.0 $AGENT_OBJS artifacts/ios15/obj/agent_main.o \
-            -framework Foundation -framework AudioToolbox -framework AVFoundation -framework Network -framework Security -framework ImageIO -framework CoreGraphics \
+            -framework Foundation -framework AudioToolbox -framework AVFoundation -framework Network -framework Security -framework ImageIO -framework CoreGraphics -framework SystemConfiguration \
             -weak_framework PDFKit -weak_framework Vision -weak_framework Speech -lz \
             -o artifacts/ios15/BackThread.Agent
 
@@ -129,18 +130,17 @@ jobs:
             UI_OBJS="$UI_OBJS $out"
           done
           xcrun -sdk iphoneos clang -arch arm64 -miphoneos-version-min=15.0 $UI_OBJS \
-            -framework Foundation -framework UIKit -framework CoreGraphics -framework QuartzCore -framework AudioToolbox -framework AVFoundation -framework AVKit -framework Network -framework Security -framework ImageIO \
-            -weak_framework WebKit -weak_framework PDFKit -weak_framework Vision -weak_framework Speech -lz \
+            -framework UIKit -framework Foundation -framework AVFoundation -framework CoreMedia -framework AudioToolbox -framework MediaPlayer -framework WebKit -framework Security -framework Network -framework ImageIO -framework CoreGraphics -framework QuartzCore -framework SystemConfiguration \
+            -weak_framework PDFKit -weak_framework Vision -weak_framework Speech -lz \
             -o artifacts/ios15/Payload/BackThread.app/BackThread
 
-          cp src/iOS/Resources/Info.plist artifacts/ios15/Payload/BackThread.app/Info.plist
+          cp -R src/iOS/Resources/* artifacts/ios15/Payload/BackThread.app/
           python3 - <<'PY'
           from pathlib import Path
           import sys
           sys.path.insert(0, "scripts")
           import ios_build_support as s
-          app_bin = Path("artifacts/ios15/Payload/BackThread.app/BackThread")
-          s.macho(app_bin, profile="ios15")
+          s.macho(Path("artifacts/ios15/Payload/BackThread.app/BackThread"), profile="ios15")
           s.macho(Path("artifacts/ios15/BackThread.Agent"), profile="ios15")
           s.write_ipa(Path("artifacts/ios15/Payload/BackThread.app"), Path("artifacts/ios15/BackThread-iOS15.ipa"))
           print("VERIFIED iOS 15 arm64 Mach-O & IPA:", Path("artifacts/ios15/BackThread-iOS15.ipa").stat().st_size, "bytes")

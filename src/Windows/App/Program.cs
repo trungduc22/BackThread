@@ -58,7 +58,7 @@ public static class Program
             try
             {
                 ComWrappersSupport.InitializeComWrappers();
-                Application.Start(_ =>
+                Application.Start(callbackParams =>
                 {
                     SynchronizationContext.SetSynchronizationContext(
                         new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread()));

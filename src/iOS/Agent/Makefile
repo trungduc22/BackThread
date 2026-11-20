@@ -2,8 +2,10 @@ ARCHS = arm64
 TARGET = iphone:clang:latest:12.0
 include $(THEOS)/makefiles/common.mk
 TOOL_NAME = BackThread.Agent
-BackThread.Agent_FILES = main.m BTAgent.m ../AudioReceiver/BTAudioSessionCoordinator.m ../AudioReceiver/BTAudioReceiver.m ../AudioReceiver/BTPcmRing.c ../../Shared/Protocol/bt_wire.c
-BackThread.Agent_FRAMEWORKS = Foundation AVFoundation AudioToolbox Security
+BackThread.Agent_FILES = main.m BTAgent.m ../Transport/BTWifiClient.m ../Worker/BTWorkerEngine.m ../AudioReceiver/BTAudioSessionCoordinator.m ../AudioReceiver/BTAudioReceiver.m ../AudioReceiver/BTPcmRing.c ../../Shared/Protocol/bt_wire.c
+BackThread.Agent_FRAMEWORKS = Foundation AVFoundation AudioToolbox Security Network ImageIO CoreGraphics SystemConfiguration
+BackThread.Agent_WEAK_FRAMEWORKS = PDFKit Vision Speech
+BackThread.Agent_LIBRARIES = z
 BackThread.Agent_CFLAGS = -Wall -Wextra -Werror -Werror=unguarded-availability-new
 BackThread.Agent_OBJCFLAGS = -fobjc-arc -fblocks
 BackThread.Agent_INSTALL_PATH = /var/mobile/BackThread/bin
